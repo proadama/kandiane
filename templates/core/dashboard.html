@@ -1,0 +1,84 @@
+<!-- templates/core/dashboard.html -->
+{% extends "layouts/base.html" %}
+
+{% block title %}Tableau de bord - Gestion d'Association{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Tableau de bord</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary">Exporter</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary">Imprimer</button>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle">
+            <i class="fas fa-calendar"></i> Cette semaine
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Statistiques générales -->
+    <div class="col-md-4">
+        <div class="card mb-4 box-shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="my-0 font-weight-normal">Membres</h4>
+            </div>
+            <div class="card-body">
+                <h1 class="card-title">0</h1>
+                <ul class="list-unstyled mt-3 mb-4">
+                    <li>0 nouveaux ce mois-ci</li>
+                    <li>0 avec cotisations à jour</li>
+                </ul>
+                <button type="button" class="btn btn-lg btn-block btn-outline-primary">Voir les membres</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4 box-shadow">
+            <div class="card-header bg-success text-white">
+                <h4 class="my-0 font-weight-normal">Cotisations</h4>
+            </div>
+            <div class="card-body">
+                <h1 class="card-title">0€</h1>
+                <ul class="list-unstyled mt-3 mb-4">
+                    <li>0€ perçus ce mois-ci</li>
+                    <li>0 cotisations en attente</li>
+                </ul>
+                <button type="button" class="btn btn-lg btn-block btn-outline-success">Voir les cotisations</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4 box-shadow">
+            <div class="card-header bg-info text-white">
+                <h4 class="my-0 font-weight-normal">Événements</h4>
+            </div>
+            <div class="card-body">
+                <h1 class="card-title">0</h1>
+                <ul class="list-unstyled mt-3 mb-4">
+                    <li>0 événements à venir</li>
+                    <li>0 inscriptions en attente</li>
+                </ul>
+                <button type="button" class="btn btn-lg btn-block btn-outline-info">Voir les événements</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Activités récentes -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Activités récentes</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-center text-muted">Aucune activité récente à afficher.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

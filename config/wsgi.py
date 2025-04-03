@@ -6,11 +6,12 @@ It exposes the WSGI callable as a module-level variable named ``application``.
 For more information on this file, see
 https://docs.djangoproject.com/en/5.1/howto/deployment/wsgi/
 """
-
+# config/asgi.py
 import os
-
-from django.core.wsgi import get_wsgi_application
+import django
+from django.core.asgi import get_asgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+django.setup()
 
-application = get_wsgi_application()
+application = get_asgi_application()

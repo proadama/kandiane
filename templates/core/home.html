@@ -1,0 +1,49 @@
+<!-- templates/core/home.html -->
+{% extends "layouts/base.html" %}
+
+{% block title %}Accueil - Gestion d'Association{% endblock %}
+
+{% block content %}
+<div class="jumbotron bg-light p-5 rounded">
+    <h1 class="display-4">Bienvenue sur votre plateforme de gestion d'association</h1>
+    <p class="lead">Un outil complet pour gérer vos membres, cotisations et événements.</p>
+    <hr class="my-4">
+    <p>
+        Notre plateforme facilite la gestion quotidienne de votre association et vous permet 
+        de vous concentrer sur ce qui compte vraiment: vos membres et vos activités.
+    </p>
+    {% if not user.is_authenticated %}
+        <a class="btn btn-primary btn-lg" href="/admin/" role="button">Se connecter</a>
+        <a class="btn btn-outline-primary btn-lg" href="#" role="button">En savoir plus</a>
+    {% else %}
+        <a class="btn btn-primary btn-lg" href="{% url 'core:dashboard' %}" role="button">Accéder au tableau de bord</a>
+    {% endif %}
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Gestion des membres</h5>
+                <p class="card-text">Suivez vos adhérents, leurs informations et leur historique d'activité.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Suivi des cotisations</h5>
+                <p class="card-text">Gérez les cotisations, les rappels et générez des rapports financiers.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Organisation d'événements</h5>
+                <p class="card-text">Planifiez vos événements et gérez les inscriptions en toute simplicité.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
