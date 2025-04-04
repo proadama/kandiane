@@ -1,0 +1,145 @@
+{% extends "layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Supprimer le type de membre" %}: {{ type_membre.libelle }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h1 class="h3 card-title mb-0">{% trans "Supprimer le type de membre" %}</h1>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        {% trans "Attention ! Cette action est irréversible." %}
+                    </div>
+                    
+                    <p class="lead">
+                        {% blocktrans with name=type_membre.libelle %}
+                        Êtes-vous sûr de vouloir supprimer le type de membre <strong>{{ name }}</strong> ?
+                        {% endblocktrans %}
+                    </p>
+                    
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h5 class="card-title mb-0">{% trans "Informations sur le type de membre" %}</h5>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row">
+                                <dt class="col-sm-3">{% trans "Libellé" %}</dt>
+                                <dd class="col-sm-9">{{ type_membre.libelle }}</dd>
+                                
+                                <dt class="col-sm-3">{% trans "Description" %}</dt>
+                                <dd class="col-sm-9">{{ type_membre.description|default:"-" }}</dd>
+                                
+                                <dt class="col-sm-3">{% trans "Cotisation requise" %}</dt>
+                                <dd class="col-sm-9">
+                                    {% if type_membre.cotisation_requise %}
+                                    <span class="badge bg-success">{% trans "Oui" %}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{% trans "Non" %}</span>
+                                    {% endif %}
+                                </dd>
+                                
+                                <dt class="col-sm-3">{% trans "Ordre d'affichage" %}</dt>
+                                <dd class="col-sm-9">{{ type_membre.ordre_affichage }}</dd>
+                                
+                                <dt class="col-sm-3">{% trans "Membres actifs" %}</dt>
+                                <dd class="col-sm-9">
+                                    <span class="badge bg-{% if nb_membres_actifs > 0 %}warning{% else %}success{% endif %}">
+                                        {{ nb_membres_actifs }}
+                                    </span>
+                                </dd>
+                                
+                                <dt class="col-sm-3">{% trans "Date de création" %}</dt>
+                                <dd class="col-sm-9">{{ type_membre.created_at|date:"d/m/Y H:i" }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                    
+                    {% if nb_membres_actifs > 0 %}
+                    <div class="alert alert-danger mb-4">
+                        <h5><i class="fas fa-exclamation-circle me-2"></i>{% trans "Attention : Type de membre en utilisation" %}</h5>
+                        <p>
+                            {% blocktrans with count=nb_membres_actifs %}
+                            Ce type de membre est actuellement utilisé par <strong>{{ count }}</strong> membre(s) actif(s).
+                            {% endblocktrans %}
+                        </p>
+                        <p>
+                            {% trans "Si vous supprimez ce type de membre, ces associations seront automatiquement terminées (avec la date du jour comme date de fin)." %}
+                        </p>
+                        <a href="{% url 'membres:membre_liste' %}?type_membre={{ type_membre.id }}" class="btn btn-outline-danger">
+                            <i class="fas fa-search"></i> {% trans "Voir les membres concernés" %}
+                        </a>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h5 class="card-title mb-0">{% trans "Conséquences de la suppression" %}</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul>
+                                <li>{% trans "Le type de membre sera marqué comme supprimé (suppression logique)" %}</li>
+                                <li>{% trans "Il n'apparaîtra plus dans les listes et formulaires" %}</li>
+                                <li>{% trans "Les associations actives avec des membres seront terminées" %}</li>
+                                <li>{% trans "L'historique des associations passées sera conservé" %}</li>
+                                <li>{% trans "Les données de statistiques seront conservées" %}</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-between">
+                            <a href="{% if request.META.HTTP_REFERER %}{{ request.META.HTTP_REFERER }}{% else %}{% url 'membres:type_membre_liste' %}{% endif %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> {% trans "Annuler" %}
+                            </a>
+                            
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> {% trans "Confirmer la suppression" %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            {% if nb_membres_actifs == 0 %}
+            <div class="alert alert-success mt-4">
+                <i class="fas fa-info-circle me-2"></i>
+                {% trans "Aucun membre actif n'utilise actuellement ce type de membre. La suppression n'aura pas d'impact sur les membres existants." %}
+            </div>
+            {% endif %}
+            
+            <div class="card mt-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Alternative à la suppression" %}</h5>
+                </div>
+                <div class="card-body">
+                    <p>
+                        {% blocktrans %}
+                        Au lieu de supprimer ce type de membre, vous pouvez également :
+                        {% endblocktrans %}
+                    </p>
+                    <ul>
+                        <li>
+                            <strong>{% trans "Le désactiver" %}</strong> : 
+                            {% trans "Modifiez son libellé pour ajouter \"(Désactivé)\" et indiquez dans la description qu'il n'est plus utilisé." %}
+                        </li>
+                        <li>
+                            <strong>{% trans "Terminer les associations" %}</strong> : 
+                            {% trans "Mettez fin manuellement aux associations avec les membres actifs pour ce type." %}
+                        </li>
+                    </ul>
+                    <a href="{% url 'membres:type_membre_modifier' type_membre.id %}" class="btn btn-outline-primary">
+                        <i class="fas fa-edit"></i> {% trans "Modifier ce type de membre" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

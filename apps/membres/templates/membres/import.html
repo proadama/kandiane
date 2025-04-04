@@ -1,0 +1,254 @@
+{% extends "layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Importer des membres" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{% trans "Importer des membres" %}</h1>
+        <div>
+            <a href="{% url 'membres:membre_liste' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> {% trans "Retour à la liste" %}
+            </a>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Formulaire d'importation -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">{% trans "Formulaire d'importation" %}</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.fichier.id_for_label }}" class="form-label">
+                                {{ form.fichier.label }} *
+                            </label>
+                            {{ form.fichier }}
+                            {% if form.fichier.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.fichier.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <div class="form-text">{{ form.fichier.help_text }}</div>
+                        </div>
+                        
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="card-title mb-0">{% trans "Options d'importation" %}</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="{{ form.delimiter.id_for_label }}" class="form-label">
+                                        {{ form.delimiter.label }}
+                                    </label>
+                                    {{ form.delimiter }}
+                                    {% if form.delimiter.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.delimiter.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        {{ form.header }}
+                                        <label class="form-check-label" for="{{ form.header.id_for_label }}">
+                                            {{ form.header.label }}
+                                        </label>
+                                        {% if form.header.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.header.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                        <div class="form-text">{{ form.header.help_text }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="card-title mb-0">{% trans "Paramètres par défaut" %}</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="{{ form.type_membre.id_for_label }}" class="form-label">
+                                        {{ form.type_membre.label }} *
+                                    </label>
+                                    {{ form.type_membre }}
+                                    {% if form.type_membre.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.type_membre.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                    <div class="form-text">{{ form.type_membre.help_text }}</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="{{ form.statut.id_for_label }}" class="form-label">
+                                        {{ form.statut.label }}
+                                    </label>
+                                    {{ form.statut }}
+                                    {% if form.statut.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.statut.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                    <div class="form-text">{{ form.statut.help_text }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-file-import"></i> {% trans "Importer les membres" %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Aide et instructions -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">{% trans "Instructions d'importation" %}</h5>
+                </div>
+                <div class="card-body">
+                    <h6>{% trans "Format du fichier" %}</h6>
+                    <p>
+                        {% trans "Le fichier d'importation doit contenir au minimum les colonnes suivantes :" %}
+                    </p>
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>{% trans "Colonne" %}</th>
+                                <th>{% trans "Description" %}</th>
+                                <th>{% trans "Obligatoire" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>{% trans "Nom" %}</td>
+                                <td>{% trans "Nom de famille du membre" %}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-success">{% trans "Oui" %}</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>{% trans "Prénom" %}</td>
+                                <td>{% trans "Prénom du membre" %}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-success">{% trans "Oui" %}</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>{% trans "Email" %}</td>
+                                <td>{% trans "Adresse email (doit être unique)" %}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-success">{% trans "Oui" %}</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>{% trans "Téléphone" %}</td>
+                                <td>{% trans "Numéro de téléphone" %}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-secondary">{% trans "Non" %}</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>{% trans "Adresse" %}</td>
+                                <td>{% trans "Adresse postale" %}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-secondary">{% trans "Non" %}</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <h6 class="mt-4">{% trans "Exemple de fichier CSV" %}</h6>
+                    <pre class="bg-light p-2 rounded small">
+Nom,Prénom,Email,Téléphone,Adresse
+DUPONT,Jean,jean.dupont@example.com,0123456789,"1 rue de la Paix, 75001 Paris"
+MARTIN,Sophie,sophie.martin@example.com,0987654321,"2 avenue des Champs, 75008 Paris"
+</pre>
+                    
+                    <h6 class="mt-4">{% trans "Notes importantes" %}</h6>
+                    <ul>
+                        <li>
+                            {% trans "La date d'adhésion sera automatiquement définie à aujourd'hui pour les nouveaux membres." %}
+                        </li>
+                        <li>
+                            {% trans "Si un membre avec le même email existe déjà, ses informations seront mises à jour (nom, prénom) et le type de membre sélectionné lui sera ajouté s'il ne l'a pas déjà." %}
+                        </li>
+                        <li>
+                            {% trans "Tous les membres importés seront associés au type de membre sélectionné." %}
+                        </li>
+                        <li>
+                            {% trans "Le statut sélectionné sera attribué uniquement aux nouveaux membres." %}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Conseils d'importation" %}</h5>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li>
+                            {% trans "Vérifiez que votre fichier est bien encodé en UTF-8 pour éviter les problèmes d'accents." %}
+                        </li>
+                        <li>
+                            {% trans "Pour les fichiers Excel, assurez-vous que toutes les cellules sont formatées en texte pour les numéros de téléphone." %}
+                        </li>
+                        <li>
+                            {% trans "Si vous importez un grand nombre de membres, l'opération peut prendre un certain temps." %}
+                        </li>
+                        <li>
+                            {% trans "Après l'importation, vérifiez les résultats pour vous assurer que toutes les données ont été correctement importées." %}
+                        </li>
+                    </ul>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        {% trans "Attention : Assurez-vous de respecter le RGPD lors de l'importation de données personnelles." %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <a href="{% url 'membres:membre_liste' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> {% trans "Annuler et retourner à la liste" %}
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

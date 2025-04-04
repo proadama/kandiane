@@ -1,0 +1,462 @@
+{% extends "layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{{ membre.prenom }} {{ membre.nom }} - {% trans "Détails du membre" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- En-tête avec informations et actions -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{{ membre.prenom }} {{ membre.nom }}</h1>
+        <div class="btn-group">
+            {% if perms.membres.change_membre %}
+            <a href="{% url 'membres:membre_modifier' membre.id %}" class="btn btn-warning">
+                <i class="fas fa-edit"></i> {% trans "Modifier" %}
+            </a>
+            {% endif %}
+            
+            <a href="{% url 'membres:membre_historique' membre.id %}" class="btn btn-info">
+                <i class="fas fa-history"></i> {% trans "Historique" %}
+            </a>
+            
+            {% if perms.membres.delete_membre %}
+            <a href="{% url 'membres:membre_supprimer' membre.id %}" class="btn btn-danger">
+                <i class="fas fa-trash"></i> {% trans "Supprimer" %}
+            </a>
+            {% endif %}
+            
+            <a href="{% url 'membres:membre_liste' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> {% trans "Retour à la liste" %}
+            </a>
+        </div>
+    </div>
+    
+    <!-- Informations principales -->
+    <div class="row">
+        <!-- Colonne de gauche: informations personnelles -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">{% trans "Informations personnelles" %}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        {% if membre.photo %}
+                        <img src="{{ membre.photo.url }}" alt="{{ membre.nom_complet }}" class="img-thumbnail rounded-circle" style="width: 150px; height: 150px; object-fit: cover;">
+                        {% else %}
+                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center mx-auto" style="width: 150px; height: 150px; font-size: 3rem;">
+                            {{ membre.prenom|first }}{{ membre.nom|first }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <dl class="row">
+                        <dt class="col-sm-4">{% trans "Email" %}</dt>
+                        <dd class="col-sm-8">
+                            <a href="mailto:{{ membre.email }}">{{ membre.email }}</a>
+                        </dd>
+                        
+                        <dt class="col-sm-4">{% trans "Téléphone" %}</dt>
+                        <dd class="col-sm-8">
+                            {% if membre.telephone %}
+                            <a href="tel:{{ membre.telephone }}">{{ membre.telephone }}</a>
+                            {% else %}
+                            <span class="text-muted">{% trans "Non renseigné" %}</span>
+                            {% endif %}
+                        </dd>
+                        
+                        <dt class="col-sm-4">{% trans "Adresse" %}</dt>
+                        <dd class="col-sm-8">
+                            {% if membre.adresse_complete %}
+                            {{ membre.adresse_complete|linebreaks }}
+                            {% else %}
+                            <span class="text-muted">{% trans "Non renseignée" %}</span>
+                            {% endif %}
+                        </dd>
+                        
+                        <dt class="col-sm-4">{% trans "Date de naissance" %}</dt>
+                        <dd class="col-sm-8">
+                            {% if membre.date_naissance %}
+                            {{ membre.date_naissance }} 
+                            {% if age %}
+                            <span class="badge bg-secondary">{{ age }} ans</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-muted">{% trans "Non renseignée" %}</span>
+                            {% endif %}
+                        </dd>
+                        
+                        <dt class="col-sm-4">{% trans "Langue" %}</dt>
+                        <dd class="col-sm-8">
+                            {{ membre.get_langue_display }}
+                        </dd>
+                        
+                        <dt class="col-sm-4">{% trans "Pays" %}</dt>
+                        <dd class="col-sm-8">
+                            {{ membre.pays|default:_("Non renseigné") }}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+            
+            <!-- Commentaires -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Commentaires" %}</h5>
+                </div>
+                <div class="card-body">
+                    {% if membre.commentaires %}
+                    <p>{{ membre.commentaires|linebreaks }}</p>
+                    {% else %}
+                    <p class="text-muted">{% trans "Aucun commentaire" %}</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Préférences de communication -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Préférences de communication" %}</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {% trans "Accepte les emails" %}
+                            {% if membre.accepte_mail %}
+                            <span class="badge bg-success"><i class="fas fa-check"></i></span>
+                            {% else %}
+                            <span class="badge bg-danger"><i class="fas fa-times"></i></span>
+                            {% endif %}
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {% trans "Accepte les SMS" %}
+                            {% if membre.accepte_sms %}
+                            <span class="badge bg-success"><i class="fas fa-check"></i></span>
+                            {% else %}
+                            <span class="badge bg-danger"><i class="fas fa-times"></i></span>
+                            {% endif %}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Colonne centrale: informations d'adhésion -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">{% trans "Informations d'adhésion" %}</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-4">{% trans "Date d'adhésion" %}</dt>
+                        <dd class="col-sm-8">
+                            {{ membre.date_adhesion }}
+                            {% if anciennete %}
+                            <span class="badge bg-secondary">{{ anciennete }} {% trans "an(s)" %}</span>
+                            {% endif %}
+                        </dd>
+                        
+                        <dt class="col-sm-4">{% trans "Statut" %}</dt>
+                        <dd class="col-sm-8">
+                            {% if membre.statut %}
+                            <span class="badge {% if membre.statut.nom == 'Actif' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ membre.statut.nom }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">{% trans "Non défini" %}</span>
+                            {% endif %}
+                        </dd>
+                        
+                        <dt class="col-sm-4">{% trans "Compte utilisateur" %}</dt>
+                        <dd class="col-sm-8">
+                            {% if membre.utilisateur %}
+                            <span class="badge bg-primary">{{ membre.utilisateur.username }}</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">{% trans "Aucun compte associé" %}</span>
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+            
+            <!-- Types de membre -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">{% trans "Types de membre" %}</h5>
+                    {% if perms.membres.add_membretypemembre %}
+                    <a href="{% url 'membres:membre_ajouter_type' membre.id %}" class="btn btn-sm btn-light">
+                        <i class="fas fa-plus"></i> {% trans "Ajouter" %}
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if types_actifs %}
+                    <h6>{% trans "Types actifs" %}</h6>
+                    <ul class="list-group mb-3">
+                        {% for type in types_actifs %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ type.libelle }}
+                            <span class="badge bg-success">{% trans "Actif" %}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        {% trans "Aucun type de membre actif" %}
+                    </div>
+                    {% endif %}
+                    
+                    <h6>{% trans "Historique des types" %}</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>{% trans "Type" %}</th>
+                                    <th>{% trans "Date début" %}</th>
+                                    <th>{% trans "Date fin" %}</th>
+                                    <th>{% trans "Actions" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for assoc in historique_types %}
+                                <tr class="{% if assoc.est_actif %}table-success{% elif assoc.date_fin %}table-secondary{% endif %}">
+                                    <td>{{ assoc.type_membre.libelle }}</td>
+                                    <td>{{ assoc.date_debut }}</td>
+                                    <td>{{ assoc.date_fin|default:"-" }}</td>
+                                    <td>
+                                        {% if assoc.est_actif and perms.membres.change_membretypemembre %}
+                                        <div class="btn-group">
+                                            <a href="{% url 'membres:membre_type_modifier' assoc.id %}" class="btn btn-sm btn-warning">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#terminateModal{{ assoc.id }}">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- Modal pour terminer l'association -->
+                                        <div class="modal fade" id="terminateModal{{ assoc.id }}" tabindex="-1" aria-labelledby="terminateModalLabel{{ assoc.id }}" aria-hidden="true">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title" id="terminateModalLabel{{ assoc.id }}">
+                                                            {% trans "Terminer l'association" %}
+                                                        </h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <form method="post" action="{% url 'membres:membre_type_terminer' assoc.id %}">
+                                                        {% csrf_token %}
+                                                        <div class="modal-body">
+                                                            <p>{% trans "Êtes-vous sûr de vouloir terminer l'association avec le type" %} <strong>{{ assoc.type_membre.libelle }}</strong> ?</p>
+                                                            <div class="mb-3">
+                                                                <label for="commentaire{{ assoc.id }}" class="form-label">{% trans "Commentaire" %}</label>
+                                                                <textarea id="commentaire{{ assoc.id }}" name="commentaire" class="form-control" rows="3"></textarea>
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
+                                                            <button type="submit" class="btn btn-danger">{% trans "Terminer" %}</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center">{% trans "Aucun historique de type" %}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Formulaire pour ajouter un type -->
+            {% if perms.membres.add_membretypemembre %}
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Ajouter un type de membre" %}</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'membres:membre_ajouter_type' membre.id %}">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ type_form.type_membre.id_for_label }}" class="form-label">
+                                {{ type_form.type_membre.label }}
+                            </label>
+                            {{ type_form.type_membre }}
+                            {% if type_form.type_membre.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ type_form.type_membre.errors }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ type_form.date_debut.id_for_label }}" class="form-label">
+                                {{ type_form.date_debut.label }}
+                            </label>
+                            {{ type_form.date_debut }}
+                            {% if type_form.date_debut.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ type_form.date_debut.errors }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ type_form.commentaire.id_for_label }}" class="form-label">
+                                {{ type_form.commentaire.label }}
+                            </label>
+                            {{ type_form.commentaire }}
+                            {% if type_form.commentaire.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ type_form.commentaire.errors }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> {% trans "Ajouter" %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Colonne de droite: historique et activités -->
+        <div class="col-md-4">
+            <!-- Historique récent -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">{% trans "Historique récent" %}</h5>
+                    <a href="{% url 'membres:membre_historique' membre.id %}" class="btn btn-sm btn-light">
+                        {% trans "Voir tout" %}
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for entry in historique %}
+                        <div class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ entry.action }}</h6>
+                                <small>{{ entry.created_at|date:"d/m/Y H:i" }}</small>
+                            </div>
+                            <p class="mb-1">{{ entry.description }}</p>
+                            <small>{% trans "Par" %}: {{ entry.utilisateur.username|default:_("Système") }}</small>
+                        </div>
+                        {% empty %}
+                        <div class="alert alert-info">
+                            {% trans "Aucun historique disponible" %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Cotisations (si application disponible) -->
+            {% if cotisations %}
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">{% trans "Cotisations" %}</h5>
+                    {% if nb_cotisations_impayees > 0 %}
+                    <span class="badge bg-danger">{{ nb_cotisations_impayees }} {% trans "impayée(s)" %}</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>{% trans "Période" %}</th>
+                                    <th>{% trans "Montant" %}</th>
+                                    <th>{% trans "Statut" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cotisation in cotisations %}
+                                <tr class="{% if cotisation.statut_paiement == 'payée' %}table-success{% elif cotisation.statut_paiement == 'partiellement_payée' %}table-warning{% else %}table-danger{% endif %}">
+                                    <td>{{ cotisation.mois }}/{{ cotisation.annee }}</td>
+                                    <td>{{ cotisation.montant }} €</td>
+                                    <td>{{ cotisation.get_statut_paiement_display }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center">{% trans "Aucune cotisation" %}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Événements (si application disponible) -->
+            {% if inscriptions %}
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">{% trans "Événements" %}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for inscription in inscriptions %}
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ inscription.evenement.titre }}</h6>
+                                <small>{{ inscription.date_inscription|date:"d/m/Y" }}</small>
+                            </div>
+                            <p class="mb-1">
+                                {% trans "Date" %}: {{ inscription.evenement.date_debut|date:"d/m/Y H:i" }}
+                            </p>
+                            <span class="badge {% if inscription.statut == 'confirmée' %}bg-success{% elif inscription.statut == 'en_attente' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                {{ inscription.get_statut_display }}
+                            </span>
+                        </div>
+                        {% empty %}
+                        <div class="alert alert-info">
+                            {% trans "Aucun événement" %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Documents (si application disponible) -->
+            {% if documents %}
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">{% trans "Documents" %}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for document in documents %}
+                        <a href="{{ document.fichier.url }}" class="list-group-item list-group-item-action" target="_blank">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ document.nom_fichier }}</h6>
+                                <small>{{ document.date_upload|date:"d/m/Y" }}</small>
+                            </div>
+                            <p class="mb-1">{{ document.type_document.libelle }}</p>
+                            <small>{% trans "Taille" %}: {{ document.taille_fichier|filesizeformat }}</small>
+                        </a>
+                        {% empty %}
+                        <div class="alert alert-info">
+                            {% trans "Aucun document" %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

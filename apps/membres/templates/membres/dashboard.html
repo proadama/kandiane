@@ -1,0 +1,269 @@
+{% extends "layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Tableau de bord des membres" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h1 class="mb-4">{% trans "Tableau de bord des membres" %}</h1>
+    
+    <!-- Cartes des statistiques -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{% trans "Total des membres" %}</h5>
+                    <p class="display-4">{{ total_membres }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{% trans "Membres actifs" %}</h5>
+                    <p class="display-4">{{ membres_actifs }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card border-info">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{% trans "Types de membres" %}</h5>
+                    <p class="display-4">{{ types_membres.count }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{% trans "Adhésions récentes" %}</h5>
+                    <p class="display-4">{{ adhesions_recentes.count }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Graphiques -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">{% trans "Répartition par types de membres" %}</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="chartTypes" width="400" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">{% trans "Adhésions par mois" %}</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="chartMonthly" width="400" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">{% trans "Répartition par statut" %}</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="chartStatuts" width="400" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">{% trans "Membres avec compte utilisateur" %}</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="chartComptes" width="400" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Adhésions récentes -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">{% trans "Dernières adhésions" %}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>{% trans "Nom" %}</th>
+                                    <th>{% trans "Email" %}</th>
+                                    <th>{% trans "Date d'adhésion" %}</th>
+                                    <th>{% trans "Types" %}</th>
+                                    <th>{% trans "Actions" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for membre in adhesions_recentes %}
+                                <tr>
+                                    <td>{{ membre.prenom }} {{ membre.nom }}</td>
+                                    <td>{{ membre.email }}</td>
+                                    <td>{{ membre.date_adhesion }}</td>
+                                    <td>
+                                        {% for type in membre.get_types_actifs %}
+                                        <span class="badge bg-primary">{{ type.libelle }}</span>
+                                        {% empty %}
+                                        <span class="badge bg-secondary">{% trans "Aucun" %}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'membres:membre_detail' membre.id %}" class="btn btn-sm btn-info">
+                                            <i class="fas fa-eye"></i> {% trans "Voir" %}
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center">{% trans "Aucune adhésion récente" %}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer text-end">
+                    <a href="{% url 'membres:membre_liste' %}" class="btn btn-primary">
+                        {% trans "Voir tous les membres" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Données pour les graphiques
+    const typesData = {{ chart_types|safe }};
+    const monthlyData = {{ chart_monthly|safe }};
+    const statutsData = {{ chart_statuts|safe }};
+    const comptesData = {{ chart_comptes|safe }};
+    
+    // Configuration des couleurs
+    const bgColors = [
+        'rgba(54, 162, 235, 0.6)',
+        'rgba(255, 99, 132, 0.6)',
+        'rgba(75, 192, 192, 0.6)',
+        'rgba(255, 206, 86, 0.6)',
+        'rgba(153, 102, 255, 0.6)',
+        'rgba(255, 159, 64, 0.6)',
+        'rgba(199, 199, 199, 0.6)'
+    ];
+    
+    // Graphique des types de membres
+    const ctxTypes = document.getElementById('chartTypes').getContext('2d');
+    new Chart(ctxTypes, {
+        type: 'pie',
+        data: {
+            labels: typesData.map(d => d.name),
+            datasets: [{
+                data: typesData.map(d => d.value),
+                backgroundColor: bgColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right',
+                }
+            }
+        }
+    });
+    
+    // Graphique des adhésions par mois
+    const ctxMonthly = document.getElementById('chartMonthly').getContext('2d');
+    new Chart(ctxMonthly, {
+        type: 'bar',
+        data: {
+            labels: monthlyData.map(d => d.month),
+            datasets: [{
+                label: '{% trans "Nombre d\'adhésions" %}',
+                data: monthlyData.map(d => d.count),
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Graphique des statuts
+    const ctxStatuts = document.getElementById('chartStatuts').getContext('2d');
+    new Chart(ctxStatuts, {
+        type: 'doughnut',
+        data: {
+            labels: statutsData.map(d => d.name),
+            datasets: [{
+                data: statutsData.map(d => d.value),
+                backgroundColor: bgColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right',
+                }
+            }
+        }
+    });
+    
+    // Graphique des comptes utilisateurs
+    const ctxComptes = document.getElementById('chartComptes').getContext('2d');
+    new Chart(ctxComptes, {
+        type: 'pie',
+        data: {
+            labels: comptesData.map(d => d.name),
+            datasets: [{
+                data: comptesData.map(d => d.value),
+                backgroundColor: [
+                    'rgba(75, 192, 192, 0.6)',
+                    'rgba(255, 99, 132, 0.6)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right',
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

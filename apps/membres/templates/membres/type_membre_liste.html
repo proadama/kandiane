@@ -1,0 +1,130 @@
+{% extends "layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Types de membres" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{% trans "Types de membres" %}</h1>
+        <div>
+            {% if perms.membres.add_typemembre %}
+            <a href="{% url 'membres:type_membre_nouveau' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> {% trans "Nouveau type de membre" %}
+            </a>
+            {% endif %}
+            <a href="{% url 'membres:dashboard' %}" class="btn btn-secondary">
+                <i class="fas fa-tachometer-alt"></i> {% trans "Tableau de bord" %}
+            </a>
+        </div>
+    </div>
+    
+    <!-- Liste des types de membre -->
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0">{% trans "Liste des types de membres" %}</h5>
+        </div>
+        <div class="card-body">
+            {% if types_membres %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Libellé" %}</th>
+                            <th>{% trans "Description" %}</th>
+                            <th>{% trans "Cotisation requise" %}</th>
+                            <th>{% trans "Ordre d'affichage" %}</th>
+                            <th>{% trans "Membres actifs" %}</th>
+                            <th>{% trans "Actions" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for type in types_membres %}
+                        <tr>
+                            <td>
+                                <strong>{{ type.libelle }}</strong>
+                            </td>
+                            <td>{{ type.description|default:"-"|truncatechars:100 }}</td>
+                            <td>
+                                {% if type.cotisation_requise %}
+                                <span class="badge bg-success"><i class="fas fa-check"></i></span>
+                                {% else %}
+                                <span class="badge bg-secondary"><i class="fas fa-times"></i></span>
+                                {% endif %}
+                            </td>
+                            <td>{{ type.ordre_affichage }}</td>
+                            <td>
+                                {% if type.members_count is not None %}
+                                {{ type.members_count }}
+                                {% else %}
+                                {{ type.nb_membres_actifs }}
+                                {% endif %}
+                                <a href="{% url 'membres:membre_liste' %}?type_membre={{ type.id }}" class="btn btn-sm btn-outline-primary ms-2">
+                                    <i class="fas fa-search"></i>
+                                </a>
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    {% if perms.membres.change_typemembre %}
+                                    <a href="{% url 'membres:type_membre_modifier' type.id %}" class="btn btn-sm btn-warning">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if perms.membres.delete_typemembre %}
+                                    <a href="{% url 'membres:type_membre_supprimer' type.id %}" class="btn btn-sm btn-danger">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                {% trans "Aucun type de membre défini." %}
+                {% if perms.membres.add_typemembre %}
+                <a href="{% url 'membres:type_membre_nouveau' %}" class="alert-link">
+                    {% trans "Créer un nouveau type de membre" %}
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Explication des types de membres -->
+    <div class="card mt-4">
+        <div class="card-header bg-light">
+            <h5 class="card-title mb-0">{% trans "À propos des types de membres" %}</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>{% trans "Qu'est-ce qu'un type de membre ?" %}</h6>
+                    <p>
+                        {% trans "Les types de membres permettent de catégoriser les membres selon leur relation avec l'association." %}
+                        {% trans "Par exemple : membre actif, membre bienfaiteur, membre d'honneur, etc." %}
+                    </p>
+                    <p>
+                        {% trans "Chaque membre peut avoir un ou plusieurs types de membre, avec des dates de début et de fin." %}
+                        {% trans "Cela permet de garder un historique des changements de statut." %}
+                    </p>
+                </div>
+                <div class="col-md-6">
+                    <h6>{% trans "Comment utiliser les types de membres ?" %}</h6>
+                    <ul>
+                        <li>{% trans "Créez différents types selon les besoins de votre association" %}</li>
+                        <li>{% trans "Définissez si le type nécessite une cotisation" %}</li>
+                        <li>{% trans "Attribuez un ordre d'affichage pour organiser la présentation" %}</li>
+                        <li>{% trans "Assignez un ou plusieurs types à chaque membre" %}</li>
+                        <li>{% trans "Utilisez les types pour filtrer les membres dans les recherches" %}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

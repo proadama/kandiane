@@ -31,6 +31,7 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     'apps.core',
     'apps.accounts',
+    'apps.membres',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -134,3 +135,12 @@ SESSION_IDLE_TIMEOUT = 1800  # 30 minutes
 
 # Nom du site pour les emails
 SITE_NAME = env('SITE_NAME', default='Nom de l\'association')
+
+# Paramètres pour les photos des membres
+THUMBNAIL_ALIASES = {
+    '': {
+        'small': {'size': (50, 50), 'crop': True},
+        'medium': {'size': (100, 100), 'crop': True},
+        'large': {'size': (250, 250), 'crop': True},
+    },
+}

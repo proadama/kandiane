@@ -1,0 +1,178 @@
+{% extends "layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}
+    {% if form.instance.pk %}
+        {% trans "Modifier le type de membre" %}: {{ form.instance.libelle }}
+    {% else %}
+        {% trans "Nouveau type de membre" %}
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h1 class="h3 card-title mb-0">
+                        {% if form.instance.pk %}
+                            {% trans "Modifier le type de membre" %}: {{ form.instance.libelle }}
+                        {% else %}
+                            {% trans "Nouveau type de membre" %}
+                        {% endif %}
+                    </h1>
+                </div>
+                <div class="card-body">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.libelle.id_for_label }}" class="form-label">{{ form.libelle.label }} *</label>
+                            {{ form.libelle }}
+                            {% if form.libelle.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.libelle.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            {% if form.libelle.help_text %}
+                            <div class="form-text">{{ form.libelle.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.description.id_for_label }}" class="form-label">{{ form.description.label }}</label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.description.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            {% if form.description.help_text %}
+                            <div class="form-text">{{ form.description.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                {{ form.cotisation_requise }}
+                                <label class="form-check-label" for="{{ form.cotisation_requise.id_for_label }}">
+                                    {{ form.cotisation_requise.label }}
+                                </label>
+                                {% if form.cotisation_requise.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.cotisation_requise.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                {% if form.cotisation_requise.help_text %}
+                                <div class="form-text">{{ form.cotisation_requise.help_text }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.ordre_affichage.id_for_label }}" class="form-label">{{ form.ordre_affichage.label }}</label>
+                            {{ form.ordre_affichage }}
+                            {% if form.ordre_affichage.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.ordre_affichage.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            {% if form.ordre_affichage.help_text %}
+                            <div class="form-text">{{ form.ordre_affichage.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'membres:type_membre_liste' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> {% trans "Annuler" %}
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> 
+                                {% if form.instance.pk %}
+                                    {% trans "Enregistrer les modifications" %}
+                                {% else %}
+                                    {% trans "Créer le type de membre" %}
+                                {% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            {% if form.instance.pk %}
+            <!-- Informations supplémentaires pour un type existant -->
+            <div class="card mt-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Informations sur l'utilisation" %}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-6">{% trans "Membres actifs" %}</dt>
+                                <dd class="col-sm-6">{{ form.instance.nb_membres_actifs }}</dd>
+                                
+                                <dt class="col-sm-6">{% trans "Date de création" %}</dt>
+                                <dd class="col-sm-6">{{ form.instance.created_at|date:"d/m/Y H:i" }}</dd>
+                                
+                                <dt class="col-sm-6">{% trans "Dernière modification" %}</dt>
+                                <dd class="col-sm-6">{{ form.instance.updated_at|date:"d/m/Y H:i" }}</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-info">
+                                <h6>{% trans "Utilisation de ce type" %}</h6>
+                                <p>
+                                    {% blocktrans with count=form.instance.nb_membres_actifs %}
+                                    Ce type de membre est actuellement utilisé par <strong>{{ count }}</strong> membre(s).
+                                    {% endblocktrans %}
+                                </p>
+                                <a href="{% url 'membres:membre_liste' %}?type_membre={{ form.instance.id }}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-search"></i> {% trans "Voir les membres" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Conseils pour la création de types de membres -->
+            <div class="card mt-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Conseils" %}</h5>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li>{% trans "Donnez un libellé clair et représentatif du type de membre" %}</li>
+                        <li>{% trans "La description permet de préciser les droits et obligations associés à ce type" %}</li>
+                        <li>{% trans "Cochez 'Cotisation requise' si ce type de membre doit payer une cotisation" %}</li>
+                        <li>{% trans "L'ordre d'affichage permet de trier les types dans les listes et formulaires" %}</li>
+                    </ul>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        {% trans "Attention : la modification d'un type de membre affecte tous les membres qui y sont associés." %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

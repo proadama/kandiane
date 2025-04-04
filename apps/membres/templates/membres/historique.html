@@ -1,0 +1,276 @@
+{% extends "layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Historique du membre" %}: {{ membre.prenom }} {{ membre.nom }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{% trans "Historique du membre" %}: {{ membre.prenom }} {{ membre.nom }}</h1>
+        <div>
+            <a href="{% url 'membres:membre_detail' membre.id %}" class="btn btn-primary">
+                <i class="fas fa-arrow-left"></i> {% trans "Retour au membre" %}
+            </a>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-3">
+            <!-- Informations du membre -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">{% trans "Informations du membre" %}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        {% if membre.photo %}
+                        <img src="{{ membre.photo.url }}" alt="{{ membre.nom_complet }}" class="img-thumbnail rounded-circle" style="width: 120px; height: 120px; object-fit: cover;">
+                        {% else %}
+                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center mx-auto" style="width: 120px; height: 120px; font-size: 2.5rem;">
+                            {{ membre.prenom|first }}{{ membre.nom|first }}
+                        </div>
+                        {% endif %}
+                        <h5 class="mt-2">{{ membre.prenom }} {{ membre.nom }}</h5>
+                        <p class="text-muted">{{ membre.email }}</p>
+                    </div>
+                    
+                    <dl class="row">
+                        <dt class="col-sm-6">{% trans "Date d'adhésion" %}</dt>
+                        <dd class="col-sm-6">{{ membre.date_adhesion }}</dd>
+                        
+                        <dt class="col-sm-6">{% trans "Statut" %}</dt>
+                        <dd class="col-sm-6">
+                            {% if membre.statut %}
+                            <span class="badge {% if membre.statut.nom == 'Actif' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ membre.statut.nom }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </dd>
+                        
+                        <dt class="col-sm-6">{% trans "Types actifs" %}</dt>
+                        <dd class="col-sm-6">
+                            {% for type in membre.get_types_actifs %}
+                            <span class="badge bg-primary">{{ type.libelle }}</span>
+                            {% empty %}
+                            <span class="text-muted">-</span>
+                            {% endfor %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+            
+            <!-- Filtres -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Filtres" %}</h5>
+                </div>
+                <div class="card-body">
+                    <form method="get">
+                        <div class="mb-3">
+                            <label class="form-label">{% trans "Type d'action" %}</label>
+                            <select name="action" class="form-select">
+                                <option value="">{% trans "Toutes les actions" %}</option>
+                                <option value="creation" {% if request.GET.action == 'creation' %}selected{% endif %}>{% trans "Création" %}</option>
+                                <option value="modification" {% if request.GET.action == 'modification' %}selected{% endif %}>{% trans "Modification" %}</option>
+                                <option value="suppression" {% if request.GET.action == 'suppression' %}selected{% endif %}>{% trans "Suppression" %}</option>
+                                <option value="ajout_type" {% if request.GET.action == 'ajout_type' %}selected{% endif %}>{% trans "Ajout de type" %}</option>
+                                <option value="fin_type" {% if request.GET.action == 'fin_type' %}selected{% endif %}>{% trans "Fin de type" %}</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">{% trans "Date début" %}</label>
+                            <input type="date" name="date_debut" class="form-control" value="{{ request.GET.date_debut }}">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">{% trans "Date fin" %}</label>
+                            <input type="date" name="date_fin" class="form-control" value="{{ request.GET.date_fin }}">
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-filter"></i> {% trans "Filtrer" %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-9">
+            <!-- Historique des types de membre -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">{% trans "Historique des types de membre" %}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>{% trans "Type" %}</th>
+                                    <th>{% trans "Date début" %}</th>
+                                    <th>{% trans "Date fin" %}</th>
+                                    <th>{% trans "Commentaire" %}</th>
+                                    <th>{% trans "Modifié par" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for assoc in historique_types %}
+                                <tr class="{% if assoc.est_actif %}table-success{% elif assoc.date_fin %}table-secondary{% endif %}">
+                                    <td>{{ assoc.type_membre.libelle }}</td>
+                                    <td>{{ assoc.date_debut }}</td>
+                                    <td>{{ assoc.date_fin|default:"-" }}</td>
+                                    <td>{{ assoc.commentaire|default:"-" }}</td>
+                                    <td>{{ assoc.modifie_par.username|default:_("Non spécifié") }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center">{% trans "Aucun historique de type de membre" %}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Historique des modifications -->
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">{% trans "Historique des modifications" %}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        {% for entry in historique %}
+                        <div class="card mb-3 {% if entry.action == 'creation' %}border-success{% elif entry.action == 'modification' %}border-warning{% elif entry.action == 'suppression' %}border-danger{% elif entry.action == 'ajout_type' %}border-info{% elif entry.action == 'fin_type' %}border-secondary{% endif %}">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                <span>
+                                    <i class="fas {% if entry.action == 'creation' %}fa-plus-circle text-success{% elif entry.action == 'modification' %}fa-edit text-warning{% elif entry.action == 'suppression' %}fa-trash text-danger{% elif entry.action == 'ajout_type' %}fa-tag text-info{% elif entry.action == 'fin_type' %}fa-unlink text-secondary{% else %}fa-history{% endif %} me-2"></i>
+                                    <strong>{{ entry.action|title }}</strong>
+                                </span>
+                                <span class="text-muted small">
+                                    {{ entry.created_at|date:"d/m/Y H:i" }}
+                                    {% if entry.utilisateur %}
+                                    {% trans "par" %} {{ entry.utilisateur.username }}
+                                    {% else %}
+                                    {% trans "par système" %}
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">{{ entry.description }}</p>
+                                
+                                {% if entry.donnees_avant or entry.donnees_apres %}
+                                <div class="accordion" id="accordion-{{ entry.id }}">
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header" id="heading-{{ entry.id }}">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ entry.id }}" aria-expanded="false" aria-controls="collapse-{{ entry.id }}">
+                                                {% trans "Détails des modifications" %}
+                                            </button>
+                                        </h2>
+                                        <div id="collapse-{{ entry.id }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ entry.id }}" data-bs-parent="#accordion-{{ entry.id }}">
+                                            <div class="accordion-body">
+                                                <div class="row">
+                                                    {% if entry.donnees_avant %}
+                                                    <div class="col-md-6">
+                                                        <h6>{% trans "Avant" %}</h6>
+                                                        <pre class="bg-light p-2 rounded"><code>{{ entry.donnees_avant|pprint }}</code></pre>
+                                                    </div>
+                                                    {% endif %}
+                                                    
+                                                    {% if entry.donnees_apres %}
+                                                    <div class="col-md-6">
+                                                        <h6>{% trans "Après" %}</h6>
+                                                        <pre class="bg-light p-2 rounded"><code>{{ entry.donnees_apres|pprint }}</code></pre>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="alert alert-info">
+                            {% trans "Aucun historique de modification disponible." %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Pagination -->
+                    {% if historique.paginator %}
+                    <nav aria-label="{% trans 'Pagination' %}">
+                        <ul class="pagination justify-content-center mt-4">
+                            {% if historique.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page=1">
+                                    <i class="fas fa-angle-double-left"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ historique.previous_page_number }}">
+                                    <i class="fas fa-angle-left"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            <li class="page-item active">
+                                <span class="page-link">
+                                    {{ historique.number }} / {{ historique.paginator.num_pages }}
+                                </span>
+                            </li>
+                            
+                            {% if historique.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ historique.next_page_number }}">
+                                    <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ historique.paginator.num_pages }}">
+                                    <i class="fas fa-angle-double-right"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .timeline {
+        position: relative;
+        max-width: 100%;
+    }
+    
+    .timeline:before {
+        content: '';
+        position: absolute;
+        left: 20px;
+        top: 0;
+        height: 100%;
+        width: 2px;
+        background: #e9ecef;
+        z-index: 0;
+    }
+    
+    @media (min-width: 768px) {
+        .timeline:before {
+            left: 50%;
+            margin-left: -1px;
+        }
+    }
+</style>
+{% endblock %}
