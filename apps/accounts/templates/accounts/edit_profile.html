@@ -1,0 +1,181 @@
+{% extends 'layouts/base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "Modifier mon profil" %}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">{% trans "Modifier mon profil" %}</h4>
+                    <a href="{% url 'accounts:profile' %}" class="btn btn-sm btn-light">
+                        <i class="bi bi-arrow-left"></i> {% trans "Retour" %}
+                    </a>
+                </div>
+                <div class="card-body p-4">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }}" role="alert">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                    
+                    <form method="post" enctype="multipart/form-data" action="{% url 'accounts:edit_profile' %}">
+                        {% csrf_token %}
+                        
+                        <h5 class="mb-3">{% trans "Informations personnelles" %}</h5>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.first_name.id_for_label }}" class="form-label">
+                                    {% trans "Prénom" %}
+                                </label>
+                                {{ form.first_name }}
+                                {% if form.first_name.errors %}
+                                    <div class="text-danger mt-1">
+                                        {{ form.first_name.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.last_name.id_for_label }}" class="form-label">
+                                    {% trans "Nom" %}
+                                </label>
+                                {{ form.last_name }}
+                                {% if form.last_name.errors %}
+                                    <div class="text-danger mt-1">
+                                        {{ form.last_name.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.telephone.id_for_label }}" class="form-label">
+                                    {% trans "Téléphone" %}
+                                </label>
+                                {{ form.telephone }}
+                                {% if form.telephone.errors %}
+                                    <div class="text-danger mt-1">
+                                        {{ form.telephone.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.date_naissance.id_for_label }}" class="form-label">
+                                    {% trans "Date de naissance" %}
+                                </label>
+                                {{ form.date_naissance }}
+                                {% if form.date_naissance.errors %}
+                                    <div class="text-danger mt-1">
+                                        {{ form.date_naissance.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.avatar.id_for_label }}" class="form-label">
+                                {% trans "Avatar" %}
+                            </label>
+                            {{ form.avatar }}
+                            {% if form.avatar.errors %}
+                                <div class="text-danger mt-1">
+                                    {{ form.avatar.errors }}
+                                </div>
+                            {% endif %}
+                            {% if user.avatar %}
+                                <div class="form-text">
+                                    {% trans "Image actuelle:" %} {{ user.avatar.url|cut:"media/" }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <hr>
+                        
+                        <h5 class="mb-3">{% trans "Adresse" %}</h5>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.adresse.id_for_label }}" class="form-label">
+                                {% trans "Adresse" %}
+                            </label>
+                            {{ form.adresse }}
+                            {% if form.adresse.errors %}
+                                <div class="text-danger mt-1">
+                                    {{ form.adresse.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.code_postal.id_for_label }}" class="form-label">
+                                    {% trans "Code postal" %}
+                                </label>
+                                {{ form.code_postal }}
+                                {% if form.code_postal.errors %}
+                                    <div class="text-danger mt-1">
+                                        {{ form.code_postal.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.ville.id_for_label }}" class="form-label">
+                                    {% trans "Ville" %}
+                                </label>
+                                {{ form.ville }}
+                                {% if form.ville.errors %}
+                                    <div class="text-danger mt-1">
+                                        {{ form.ville.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.pays.id_for_label }}" class="form-label">
+                                {% trans "Pays" %}
+                            </label>
+                            {{ form.pays }}
+                            {% if form.pays.errors %}
+                                <div class="text-danger mt-1">
+                                    {{ form.pays.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <hr>
+                        
+                        <h5 class="mb-3">{% trans "À propos de vous" %}</h5>
+                        
+                        <div class="mb-4">
+                            <label for="{{ form.bio.id_for_label }}" class="form-label">
+                                {% trans "Biographie" %}
+                            </label>
+                            {{ form.bio }}
+                            {% if form.bio.errors %}
+                                <div class="text-danger mt-1">
+                                    {{ form.bio.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                {% trans "Enregistrer les modifications" %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -29,6 +29,7 @@ handler500 = 'apps.core.views.error_500'
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('accounts/', include('apps.accounts.urls')),
     path('', include('apps.core.urls')),
     # Redirection de la racine vers l'application core
     path('favicon.ico', RedirectView.as_view(url='/static/img/favicon.ico')),
@@ -37,6 +38,7 @@ urlpatterns = [
 # Ajouter les URLs pour les media et les fichiers statiques en développement
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
     
     # Ajouter la debug toolbar seulement en mode développement
     try:

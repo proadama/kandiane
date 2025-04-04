@@ -1,0 +1,171 @@
+{% extends 'layouts/base.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "Mon profil" %}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-body text-center">
+                    {% if user.avatar %}
+                        <img src="{{ user.avatar.url }}" alt="{{ user.get_full_name }}" class="rounded-circle img-thumbnail mb-3" style="width: 150px; height: 150px; object-fit: cover;">
+                    {% else %}
+                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 150px; height: 150px; font-size: 50px;">
+                            {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}
+                        </div>
+                    {% endif %}
+                    <h5 class="mb-0">{{ user.get_full_name }}</h5>
+                    <p class="text-muted mb-2">{{ user.email }}</p>
+                    
+                    {% if user.role %}
+                        <span class="badge bg-primary mb-3">{{ user.role.nom }}</span>
+                    {% endif %}
+                    
+                    <div class="d-grid gap-2 mt-3">
+                        <a href="{% url 'accounts:edit_profile' %}" class="btn btn-primary">
+                            <i class="bi bi-pencil-square me-1"></i> {% trans "Modifier mon profil" %}
+                        </a>
+                        <a href="{% url 'accounts:change_password' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-shield-lock me-1"></i> {% trans "Changer mon mot de passe" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card shadow">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">{% trans "Informations de connexion" %}</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">
+                        <strong>{% trans "Date d'inscription :" %}</strong>
+                        {{ user.date_joined|date:"d/m/Y" }}
+                    </p>
+                    <p class="mb-0">
+                        <strong>{% trans "Dernière connexion :" %}</strong>
+                        {% if user.derniere_connexion %}
+                            {{ user.derniere_connexion|date:"d/m/Y H:i" }}
+                        {% else %}
+                            {% trans "Jamais" %}
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">{% trans "Informations personnelles" %}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>{% trans "Prénom" %}</strong></p>
+                            <p>{{ user.first_name|default:"-" }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>{% trans "Nom" %}</strong></p>
+                            <p>{{ user.last_name|default:"-" }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>{% trans "Nom d'utilisateur" %}</strong></p>
+                            <p>{{ user.username }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>{% trans "Téléphone" %}</strong></p>
+                            <p>{{ user.telephone|default:"-" }}</p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <h6 class="mb-3">{% trans "Profil complémentaire" %}</h6>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>{% trans "Date de naissance" %}</strong></p>
+                            <p>{{ user.profile.date_naissance|date:"d/m/Y"|default:"-" }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>{% trans "Pays" %}</strong></p>
+                            <p>{{ user.profile.pays|default:"-" }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <p class="mb-1"><strong>{% trans "Adresse" %}</strong></p>
+                        <p>
+                            {% if user.profile.adresse %}
+                                {{ user.profile.adresse }}<br>
+                                {% if user.profile.code_postal or user.profile.ville %}
+                                    {{ user.profile.code_postal }} {{ user.profile.ville }}
+                                {% endif %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <p class="mb-1"><strong>{% trans "Biographie" %}</strong></p>
+                        <p>{{ user.profile.bio|linebreaks|default:"-" }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <p class="mb-1"><strong>{% trans "Préférences de communication" %}</strong></p>
+                        <p>
+                            {% if user.accepte_communications %}
+                                <span class="badge bg-success">{% trans "Activées" %}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{% trans "Désactivées" %}</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            {% if user.login_history.all %}
+                <div class="card shadow mt-4">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">{% trans "Activité récente" %}</h5>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>{% trans "Date" %}</th>
+                                    <th>{% trans "Activité" %}</th>
+                                    <th>{% trans "Adresse IP" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in user.login_history.all|slice:":5" %}
+                                    <tr>
+                                        <td>{{ log.created_at|date:"d/m/Y H:i" }}</td>
+                                        <td>
+                                            {% if log.status == 'success' %}
+                                                <span class="badge bg-success">{% trans "Connexion réussie" %}</span>
+                                            {% elif log.status == 'failed' %}
+                                                <span class="badge bg-danger">{% trans "Tentative échouée" %}</span>
+                                            {% elif log.status == 'logout' %}
+                                                <span class="badge bg-secondary">{% trans "Déconnexion" %}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ log.ip_address|default:"-" }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

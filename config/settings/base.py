@@ -30,6 +30,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     'apps.core',
+    'apps.accounts',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -42,6 +43,10 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Middlewares personnalisés
+    'apps.accounts.middleware.LastUserActivityMiddleware',
+    'apps.accounts.middleware.SessionExpiryMiddleware',
+    'apps.accounts.middleware.RolePermissionMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -115,3 +120,17 @@ EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
 
 # Site URL
 SITE_URL = env('SITE_URL', default='http://localhost:8000')
+
+# Modèle utilisateur personnalisé
+AUTH_USER_MODEL = 'accounts.CustomUser'
+
+# URLs d'authentification
+LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/accounts/login/'
+
+# Durée d'inactivité avant déconnexion (en secondes)
+SESSION_IDLE_TIMEOUT = 1800  # 30 minutes
+
+# Nom du site pour les emails
+SITE_NAME = env('SITE_NAME', default='Nom de l\'association')
