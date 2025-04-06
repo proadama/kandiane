@@ -60,4 +60,7 @@ urlpatterns = [
 
     # Page protégée
     path('protected/', views.ProtectedPageView.as_view(), name='protected_page'),
+
+    # Termes CGU
+    path('terms/', views.TermsView.as_view(), name='terms'),
 ]

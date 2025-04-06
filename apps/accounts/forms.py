@@ -3,7 +3,7 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordResetForm, SetPasswordForm
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
-from .models import Role, Permission, UserProfile
+from .models import Role, Permission, UserProfile, CustomUser
 
 User = get_user_model()
 
@@ -72,10 +72,25 @@ class CustomUserCreationForm(UserCreationForm):
         initial=True,
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
+
+    accept_terms = forms.BooleanField(
+        required=True,
+        label=_("J'accepte les termes et conditions d'utilisation"),
+        error_messages={
+            'required': _("Vous devez accepter les termes et conditions pour créer un compte.")
+        },
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
     
     class Meta:
-        model = User
-        fields = ('email', 'username', 'first_name', 'last_name', 'password1', 'password2', 'accepte_communications')
+        model = CustomUser
+        fields = ('email', 'username', 'first_name', 'last_name', 'password1', 'password2')
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        if not cleaned_data.get('accept_terms'):
+            raise forms.ValidationError(_("Vous devez accepter les termes et conditions."))
+        return cleaned_data
     
     def save(self, commit=True):
         user = super().save(commit=False)

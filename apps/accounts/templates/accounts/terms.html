@@ -1,0 +1,24 @@
+{% extends 'layouts/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h2 class="mb-0">{% trans "Termes et conditions d'utilisation" %}</h2>
+        </div>
+        <div class="card-body">
+            <h3>1. {% trans "Acceptation des conditions" %}</h3>
+            <p>{% trans "En créant un compte, vous acceptez de respecter les présentes conditions d'utilisation." %}</p>
+            
+            <h3>2. {% trans "Confidentialité" %}</h3>
+            <p>{% trans "Nous nous engageons à protéger vos données personnelles selon notre politique de confidentialité." %}</p>
+            
+            <h3>3. {% trans "Utilisation du service" %}</h3>
+            <p>{% trans "Vous acceptez d'utiliser ce service conformément aux lois en vigueur et de ne pas l'utiliser à des fins illégales." %}</p>
+            
+            <a href="{% url 'accounts:register' %}" class="btn btn-primary mt-3">{% trans "Retour à l'inscription" %}</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

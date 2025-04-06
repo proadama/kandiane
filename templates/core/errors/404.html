@@ -1,0 +1,49 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Page introuvable" %}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 text-center">
+            <div class="mb-4">
+                <h1 class="display-1 text-danger">404</h1>
+                <h2 class="mb-4">{% trans "Page introuvable" %}</h2>
+            </div>
+            
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-5">
+                    <p class="lead mb-4">
+                        {% trans "La page que vous avez demandée n'existe pas ou a été déplacée." %}
+                    </p>
+                    
+                    <div class="my-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" fill="currentColor" class="bi bi-search text-secondary mb-3" viewBox="0 0 16 16">
+                            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                        </svg>
+                    </div>
+
+                    <p class="mb-4">
+                        {% trans "Vous pouvez retourner à la page d'accueil ou vous connecter à votre compte." %}
+                    </p>
+                    
+                    <div class="d-flex justify-content-center gap-3">
+                        <a href="{% url 'home' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-house-door me-2"></i>{% trans "Page d'accueil" %}
+                        </a>
+                        <a href="{% url 'login' %}" class="btn btn-primary">
+                            <i class="bi bi-box-arrow-in-right me-2"></i>{% trans "Connexion" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <p class="text-muted">
+                {% trans "Si vous pensez qu'il s'agit d'une erreur, veuillez contacter l'administrateur du site." %}
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

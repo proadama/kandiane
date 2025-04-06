@@ -340,3 +340,9 @@ class ProtectedPageView(LoginRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['now'] = timezone.now()
         return context
+
+class TermsView(TemplateView):
+    """
+    Vue pour afficher les termes et conditions d'utilisation.
+    """
+    template_name = 'accounts/terms.html'

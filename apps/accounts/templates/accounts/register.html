@@ -108,14 +108,18 @@
                                 </div>
                             {% endif %}
                         </div>
-                        
-                        <div class="mb-4 form-check">
-                            {{ form.accepte_communications }}
-                            <label class="form-check-label" for="{{ form.accepte_communications.id_for_label }}">
-                                {% trans "J'accepte de recevoir des communications" %}
+                        <!-- Accepter les termes -->
+                        <div class="mb-3 form-check">
+                            {{ form.accept_terms }}
+                            <label class="form-check-label" for="{{ form.accept_terms.id_for_label }}">
+                                {{ form.accept_terms.label }}
+                                <a href="{% url 'accounts:terms' %}" target="_blank">{% trans "Lire les termes et conditions" %}</a>
                             </label>
+                            {% if form.accept_terms.errors %}
+                                <div class="text-danger">{{ form.accept_terms.errors }}</div>
+                            {% endif %}
                         </div>
-                        
+
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-primary">
                                 {% trans "S'inscrire" %}
