@@ -1,0 +1,43 @@
+{% extends 'layouts/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow">
+        <div class="card-header bg-success text-white">
+            <h3 class="mb-0">{% trans "Page protégée par authentification" %}</h3>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <p><strong>{% trans "Cette page n'est accessible qu'aux utilisateurs connectés." %}</strong></p>
+                <p>{% trans "Si votre session expire, vous serez automatiquement redirigé vers la page de connexion." %}</p>
+                <p>{% trans "Heure actuelle du serveur:" %} {{ now }}</p>
+            </div>
+            
+            <h4>{% trans "Utilisateurs actifs récents" %}</h4>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>{% trans "Nom d'utilisateur" %}</th>
+                        <th>{% trans "Email" %}</th>
+                        <th>{% trans "Dernière connexion" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ user.derniere_connexion|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="text-center">{% trans "Aucun utilisateur actif trouvé" %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

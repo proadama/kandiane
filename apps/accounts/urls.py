@@ -57,4 +57,7 @@ urlpatterns = [
     
     # API interne pour le middleware/JS
     path('api/check-session/', views.check_session, name='check_session'),
+
+    # Page protégée
+    path('protected/', views.ProtectedPageView.as_view(), name='protected_page'),
 ]

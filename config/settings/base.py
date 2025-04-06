@@ -149,3 +149,6 @@ THUMBNAIL_ALIASES = {
 
 # Paramètre pour le mode maintenance (False par défaut)
 MAINTENANCE_MODE = False
+
+# Pour les tests, définir une session très courte (30 secondes)
+SESSION_COOKIE_AGE = 60  # en secondes

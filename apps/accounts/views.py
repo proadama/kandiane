@@ -18,6 +18,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth import logout
 from django.shortcuts import redirect
+from django.views.generic import TemplateView
 
 from .models import Role, Permission, UserProfile, UserLoginHistory
 from .forms import (
@@ -319,3 +320,23 @@ def required_permission(permission_code):
         view_func.required_permission = permission_code
         return view_func
     return decorator
+
+class ProtectedPageView(LoginRequiredMixin, ListView):
+    """
+    Vue protégée pour afficher une liste d'utilisateurs.
+    Combine les fonctionnalités de TemplateView avec celles de ListView.
+    """
+    model = User
+    template_name = 'accounts/protected_page.html'
+    context_object_name = 'users'
+    login_url = '/accounts/login/'
+    redirect_field_name = 'next'
+    
+    def get_queryset(self):
+        # Limiter la liste pour des raisons de performance
+        return User.objects.filter(is_active=True)[:5]
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['now'] = timezone.now()
+        return context
