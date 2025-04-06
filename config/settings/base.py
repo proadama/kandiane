@@ -48,6 +48,7 @@ MIDDLEWARE = [
     'apps.accounts.middleware.LastUserActivityMiddleware',
     'apps.accounts.middleware.SessionExpiryMiddleware',
     'apps.accounts.middleware.RolePermissionMiddleware',
+    'apps.core.middleware.MaintenanceModeMiddleware'
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -144,3 +145,6 @@ THUMBNAIL_ALIASES = {
         'large': {'size': (250, 250), 'crop': True},
     },
 }
+
+# Paramètre pour le mode maintenance (False par défaut)
+MAINTENANCE_MODE = False
