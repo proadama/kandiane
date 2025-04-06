@@ -48,7 +48,8 @@ MIDDLEWARE = [
     'apps.accounts.middleware.LastUserActivityMiddleware',
     'apps.accounts.middleware.SessionExpiryMiddleware',
     'apps.accounts.middleware.RolePermissionMiddleware',
-    'apps.core.middleware.MaintenanceModeMiddleware'
+    'apps.core.middleware.MaintenanceModeMiddleware',
+    'apps.core.middleware.NoCacheMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'

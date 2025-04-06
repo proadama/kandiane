@@ -16,6 +16,8 @@ from django.views.decorators.http import require_POST
 from django.template.loader import render_to_string
 from django.core.mail import send_mail
 from django.conf import settings
+from django.contrib.auth import logout
+from django.shortcuts import redirect
 
 from .models import Role, Permission, UserProfile, UserLoginHistory
 from .forms import (
@@ -38,6 +40,8 @@ class CustomLoginView(LoginView):
     form_class = CustomAuthenticationForm
     template_name = 'accounts/login.html'
     redirect_authenticated_user = True
+
+    
 
 
 class RegisterView(CreateView):
@@ -110,6 +114,31 @@ def activate_account(request, activation_key):
         )
         return redirect('accounts:login')
 
+# Supprimer : Ajoutez cette fonction à votre fichier views.py existant
+
+def custom_logout(request):
+    """
+    Vue personnalisée pour la déconnexion qui s'assure que la session est 
+    complètement invalidée et que les cookies sont supprimés.
+    """
+    # Déconnecter l'utilisateur (invalidation de session)
+    logout(request)
+    
+    # Créer une réponse de redirection
+    response = redirect('accounts:login')
+    
+    # Supprimer explicitement le cookie de session
+    response.delete_cookie('sessionid')
+    
+    # Éventuellement, supprimer d'autres cookies si nécessaire
+    response.delete_cookie('csrftoken')
+    
+    # Ajouter des en-têtes pour éviter la mise en cache
+    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    
+    return response
 
 @require_POST
 def resend_activation(request):
@@ -277,7 +306,8 @@ def check_session(request):
     return JsonResponse({
         'authenticated': request.user.is_authenticated,
         'user_id': request.user.id if request.user.is_authenticated else None,
-        'session_valid': True
+        'session_valid': True,
+        'timestamp': timezone.now().timestamp()
     })
 
 

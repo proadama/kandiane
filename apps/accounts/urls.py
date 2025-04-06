@@ -1,5 +1,5 @@
 # apps/accounts/urls.py
-from django.urls import path, re_path
+from django.urls import path, re_path, reverse_lazy
 from django.contrib.auth import views as auth_views
 from . import views
 from .forms import CustomAuthenticationForm, CustomPasswordResetForm, CustomSetPasswordForm
@@ -13,9 +13,8 @@ urlpatterns = [
         template_name='accounts/login.html'
     ), name='login'),
     
-    path('logout/', auth_views.LogoutView.as_view(
-        template_name='accounts/logout.html'
-    ), name='logout'),
+    # Utiliser notre vue de déconnexion personnalisée à la place de LogoutView
+    path('logout/', views.custom_logout, name='logout'),
     
     # Inscription et activation
     path('register/', views.RegisterView.as_view(), name='register'),

@@ -32,7 +32,7 @@
                             <ul class="dropdown-menu dropdown-menu-end">
                                 <li><a class="dropdown-item" href="{% url 'accounts:profile' %}">Mon profil</a></li>
                                 {% if user.is_staff %}
-                                    <li><a class="dropdown-item" href="/admin/">Administration</a></li>
+                                <li><a class="dropdown-item" href="/admin/">Administration</a></li>
                                 {% endif %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'accounts:logout' %}">Déconnexion</a></li>
