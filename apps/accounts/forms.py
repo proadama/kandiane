@@ -4,6 +4,8 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, Pass
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from .models import Role, Permission, UserProfile, CustomUser
+from django.contrib.auth.forms import PasswordResetForm
+from django.core.exceptions import ValidationError
 
 User = get_user_model()
 
@@ -229,3 +231,25 @@ class RoleForm(forms.ModelForm):
                 role.permissions.create(permission=permission)
         
         return role
+
+class CustomPasswordResetForm(PasswordResetForm):
+    """
+    Formulaire personnalisé pour la réinitialisation de mot de passe.
+    Vérifie que l'email existe et correspond à un compte actif avant d'envoyer l'email.
+    """
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        # Récupérer le modèle utilisateur
+        User = self.user_model
+        
+        # Vérifier si l'email existe et correspond à un compte actif
+        if not User.objects.filter(email=email, is_active=True).exists():
+            raise ValidationError(_("Aucun compte actif n'est associé à cette adresse email."))
+        
+        return email
+
+    # Surcharge de la propriété pour éviter la circularité d'import
+    @property
+    def user_model(self):
+        from django.contrib.auth import get_user_model
+        return get_user_model()

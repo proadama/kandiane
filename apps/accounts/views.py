@@ -19,6 +19,9 @@ from django.conf import settings
 from django.contrib.auth import logout
 from django.shortcuts import redirect
 from django.views.generic import TemplateView
+from django.contrib.auth.forms import PasswordResetForm
+from django.core.exceptions import ValidationError
+from django.contrib.auth.views import LoginView, PasswordResetView
 
 from .models import Role, Permission, UserProfile, UserLoginHistory
 from .forms import (
