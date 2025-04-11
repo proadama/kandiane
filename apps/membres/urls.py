@@ -6,6 +6,7 @@ app_name = 'membres'
 urlpatterns = [
     # Dashboard et statistiques
     path('', views.DashboardView.as_view(), name='dashboard'),
+    path('dashboard/', views.DashboardView.as_view(), name='dashboard_alt'),
     path('statistiques/', views.MembreStatistiquesView.as_view(), name='statistiques'),
     
     # Gestion des membres
