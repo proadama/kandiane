@@ -123,53 +123,74 @@ class MembreListView(ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = super().get_queryset()
+        # On commence avec un queryset vide mais qui sera rempli par les filtres
+        queryset = Membre.objects.all()
         form = MembreSearchForm(self.request.GET)
         
         if form.is_valid():
-            # Filtrer par recherche textuelle
-            if term := form.cleaned_data.get('terme'):
-                queryset = queryset.recherche(term)
+            # Variables pour stocker les différents critères de filtrage
+            filters = {}
+            term = form.cleaned_data.get('terme')
+            type_membre_id = form.cleaned_data.get('type_membre').id if form.cleaned_data.get('type_membre') else None
+            statut_id = form.cleaned_data.get('statut').id if form.cleaned_data.get('statut') else None
+            date_adhesion_min = form.cleaned_data.get('date_adhesion_min')
+            date_adhesion_max = form.cleaned_data.get('date_adhesion_max')
+            age_min = form.cleaned_data.get('age_min')
+            age_max = form.cleaned_data.get('age_max')
+            cotisations_impayees = form.cleaned_data.get('cotisations_impayees')
+            avec_compte = form.cleaned_data.get('avec_compte')
+            actif = form.cleaned_data.get('actif')
             
-            # Filtrer par type de membre
-            if type_membre := form.cleaned_data.get('type_membre'):
-                queryset = queryset.par_type(type_membre.id)
-            
-            # Filtrer par statut
-            if statut := form.cleaned_data.get('statut'):
-                queryset = queryset.par_statut(statut.id)
-            
-            # Filtrer par date d'adhésion
-            if date_min := form.cleaned_data.get('date_adhesion_min'):
-                queryset = queryset.filter(date_adhesion__gte=date_min)
+            # Appliquer les filtres standards Django (qui fonctionnent sur n'importe quel QuerySet)
+            if date_adhesion_min:
+                queryset = queryset.filter(date_adhesion__gte=date_adhesion_min)
+            if date_adhesion_max:
+                queryset = queryset.filter(date_adhesion__lte=date_adhesion_max)
                 
-            if date_max := form.cleaned_data.get('date_adhesion_max'):
-                queryset = queryset.filter(date_adhesion__lte=date_max)
+            # Construire un filtre Q complexe pour gérer tous les critères
+            q_objects = Q()
             
-            # Filtrer par âge
-            if age_min := form.cleaned_data.get('age_min'):
-                queryset = queryset.par_age(age_min=age_min)
+            # Ajouter les filtres manuellement avec des expressions Q
+            if term:
+                q_objects &= (
+                    Q(nom__icontains=term) | 
+                    Q(prenom__icontains=term) | 
+                    Q(email__icontains=term) | 
+                    Q(telephone__icontains=term) |
+                    Q(code_postal__icontains=term) |
+                    Q(ville__icontains=term)
+                )
+            
+            if type_membre_id:
+                q_objects &= Q(
+                    types_historique__type_membre_id=type_membre_id,
+                    types_historique__date_debut__lte=timezone.now().date(),
+                    types_historique__date_fin__isnull=True
+                )
+            
+            if statut_id:
+                q_objects &= Q(statut_id=statut_id)
                 
-            if age_max := form.cleaned_data.get('age_max'):
-                queryset = queryset.par_age(age_max=age_max)
-            
-            # Filtrer par cotisations impayées
-            if form.cleaned_data.get('cotisations_impayees'):
-                queryset = queryset.avec_cotisations_impayees()
-            
-            # Filtrer par présence de compte utilisateur
-            if compte := form.cleaned_data.get('avec_compte'):
-                if compte == 'avec':
-                    queryset = queryset.avec_compte_utilisateur()
-                elif compte == 'sans':
-                    queryset = queryset.sans_compte_utilisateur()
-            
-            # Filtrer par statut d'activité
-            if actif := form.cleaned_data.get('actif'):
-                if actif == 'actif':
-                    queryset = queryset.actifs()
-                elif actif == 'inactif':
-                    queryset = queryset.inactifs()
+            # Applique tous les filtres Q construits
+            if q_objects:
+                queryset = queryset.filter(q_objects).distinct()
+                
+            # Appliquer les filtres spéciaux qui ne peuvent pas être facilement exprimés avec Q
+            if age_min is not None or age_max is not None:
+                queryset = Membre.objects.par_age(age_min=age_min, age_max=age_max)
+                
+            if cotisations_impayees:
+                queryset = Membre.objects.avec_cotisations_impayees()
+                
+            if avec_compte == 'avec':
+                queryset = queryset.filter(utilisateur__isnull=False)
+            elif avec_compte == 'sans':
+                queryset = queryset.filter(utilisateur__isnull=True)
+                
+            if actif == 'actif':
+                queryset = Membre.objects.actifs()
+            elif actif == 'inactif':
+                queryset = Membre.objects.inactifs()
         
         # Précharger les relations pour optimiser les performances
         return queryset.select_related('statut').prefetch_related('types')
