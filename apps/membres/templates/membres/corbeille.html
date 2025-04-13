@@ -1,3 +1,4 @@
+<!-- templates/membres/corbeille.html -->
 {% extends "layouts/base.html" %}
 {% load i18n %}
 
@@ -5,38 +6,92 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h1>{% trans "Corbeille - Membres supprimés" %}</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{% trans "Corbeille - Membres supprimés" %}</h1>
+        <a href="{% url 'membres:membre_liste' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> {% trans "Retour à la liste" %}
+        </a>
+    </div>
     
     {% if membres %}
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>{% trans "Nom" %}</th>
-                <th>{% trans "Email" %}</th>
-                <th>{% trans "Date de suppression" %}</th>
-                <th>{% trans "Actions" %}</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for membre in membres %}
-            <tr>
-                <td>{{ membre.nom_complet }}</td>
-                <td>{{ membre.email }}</td>
-                <td>{{ membre.deleted_at|date:"d/m/Y H:i" }}</td>
-                <td>
-                    <form method="post" action="{% url 'membres:membre_restaurer' membre.pk %}" style="display:inline;">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-success">{% trans "Restaurer" %}</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+        <div class="card">
+            <div class="card-header bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>{% trans "Membres supprimés" %} ({{ page_obj.paginator.count }})</span>
+                    <small class="text-muted">{% trans "Les membres dans la corbeille seront automatiquement supprimés définitivement après 30 jours." %}</small>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Nom" %}</th>
+                            <th>{% trans "Email" %}</th>
+                            <th>{% trans "Date de suppression" %}</th>
+                            <th class="text-center">{% trans "Actions" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for membre in membres %}
+                        <tr>
+                            <td>{{ membre.nom_complet }}</td>
+                            <td>{{ membre.email }}</td>
+                            <td>{{ membre.deleted_at|date:"d/m/Y H:i" }}</td>
+                            <td class="text-center">
+                                <div class="btn-group" role="group">
+                                    <form method="post" action="{% url 'membres:membre_restaurer' membre.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-success" title="{% trans 'Restaurer' %}">
+                                            <i class="fas fa-trash-restore"></i>
+                                        </button>
+                                    </form>
+                                    <form method="post" action="{% url 'membres:membre_supprimer_definitif' membre.pk %}" class="d-inline ml-2" 
+                                          onsubmit="return confirm('{% trans "Êtes-vous sûr de vouloir supprimer définitivement ce membre? Cette action est irréversible." %}');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-danger" title="{% trans 'Supprimer définitivement' %}">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        {% if is_paginated %}
+        <nav aria-label="Page navigation" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1">&laquo; {% trans "Première" %}</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">{% trans "Précédente" %}</a>
+                </li>
+                {% endif %}
+                
+                <li class="page-item disabled">
+                    <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+                </li>
+                
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">{% trans "Suivante" %}</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">{% trans "Dernière" %} &raquo;</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
     {% else %}
-    <div class="alert alert-info">
-        {% trans "Aucun membre supprimé." %}
-    </div>
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle mr-2"></i> {% trans "La corbeille est vide. Aucun membre n'a été supprimé récemment." %}
+        </div>
     {% endif %}
 </div>
 {% endblock %}

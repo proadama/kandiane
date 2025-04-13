@@ -7,24 +7,22 @@ from datetime import datetime
 
 from django.db.models.functions import ExtractMonth
 from django.contrib import messages
-from django.contrib.auth.mixins import UserPassesTestMixin
-from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import (
-    CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView
+    CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 )
 
 from openpyxl import Workbook
 from openpyxl import load_workbook
 
-from apps.core.mixins import StaffRequiredMixin
+from apps.core.mixins import StaffRequiredMixin, TrashViewMixin, RestoreViewMixin
 from apps.core.models import Statut
 from apps.membres.forms import (
     MembreForm, TypeMembreForm, MembreTypeMembreForm, 
@@ -33,6 +31,7 @@ from apps.membres.forms import (
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, HistoriqueMembre
 from django.db.models import F, IntegerField
 from django.db.models.functions import ExtractMonth
+
 
 logger = logging.getLogger(__name__)
 
@@ -1044,3 +1043,68 @@ class MembreRestaurerView(StaffRequiredMixin, View):
             _("Le membre %(name)s a été restauré avec succès.") % {'name': membre.nom_complet}
         )
         return redirect('membres:membre_detail', pk=membre.pk)
+    
+class MembreCorbeillePage(TrashViewMixin, ListView):
+    """Vue pour la corbeille des membres."""
+    model = Membre
+    template_name = 'membres/corbeille.html'
+    context_object_name = 'membres'
+    paginate_by = 20
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['title'] = _("Corbeille - Membres supprimés")
+        return context
+
+class MembreRestaurerView(RestoreViewMixin, View):
+    """Vue pour restaurer un membre depuis la corbeille."""
+    model = Membre
+    success_url = reverse_lazy('membres:membre_liste')
+    
+    def get_object(self):
+        """Récupérer le membre à restaurer."""
+        return get_object_or_404(Membre.objects.only_deleted(), pk=self.kwargs['pk'])
+    
+    def get_success_response(self):
+        """Response après restauration réussie."""
+        messages.success(
+            self.request, 
+            _("Le membre a été restauré avec succès.")
+        )
+        return redirect(self.success_url)
+
+class MembreSuppressionDefinitiveView(RestoreViewMixin, View):
+    """Vue pour supprimer définitivement un membre."""
+    model = Membre
+    success_url = reverse_lazy('membres:membre_corbeille')
+    
+    def get_object(self):
+        """Récupérer le membre à supprimer définitivement."""
+        return get_object_or_404(Membre.objects.only_deleted(), pk=self.kwargs['pk'])
+    
+    def post(self, request, *args, **kwargs):
+        """Supprimer définitivement le membre."""
+        membre = self.get_object()
+        
+        # Journaliser l'action avant suppression définitive
+        HistoriqueMembre.objects.create(
+            membre=membre,
+            utilisateur=request.user,
+            action='suppression_definitive',
+            description=_("Suppression définitive du membre"),
+            donnees_avant={
+                'nom': membre.nom,
+                'prenom': membre.prenom,
+                'email': membre.email,
+                'deleted_at': str(membre.deleted_at)
+            }
+        )
+        
+        # Suppression physique
+        membre.delete(hard=True)
+        
+        messages.success(
+            request, 
+            _("Le membre a été définitivement supprimé.")
+        )
+        return redirect(self.success_url)

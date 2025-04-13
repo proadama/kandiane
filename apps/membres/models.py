@@ -342,6 +342,50 @@ class Membre(BaseModel):
         # Import ici pour éviter les imports circulaires
         from apps.evenements.models import Evenement
         return Evenement.objects.filter(inscriptions__membre=self)
+
+    # Ajouter ces méthodes à la classe Membre
+    def _log_deletion(self, user):
+        """Journaliser la suppression logique d'un membre."""
+        from apps.membres.models import HistoriqueMembre
+        
+        if not user:
+            return
+            
+        HistoriqueMembre.objects.create(
+            membre=self,
+            utilisateur=user,
+            action='suppression',
+            description=_("Suppression du membre (placé dans la corbeille)"),
+            donnees_avant={
+                'nom': self.nom,
+                'prenom': self.prenom,
+                'email': self.email,
+                'deleted_at': None
+            },
+            donnees_apres={
+                'deleted_at': str(self.deleted_at)
+            }
+        )
+
+    def _log_restoration(self, user):
+        """Journaliser la restauration d'un membre."""
+        from apps.membres.models import HistoriqueMembre
+        
+        if not user:
+            return
+            
+        HistoriqueMembre.objects.create(
+            membre=self,
+            utilisateur=user,
+            action='restauration',
+            description=_("Restauration du membre depuis la corbeille"),
+            donnees_avant={
+                'deleted_at': str(self.deleted_at)
+            },
+            donnees_apres={
+                'deleted_at': None
+            }
+        )
     
     @property
     def nom_complet(self):

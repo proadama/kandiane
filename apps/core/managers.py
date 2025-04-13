@@ -21,6 +21,12 @@ class BaseManager(models.Manager):
         Retourner uniquement les objets supprimés logiquement.
         """
         return super().get_queryset().filter(deleted_at__isnull=False)
+
+    def recent_deleted(self, days=30):
+        """Objets supprimés récemment (dans les X derniers jours)."""
+        from django.utils import timezone
+        date_limit = timezone.now() - timezone.timedelta(days=days)
+        return self.only_deleted().filter(deleted_at__gte=date_limit)
     
     def get_or_none(self, **kwargs):
         """

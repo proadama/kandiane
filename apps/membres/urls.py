@@ -35,4 +35,5 @@ urlpatterns = [
     # Fonction corbeille
     path('corbeille/', views.MembreCorbeillePage.as_view(), name='membre_corbeille'),
     path('<int:pk>/restaurer/', views.MembreRestaurerView.as_view(), name='membre_restaurer'),
+    path('<int:pk>/supprimer-definitivement/', views.MembreSuppressionDefinitiveView.as_view(), name='membre_supprimer_definitif'),
 ]

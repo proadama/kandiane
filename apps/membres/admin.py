@@ -42,8 +42,8 @@ class MembreAdmin(admin.ModelAdmin):
     """
     Administration des membres
     """
-    list_display = ('nom_complet', 'email', 'telephone', 'date_adhesion', 'statut_display', 'types_liste', 'utilisateur_link', 'is_active')
-    list_filter = ('statut', 'date_adhesion', 'types', 'langue', 'pays', 'accepte_mail', 'accepte_sms')
+    list_display = ('nom_complet', 'email', 'telephone', 'date_adhesion', 'statut_display', 'types_liste', 'utilisateur_link', 'is_active', 'est_supprime')
+    list_filter = ('statut', 'date_adhesion', 'types', 'langue', 'pays', 'accepte_mail', 'accepte_sms', 'deleted_at')
     search_fields = ('nom', 'prenom', 'email', 'telephone', 'adresse', 'code_postal', 'ville')
     ordering = ('nom', 'prenom')
     date_hierarchy = 'date_adhesion'
@@ -75,7 +75,7 @@ class MembreAdmin(admin.ModelAdmin):
     
     inlines = [MembreTypeMembreInline, HistoriqueMembreInline]
     
-    actions = ['export_selected_as_csv', 'create_user_accounts', 'mark_as_deleted', 'unmark_as_deleted']
+    actions = ['export_selected_as_csv', 'create_user_accounts', 'mark_as_deleted', 'unmark_as_deleted', 'restaurer_membres', 'supprimer_definitivement']
     
     def get_queryset(self, request):
         """Inclure les membres supprimés logiquement"""
@@ -86,6 +86,39 @@ class MembreAdmin(admin.ModelAdmin):
     # Ajouter un filtre pour voir les membres supprimés
     list_filter = ('deleted_at', 'statut', 'date_adhesion', 'types', 'langue', 'pays', 'accepte_mail', 'accepte_sms')
     
+    def est_supprime(self, obj):
+        return obj.deleted_at is not None
+    est_supprime.boolean = True
+    est_supprime.short_description = _('Supprimé')
+
+    def restaurer_membres(self, request, queryset):
+        count = 0
+        for obj in queryset:
+            if obj.deleted_at is not None:
+                obj.restore(user=request.user)
+                count += 1
+        
+        if count == 1:
+            message = _("1 membre a été restauré.")
+        else:
+            message = _("{} membres ont été restaurés.").format(count)
+        
+        self.message_user(request, message)
+    restaurer_membres.short_description = _("Restaurer les membres sélectionnés")
+    
+    def supprimer_definitivement(self, request, queryset):
+        count = len(queryset)
+        for obj in queryset:
+            obj.delete(hard=True, user=request.user)
+        
+        if count == 1:
+            message = _("1 membre a été supprimé définitivement.")
+        else:
+            message = _("{} membres ont été supprimés définitivement.").format(count)
+        
+        self.message_user(request, message)
+    supprimer_definitivement.short_description = _("⚠️ Supprimer définitivement les membres sélectionnés")
+
     def nom_complet(self, obj):
         """Afficher le nom complet"""
         return f"{obj.prenom} {obj.nom}"
