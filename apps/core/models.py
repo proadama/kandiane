@@ -19,14 +19,17 @@ class BaseModel(models.Model):
     
     def delete(self, hard=False, *args, **kwargs):
         """
-        Surcharge de la méthode delete pour faire une suppression logique.
-        Le paramètre hard=True permet de faire une suppression physique.
+        Suppression logique par défaut.
+        Si hard=True, suppression physique.
         """
         if hard:
+            # Suppression physique
             return super().delete(*args, **kwargs)
-        
-        self.deleted_at = timezone.now()
-        self.save(update_fields=['deleted_at'])
+        else:
+            # Suppression logique
+            self.deleted_at = timezone.now()
+            self.save(update_fields=['deleted_at'])
+            return 1, {}  # Simuler le retour de la méthode delete() standard
 
 class Statut(BaseModel):
     """

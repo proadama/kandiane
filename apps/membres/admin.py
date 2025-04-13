@@ -3,7 +3,6 @@ from django.utils.translation import gettext_lazy as _
 from django.utils.html import format_html
 from django.urls import reverse
 from django.db.models import Count
-
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, HistoriqueMembre
 
 
@@ -79,10 +78,13 @@ class MembreAdmin(admin.ModelAdmin):
     actions = ['export_selected_as_csv', 'create_user_accounts', 'mark_as_deleted', 'unmark_as_deleted']
     
     def get_queryset(self, request):
-        """Optimiser les requêtes"""
-        return super().get_queryset(request).select_related(
+        """Inclure les membres supprimés logiquement"""
+        return Membre.objects.with_deleted().select_related(
             'statut', 'utilisateur'
         ).prefetch_related('types')
+    
+    # Ajouter un filtre pour voir les membres supprimés
+    list_filter = ('deleted_at', 'statut', 'date_adhesion', 'types', 'langue', 'pays', 'accepte_mail', 'accepte_sms')
     
     def nom_complet(self, obj):
         """Afficher le nom complet"""
@@ -292,6 +294,17 @@ class TypeMembreAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    def est_supprime(self, obj):
+        return obj.deleted_at is not None
+    est_supprime.boolean = True
+    est_supprime.short_description = _('Supprimé')
+
+    def restaurer_membres(self, request, queryset):
+        # Action pour restaurer les membres supprimés
+        updated = queryset.update(deleted_at=None)
+        self.message_user(request, _(f"{updated} membre(s) restauré(s) avec succès."))
+    restaurer_membres.short_description = _("Restaurer les membres sélectionnés")
     
     def get_queryset(self, request):
         """Inclure le nombre de membres dans la requête"""

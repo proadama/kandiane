@@ -164,6 +164,10 @@ class MembreManager(BaseManager):
             queryset = queryset.filter(date_adhesion__gt=date_adhesion_min)
             
         return queryset
+    
+    def with_deleted(self):
+        # Renvoie tous les objets, y compris les supprimés
+        return super().get_queryset()
 
 
 class MembreTypeMembreManager(models.Manager):

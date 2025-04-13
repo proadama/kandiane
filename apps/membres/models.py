@@ -195,7 +195,19 @@ class Membre(BaseModel):
     def get_absolute_url(self):
         return reverse('membres:membre_modifier', kwargs={'pk': self.pk})
       
-    import datetime  # Ajoutez cet import en haut du fichier
+    def delete(self, hard=False, *args, **kwargs):
+        """
+        Suppression logique par défaut.
+        Si hard=True, suppression physique.
+        """
+        if hard:
+            # Suppression physique
+            return super().delete(*args, **kwargs)
+        else:
+            # Suppression logique
+            self.deleted_at = timezone.now()
+            self.save(update_fields=['deleted_at'])
+            return 1, {}  # Simuler le retour de la méthode delete() standard
 
     def clean(self):
         # Vérifier que la date de naissance n'est pas dans le futur

@@ -1,0 +1,42 @@
+{% extends "layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Corbeille - Membres supprimés" %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>{% trans "Corbeille - Membres supprimés" %}</h1>
+    
+    {% if membres %}
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>{% trans "Nom" %}</th>
+                <th>{% trans "Email" %}</th>
+                <th>{% trans "Date de suppression" %}</th>
+                <th>{% trans "Actions" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for membre in membres %}
+            <tr>
+                <td>{{ membre.nom_complet }}</td>
+                <td>{{ membre.email }}</td>
+                <td>{{ membre.deleted_at|date:"d/m/Y H:i" }}</td>
+                <td>
+                    <form method="post" action="{% url 'membres:membre_restaurer' membre.pk %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-success">{% trans "Restaurer" %}</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-info">
+        {% trans "Aucun membre supprimé." %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

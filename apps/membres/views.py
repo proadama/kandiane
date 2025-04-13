@@ -342,9 +342,6 @@ class MembreDeleteView(StaffRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         membre = self.get_object()
         
-        # Suppression logique (soft delete)
-        membre.delete()
-        
         # Enregistrer l'action dans l'historique
         HistoriqueMembre.objects.create(
             membre=membre,
@@ -358,6 +355,10 @@ class MembreDeleteView(StaffRequiredMixin, DeleteView):
                 'date_adhesion': str(membre.date_adhesion)
             }
         )
+        
+        # Suppression logique explicite
+        membre.deleted_at = timezone.now()
+        membre.save(update_fields=['deleted_at'])
         
         messages.success(
             request, 
@@ -1006,3 +1007,40 @@ class TypeMembreDetailView(StaffRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context['membres_actifs'] = self.object.get_membres_actifs()
         return context
+    
+class MembreCorbeillePage(StaffRequiredMixin, ListView):
+    """
+    Vue pour afficher les membres supprimés logiquement
+    """
+    model = Membre
+    template_name = 'membres/corbeille.html'
+    context_object_name = 'membres'
+    
+    def get_queryset(self):
+        # N'afficher que les membres supprimés
+        return Membre.objects.only_deleted()
+    
+class MembreRestaurerView(StaffRequiredMixin, View):
+    """
+    Vue pour restaurer un membre supprimé
+    """
+    def post(self, request, pk):
+        membre = get_object_or_404(Membre.objects.only_deleted(), pk=pk)
+        membre.deleted_at = None
+        membre.save(update_fields=['deleted_at'])
+        
+        # Ajouter à l'historique
+        HistoriqueMembre.objects.create(
+            membre=membre,
+            utilisateur=request.user,
+            action='restauration',
+            description=_("Restauration du membre"),
+            donnees_avant={'deleted_at': str(membre.deleted_at)},
+            donnees_apres={'deleted_at': None}
+        )
+        
+        messages.success(
+            request, 
+            _("Le membre %(name)s a été restauré avec succès.") % {'name': membre.nom_complet}
+        )
+        return redirect('membres:membre_detail', pk=membre.pk)

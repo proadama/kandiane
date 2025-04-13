@@ -31,4 +31,8 @@ urlpatterns = [
     path('<int:membre_id>/ajouter-type/', views.MembreTypeMembreCreateView.as_view(), name='membre_ajouter_type'),
     path('types-association/<int:pk>/modifier/', views.MembreTypeMembreUpdateView.as_view(), name='membre_type_modifier'),
     path('types-association/<int:pk>/terminer/', views.MembreTypeMembreTerminerView.as_view(), name='membre_type_terminer'),
+
+    # Fonction corbeille
+    path('corbeille/', views.MembreCorbeillePage.as_view(), name='membre_corbeille'),
+    path('<int:pk>/restaurer/', views.MembreRestaurerView.as_view(), name='membre_restaurer'),
 ]
