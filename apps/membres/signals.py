@@ -5,7 +5,9 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth import get_user_model
-
+from django.utils.crypto import get_random_string
+from apps.membres.models import Membre
+from apps.accounts.models import CustomUser
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, HistoriqueMembre
 
 logger = logging.getLogger(__name__)
@@ -18,24 +20,35 @@ def validate_membre_data(sender, instance, **kwargs):
     Valider les données du membre avant l'enregistrement
     """
     # Vérifier que la date de naissance n'est pas dans le futur
-    if instance.date_naissance and instance.date_naissance > timezone.now().date():
-        raise ValidationError({
-            'date_naissance': _("La date de naissance ne peut pas être dans le futur")
-        })
+    if instance.date_naissance:
+        # Convertir en date si c'est un datetime
+        date_naissance = instance.date_naissance
+        if hasattr(date_naissance, 'date'):
+            date_naissance = date_naissance.date()
+        
+        if date_naissance > timezone.now().date():
+            raise ValidationError({
+                'date_naissance': _("La date de naissance ne peut pas être dans le futur")
+            })
     
     # Vérifier que la date d'adhésion n'est pas dans le futur
-    if instance.date_adhesion and instance.date_adhesion > timezone.now().date():
-        raise ValidationError({
-            'date_adhesion': _("La date d'adhésion ne peut pas être dans le futur")
-        })
+    if instance.date_adhesion:
+        # Convertir en date si c'est un datetime
+        date_adhesion = instance.date_adhesion
+        if hasattr(date_adhesion, 'date'):
+            date_adhesion = date_adhesion.date()
+            
+        if date_adhesion > timezone.now().date():
+            raise ValidationError({
+                'date_adhesion': _("La date d'adhésion ne peut pas être dans le futur")
+            })
     
-    # S'assurer que le nom et prénom sont capitalisés
+    # Le reste du code reste inchangé
     if instance.nom:
         instance.nom = instance.nom.strip().upper()
     if instance.prenom:
         instance.prenom = instance.prenom.strip().title()
     
-    # Normaliser l'email en minuscules
     if instance.email:
         instance.email = instance.email.strip().lower()
 
@@ -70,16 +83,32 @@ def validate_membre_type_membre(sender, instance, **kwargs):
     Valider les données de l'association membre-type avant l'enregistrement
     """
     # Vérifier que la date de fin est postérieure à la date de début
-    if instance.date_fin and instance.date_fin < instance.date_debut:
-        raise ValidationError({
-            'date_fin': _("La date de fin doit être postérieure à la date de début")
-        })
+    if instance.date_fin and instance.date_debut:
+        # Convertir en date si nécessaire
+        date_fin = instance.date_fin
+        date_debut = instance.date_debut
+        
+        if hasattr(date_fin, 'date'):
+            date_fin = date_fin.date()
+        if hasattr(date_debut, 'date'):
+            date_debut = date_debut.date()
+            
+        if date_fin < date_debut:
+            raise ValidationError({
+                'date_fin': _("La date de fin doit être postérieure à la date de début")
+            })
     
     # Vérifier que la date de début n'est pas dans le futur
-    if instance.date_debut and instance.date_debut > timezone.now().date():
-        raise ValidationError({
-            'date_debut': _("La date de début ne peut pas être dans le futur")
-        })
+    if instance.date_debut:
+        # Convertir en date si c'est un datetime
+        date_debut = instance.date_debut
+        if hasattr(date_debut, 'date'):
+            date_debut = date_debut.date()
+            
+        if date_debut > timezone.now().date():
+            raise ValidationError({
+                'date_debut': _("La date de début ne peut pas être dans le futur")
+            })
 
 
 @receiver(post_save, sender=MembreTypeMembre)
@@ -203,3 +232,53 @@ def handle_user_create(sender, instance, created, **kwargs):
                 logger.info(f"Compte utilisateur {instance} associé automatiquement au membre {membre}")
         except Exception as e:
             logger.error(f"Erreur lors de l'association automatique du compte utilisateur: {e}")
+"""
+@receiver(post_save, sender=Membre)
+def create_user_for_membre(sender, instance, created, **kwargs):
+    Crée automatiquement un utilisateur pour un membre si nécessaire
+    # Éviter les boucles infinies
+    if hasattr(instance, '_creating_user'):
+        return
+        
+    if not instance.utilisateur and instance.email:
+        try:
+            # Vérifier si un utilisateur avec cet email existe déjà
+            user = User.objects.get(email=instance.email)
+            # Lier l'utilisateur existant au membre
+            instance._creating_user = True
+            instance.utilisateur = user
+            instance.save(update_fields=['utilisateur'])
+            logger.info(f"Utilisateur existant associé au membre {instance.nom_complet}")
+        except User.DoesNotExist:
+            # Créer un nouvel utilisateur si c'est une création automatique
+            username = f"{instance.prenom.lower()}.{instance.nom.lower()}"
+            username = username.replace(' ', '_')
+            base_username = username
+            counter = 1
+            
+            # Éviter les doublons
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            # Créer l'utilisateur avec un mot de passe aléatoire
+            from django.utils.crypto import get_random_string
+            password = get_random_string(length=12)
+            
+            user = User.objects.create_user(
+                username=username,
+                email=instance.email,
+                password=password,
+                first_name=instance.prenom,
+                last_name=instance.nom
+            )
+            
+            # Lier à ce membre
+            instance._creating_user = True
+            instance.utilisateur = user
+            instance.save(update_fields=['utilisateur'])
+            
+            # Enregistrer dans les logs pour que l'admin puisse récupérer les infos
+            logger.info(f"Utilisateur créé automatiquement pour {instance.nom_complet}. "
+                        f"Username: {username}, Password: {password}")
+"""

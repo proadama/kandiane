@@ -10,6 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from .models import Role, UserLoginHistory, CustomUser, RolePermission
 import uuid
 import logging
+from apps.membres.models import Membre
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -144,3 +145,30 @@ def get_client_ip(request):
     else:
         ip = request.META.get('REMOTE_ADDR')
     return ip
+"""
+@receiver(post_save, sender=User)
+def create_membre_for_user(sender, instance, created, **kwargs):
+    Crée automatiquement un membre pour un utilisateur si nécessaire
+    # Éviter les boucles infinies
+    if hasattr(instance, '_creating_membre'):
+        return
+        
+    if created or not hasattr(instance, 'membre'):
+        try:
+            # Vérifier si un membre avec cet email existe déjà
+            membre = Membre.objects.get(email=instance.email)
+            # Lier le membre existant à l'utilisateur
+            if not membre.utilisateur:
+                instance._creating_membre = True
+                membre.utilisateur = instance
+                membre.save(update_fields=['utilisateur'])
+        except Membre.DoesNotExist:
+            # Créer un nouveau membre
+            instance._creating_membre = True
+            Membre.objects.create(
+                nom=instance.last_name or '',
+                prenom=instance.first_name or '',
+                email=instance.email,
+                utilisateur=instance
+            )
+"""

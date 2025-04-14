@@ -4,6 +4,9 @@ import io
 import json
 import logging
 from datetime import datetime
+import traceback
+import sys
+from django.http import HttpResponseRedirect
 
 from django.db.models.functions import ExtractMonth
 from django.contrib import messages
@@ -31,6 +34,8 @@ from apps.membres.forms import (
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, HistoriqueMembre
 from django.db.models import F, IntegerField
 from django.db.models.functions import ExtractMonth
+from django.utils.crypto import get_random_string
+from apps.accounts.models import CustomUser
 
 
 logger = logging.getLogger(__name__)
@@ -286,31 +291,79 @@ class MembreCreateView(StaffRequiredMixin, CreateView):
         return kwargs
     
     def form_valid(self, form):
-        # Enregistrer le membre
-        membre = form.save()
-        
-        # Ajouter un enregistrement dans l'historique
-        HistoriqueMembre.objects.create(
-            membre=membre,
-            utilisateur=self.request.user,
-            action='creation',
-            description=_("Création du membre"),
-            donnees_apres={
-                field: str(value) for field, value in form.cleaned_data.items() 
-                if field != 'types_membre' and field != 'photo'
-            }
-        )
-        
-        messages.success(
-            self.request, 
-            _("Le membre %(name)s a été créé avec succès.") % {'name': membre.nom_complet}
-        )
-        return redirect(membre.get_absolute_url())
+        try:
+            # Enregistrer le membre
+            membre = form.save()
+            
+            # Créer un compte utilisateur si demandé
+            if form.cleaned_data.get('creer_compte'):
+                username = f"{membre.prenom.lower()}.{membre.nom.lower()}"
+                username = username.replace(' ', '_')
+                base_username = username
+                counter = 1
+                
+                # Éviter les doublons
+                while CustomUser.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                
+                # Utiliser le mot de passe fourni ou en générer un
+                password = form.cleaned_data.get('password')
+                if not password:
+                    password = get_random_string(length=12)
+                
+                # Créer l'utilisateur
+                user = CustomUser.objects.create_user(
+                    username=username,
+                    email=membre.email,
+                    password=password,
+                    first_name=membre.prenom,
+                    last_name=membre.nom
+                )
+                
+                # Lier à ce membre
+                membre.utilisateur = user
+                membre.save(update_fields=['utilisateur'])
+                
+                # Message avec identifiants
+                messages.success(
+                    self.request,
+                    _("Le membre %(name)s a été créé avec succès. Un compte utilisateur a été créé avec les identifiants:\nNom d'utilisateur: %(username)s\nMot de passe: %(password)s") % {
+                        'name': membre.nom_complet,
+                        'username': username,
+                        'password': password
+                    }
+                )
+            else:
+                messages.success(
+                    self.request, 
+                    _("Le membre %(name)s a été créé avec succès.") % {'name': membre.nom_complet}
+                )
+            
+            # Ajouter un enregistrement dans l'historique
+            HistoriqueMembre.objects.create(
+                membre=membre,
+                utilisateur=self.request.user,
+                action='creation',
+                description=_("Création du membre"),
+                donnees_apres={
+                    field: str(value) for field, value in form.cleaned_data.items() 
+                    if field not in ['types_membre', 'photo', 'creer_compte', 'password']
+                }
+            )
+            
+            return redirect(membre.get_absolute_url())
+        except Exception as e:
+            # Journaliser l'erreur
+            logger.error(f"Erreur lors de la création d'un membre: {str(e)}")
+            # Afficher un message d'erreur à l'utilisateur
+            messages.error(self.request, f"Une erreur s'est produite: {str(e)}")
+            # Re-afficher le formulaire avec les données
+            return self.form_invalid(form)
 
-
-class MembreUpdateView(StaffRequiredMixin, UpdateView):
+class MembreCreateView(StaffRequiredMixin, CreateView):
     """
-    Vue pour modifier un membre existant
+    Vue pour créer un nouveau membre
     """
     model = Membre
     form_class = MembreForm
@@ -321,13 +374,92 @@ class MembreUpdateView(StaffRequiredMixin, UpdateView):
         kwargs['user'] = self.request.user
         return kwargs
     
+    def post(self, request, *args, **kwargs):
+        """Surcharge pour diagnostiquer les problèmes"""
+        print("*** POST reçu dans MembreCreateView ***")
+        print(f"Données du formulaire: {request.POST}")
+        return super().post(request, *args, **kwargs)
+    
+    def form_invalid(self, form):
+        """Surcharge pour mieux détecter les erreurs de validation"""
+        print("*** FORM INVALID appelé ***")
+        print(f"Erreurs du formulaire: {form.errors}")
+        print(f"Non-field errors: {form.non_field_errors()}")
+        
+        # Affichage détaillé des erreurs pour l'utilisateur
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f"Erreur dans {field}: {error}")
+        
+        return super().form_invalid(form)
+    
     def form_valid(self, form):
-        membre = form.save()
-        messages.success(
-            self.request, 
-            _("Le membre %(name)s a été modifié avec succès.") % {'name': membre.nom_complet}
-        )
-        return redirect(membre.get_absolute_url())
+        """Surcharge pour diagnostiquer les problèmes de traitement"""
+        print("*** FORM VALID appelé ***")
+        print(f"Données validées: {form.cleaned_data}")
+        
+        try:
+            # Enregistrer le membre avec la méthode la plus simple possible
+            membre = form.save()
+            print(f"Membre créé avec ID: {membre.id}")
+            
+            # Essayer de créer un utilisateur séparément pour éviter les problèmes
+            if form.cleaned_data.get('creer_compte'):
+                print("Tentative de création de compte utilisateur")
+                username = f"{membre.prenom.lower()}.{membre.nom.lower()}".replace(' ', '_')
+                base_username = username
+                counter = 1
+                
+                # Éviter les doublons
+                while CustomUser.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                
+                # Mot de passe
+                password = form.cleaned_data.get('password')
+                if not password:
+                    password = get_random_string(length=12)
+                
+                # Créer l'utilisateur manuellement
+                user = CustomUser.objects.create_user(
+                    username=username,
+                    email=membre.email,
+                    password=password,
+                    first_name=membre.prenom,
+                    last_name=membre.nom
+                )
+                print(f"Utilisateur créé avec ID: {user.id}")
+                
+                # Lier à ce membre
+                membre.utilisateur = user
+                membre.save(update_fields=['utilisateur'])
+                print("Membre mis à jour avec utilisateur")
+                
+                # Message avec identifiants
+                messages.success(
+                    self.request,
+                    _(f"Le membre {membre.nom_complet} a été créé avec succès. Un compte utilisateur a été créé avec les identifiants:\nNom d'utilisateur: {username}\nMot de passe: {password}")
+                )
+            else:
+                messages.success(
+                    self.request, 
+                    _(f"Le membre {membre.nom_complet} a été créé avec succès.")
+                )
+            
+            # Redirection explicite sans passer par les méthodes standards
+            print("Redirection vers le détail du membre")
+            return HttpResponseRedirect(reverse('membres:membre_detail', kwargs={'pk': membre.pk}))
+            
+        except Exception as e:
+            # Capturer et afficher les erreurs en détail
+            print("*** EXCEPTION dans form_valid ***")
+            print(f"Erreur: {str(e)}")
+            print("Traceback:")
+            traceback.print_exc(file=sys.stdout)
+            
+            # Informer l'utilisateur
+            messages.error(self.request, f"Erreur lors de la création du membre: {str(e)}")
+            return self.form_invalid(form)
 
 
 class MembreDeleteView(StaffRequiredMixin, DeleteView):
@@ -1108,3 +1240,27 @@ class MembreSuppressionDefinitiveView(RestoreViewMixin, View):
             _("Le membre a été définitivement supprimé.")
         )
         return redirect(self.success_url)
+
+# Dans apps/membres/views.py, ajoutez cette classe:
+
+class MembreUpdateView(StaffRequiredMixin, UpdateView):
+    """
+    Vue pour modifier un membre existant
+    """
+    model = Membre
+    form_class = MembreForm
+    template_name = 'membres/form.html'
+    success_url = reverse_lazy('membres:membre_liste')
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+    
+    def form_valid(self, form):
+        membre = form.save()
+        messages.success(
+            self.request, 
+            _("Le membre %(name)s a été modifié avec succès.") % {'name': membre.nom_complet}
+        )
+        return super().form_valid(form)

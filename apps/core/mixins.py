@@ -81,4 +81,5 @@ class RestoreViewMixin(LoginRequiredMixin, UserPassesTestMixin):
         """Restaurer l'objet et rediriger."""
         obj = self.get_object()
         obj.restore(user=request.user)
-        return self.get_success_response()
+        # Utiliser redirect vers success_url au lieu de get_success_response
+        return redirect(self.success_url)

@@ -7,6 +7,8 @@ from apps.core.models import Statut
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, HistoriqueMembre
 
 
+# Mise à jour de MembreForm dans apps/membres/forms.py
+
 class MembreForm(forms.ModelForm):
     """
     Formulaire pour la création et l'édition d'un membre
@@ -17,14 +19,28 @@ class MembreForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple,
         label=_("Types de membre")
     )
+
+    creer_compte = forms.BooleanField(
+        label=_("Créer un compte utilisateur"),
+        required=False,
+        initial=True,
+        help_text=_("Permettre à ce membre de se connecter à l'application")
+    )
+    
+    password = forms.CharField(
+        label=_("Mot de passe"),
+        required=False,
+        widget=forms.PasswordInput,
+        help_text=_("Laissez vide pour générer un mot de passe aléatoire")
+    )
     
     class Meta:
         model = Membre
         fields = [
             'nom', 'prenom', 'email', 'telephone', 'adresse',
-            'code_postal', 'ville', 'pays', 'date_adhesion', 
-            'date_naissance', 'langue', 'statut', 'commentaires',
-            'photo', 'accepte_mail', 'accepte_sms'
+            'code_postal', 'ville', 'pays', 'date_adhesion', 'date_naissance',
+            'langue', 'statut', 'accepte_mail', 'accepte_sms',
+            'commentaires', 'photo'
         ]
         widgets = {
             'date_adhesion': forms.DateInput(
@@ -52,6 +68,17 @@ class MembreForm(forms.ModelForm):
             if field.widget.__class__.__name__ not in ['CheckboxInput', 'CheckboxSelectMultiple', 'RadioSelect']:
                 field.widget.attrs.update({'class': 'form-control'})
         
+        # Pour les nouveaux membres, forcer la création d'un compte utilisateur
+        if not self.instance.pk:
+            self.fields['creer_compte'].initial = True
+            self.fields['creer_compte'].help_text = _("Un compte utilisateur sera automatiquement créé pour ce membre")
+        # Si le membre a déjà un compte, désactiver l'option
+        elif self.instance and self.instance.pk and self.instance.utilisateur:
+            self.fields['creer_compte'].initial = False
+            self.fields['creer_compte'].disabled = True
+            self.fields['creer_compte'].help_text = _("Ce membre a déjà un compte utilisateur")
+            self.fields['password'].widget = forms.HiddenInput()
+            
         # Initialiser les types de membre si on édite un membre existant
         if self.instance.pk:
             self.fields['types_membre'].initial = [
@@ -60,6 +87,20 @@ class MembreForm(forms.ModelForm):
                     date_fin__isnull=True
                 )
             ]
+    
+    def clean(self):
+        """Validation globale du formulaire"""
+        cleaned_data = super().clean()
+        
+        # S'assurer que le mot de passe est fourni si creer_compte est coché
+        creer_compte = cleaned_data.get('creer_compte')
+        password = cleaned_data.get('password')
+        
+        if creer_compte and not self.instance.utilisateur:
+            # Le mot de passe vide est acceptable car on en générera un aléatoire
+            pass
+        
+        return cleaned_data
     
     def clean_email(self):
         """Valider que l'email est unique"""
@@ -93,21 +134,24 @@ class MembreForm(forms.ModelForm):
         if commit:
             # Gérer les types de membre
             types_membre_selectionnes = set(self.cleaned_data.get('types_membre', []))
-            types_membre_actuels = set(
-                type_membre.type_membre for type_membre in 
-                MembreTypeMembre.objects.filter(
-                    membre=membre, 
-                    date_fin__isnull=True
+            
+            # Ne procéder que si l'instance a déjà été sauvegardée
+            if membre.pk:
+                types_membre_actuels = set(
+                    type_membre.type_membre for type_membre in 
+                    MembreTypeMembre.objects.filter(
+                        membre=membre, 
+                        date_fin__isnull=True
+                    )
                 )
-            )
-            
-            # Types à ajouter (nouveaux)
-            for type_membre in types_membre_selectionnes - types_membre_actuels:
-                membre.ajouter_type(type_membre)
-            
-            # Types à supprimer (plus sélectionnés)
-            for type_membre in types_membre_actuels - types_membre_selectionnes:
-                membre.supprimer_type(type_membre)
+                
+                # Types à ajouter (nouveaux)
+                for type_membre in types_membre_selectionnes - types_membre_actuels:
+                    membre.ajouter_type(type_membre)
+                
+                # Types à supprimer (plus sélectionnés)
+                for type_membre in types_membre_actuels - types_membre_selectionnes:
+                    membre.supprimer_type(type_membre)
             
             # Enregistrer l'historique
             if hasattr(self, 'changed_data') and self.changed_data:

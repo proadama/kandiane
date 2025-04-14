@@ -154,3 +154,19 @@ MAINTENANCE_MODE = False
 
 # Pour les tests, définir une session très courte (30 secondes)
 SESSION_COOKIE_AGE = 600  # en secondes
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+        },
+    },
+}

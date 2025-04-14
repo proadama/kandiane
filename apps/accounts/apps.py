@@ -8,4 +8,6 @@ class AccountsConfig(AppConfig):
     verbose_name = 'Gestion des comptes'
 
     def ready(self):
+        # Cette méthode est appelée lorsque l'application est prête
+        # C'est ici qu'on importe les signaux pour les activer
         import apps.accounts.signals
