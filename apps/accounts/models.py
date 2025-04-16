@@ -171,6 +171,23 @@ class CustomUser(AbstractUser):
     
     USERNAME_FIELD = 'email'  # L'email est utilisé comme identifiant
     REQUIRED_FIELDS = ['username']  # Le nom d'utilisateur reste obligatoire
+
+    # Ajoutez ces champs à la classe CustomUser:
+    is_email_verified = models.BooleanField(
+        default=False,
+        verbose_name=_("Email vérifié")
+    )
+    email_verification_token = models.CharField(
+        max_length=100, 
+        null=True, 
+        blank=True,
+        verbose_name=_("Token de vérification d'email")
+    )
+    email_verification_sent_at = models.DateTimeField(
+        null=True, 
+        blank=True,
+        verbose_name=_("Date d'envoi de vérification")
+    )
     
     class Meta:
         verbose_name = _("Utilisateur")
@@ -211,6 +228,36 @@ class CustomUser(AbstractUser):
         if self.pk:  # Seulement si l'objet a déjà une clé primaire
             self.save(update_fields=['cle_activation'])
         return self.cle_activation
+    
+    # Puis ajoutez ces méthodes à la classe CustomUser:
+    def generate_email_verification_token(self):
+        """
+        Génère un token unique pour la vérification d'email
+        """
+        import uuid
+        token = uuid.uuid4().hex
+        self.email_verification_token = token
+        self.email_verification_sent_at = timezone.now()
+        self.save(update_fields=['email_verification_token', 'email_verification_sent_at'])
+        return token
+    
+    def verify_email(self, token):
+        """
+        Vérifie si le token correspond et active l'email
+        """
+        if not self.is_email_verified and self.email_verification_token == token:
+            # Vérifier que le token n'a pas expiré (24h)
+            from django.conf import settings
+            expiry_duration = getattr(settings, 'ACCOUNT_EMAIL_VERIFICATION_EXPIRY', 86400)  # 24h par défaut
+            
+            if self.email_verification_sent_at and (
+                timezone.now() - self.email_verification_sent_at
+            ).total_seconds() < expiry_duration:
+                self.is_email_verified = True
+                self.email_verification_token = None
+                self.save(update_fields=['is_email_verified', 'email_verification_token'])
+                return True
+        return False
 
 
 class UserProfile(BaseModel):

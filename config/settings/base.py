@@ -79,13 +79,16 @@ DATABASES = {
     'default': env.db('DATABASE_URL', default='sqlite:///db.sqlite3'),
 }
 
-# Password validation
+# Configuration Django de base pour la sécurité des mots de passe
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 8,
+        }
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -93,7 +96,42 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
+    {
+        'NAME': 'apps.accounts.validators.StrongPasswordValidator',
+        'OPTIONS': {
+            'min_length': 8,
+        }
+    },
 ]
+
+# Sécurité générale du site
+SECURE_BROWSER_XSS_FILTER = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# Si vous êtes en production, activez ces paramètres (commentés pour développement)
+# SECURE_SSL_REDIRECT = True  # Redirection vers HTTPS
+# SESSION_COOKIE_SECURE = True  # Cookies de session uniquement via HTTPS
+# CSRF_COOKIE_SECURE = True  # Cookies CSRF uniquement via HTTPS
+# SECURE_HSTS_SECONDS = 31536000  # Un an
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# SECURE_HSTS_PRELOAD = True
+
+# Paramètres des sessions
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'  # Peut être 'Strict' en production
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = 7200  # 2 heures en secondes
+
+# Taux de limitation pour les connexions
+# Nécessite django-ratelimit (à ajouter aux requirements.txt)
+RATELIMIT_ENABLE = True
+RATELIMIT_LOGIN_ATTEMPTS = 5  # Nombre de tentatives autorisées
+RATELIMIT_LOGIN_DURATION = 300  # Période de blocage en secondes (5 minutes)
+
+# Email de vérification
+ACCOUNT_EMAIL_VERIFICATION_REQUIRED = False
+ACCOUNT_EMAIL_VERIFICATION_EXPIRY = 86400  # 24 heures en secondes
 
 # Internationalization
 LANGUAGE_CODE = 'fr-fr'

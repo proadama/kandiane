@@ -40,5 +40,23 @@
     <script src="{{ STATIC_URL }}js/main.js"></script>
     
     {% block extra_js %}{% endblock %}
+    <!-- # Modifier le fichier: templates/layouts/base.html
+    # Ajouter avant la fermeture du tag </body>
+    -->
+    {% load i18n %}
+
+{# Django messages as JSON for JavaScript #}
+<script id="django-messages-data" type="application/json">
+    [
+        {% for message in messages %}
+            {
+                "tags": "{{ message.tags }}",
+                "message": "{{ message|escapejs }}"
+            }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ]
+</script>
+
+{% include 'includes/notifications.html' %}
 </body>
 </html>

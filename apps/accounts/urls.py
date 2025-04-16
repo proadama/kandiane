@@ -63,4 +63,8 @@ urlpatterns = [
 
     # Termes CGU
     path('terms/', views.TermsView.as_view(), name='terms'),
+
+    # Guide d'intégration
+    path('email-verification/<str:token>/', views.EmailVerificationView.as_view(), name='email_verify'),
+    path('email-verification-required/', views.EmailVerificationRequiredView.as_view(), name='email_verification_required'),
 ]

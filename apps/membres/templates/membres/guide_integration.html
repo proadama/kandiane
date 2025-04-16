@@ -1,0 +1,300 @@
+# Créer un nouveau fichier: templates/membres/guide_integration.html
+
+{% extends "layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Guide d'intégration" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .integration-step {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+  }
+  
+  .integration-step:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
+  }
+  
+  .step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #0d6efd;
+    color: white;
+    font-weight: bold;
+    margin-right: 1rem;
+  }
+  
+  .guide-header {
+    background-color: #e9ecef;
+    padding: 3rem 0;
+    margin-bottom: 3rem;
+    border-radius: 0.5rem;
+  }
+  
+  .faq-item {
+    margin-bottom: 1.5rem;
+  }
+  
+  .faq-question {
+    font-weight: bold;
+    color: #0d6efd;
+    cursor: pointer;
+  }
+  
+  .resources-list li {
+    margin-bottom: 1rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <!-- En-tête -->
+  <div class="guide-header text-center mb-5">
+    <h1>{% trans "Bienvenue dans notre association" %}</h1>
+    <p class="lead">{% trans "Guide d'intégration pour les nouveaux membres" %}</p>
+  </div>
+  
+  <!-- Introduction personnalisée -->
+  <div class="row mb-5">
+    <div class="col-md-8 offset-md-2">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h2 class="card-title">{% trans "Bienvenue" %} {{ membre.prenom }} !</h2>
+          <p class="card-text">
+            {% blocktrans %}
+            Nous sommes ravis de vous accueillir parmi nous. Ce guide est conçu pour vous aider 
+            à vous familiariser avec notre association et vous permettre de profiter pleinement 
+            de votre adhésion.
+            {% endblocktrans %}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Étapes d'intégration -->
+  <h2 class="mb-4">{% trans "Les étapes clés de votre intégration" %}</h2>
+  
+  <div class="row">
+    <div class="col-md-6">
+      <div class="integration-step">
+        <h3><span class="step-number">1</span> {% trans "Compléter votre profil" %}</h3>
+        <p>
+          {% blocktrans %}
+          Assurez-vous que toutes vos informations personnelles sont à jour. Cela nous permettra 
+          de mieux communiquer avec vous et de vous proposer des services adaptés.
+          {% endblocktrans %}
+        </p>
+        <a href="{% url 'membres:membre_modifier' membre.id %}" class="btn btn-outline-primary">
+          <i class="fas fa-user-edit"></i> {% trans "Modifier mon profil" %}
+        </a>
+      </div>
+    </div>
+    
+    <div class="col-md-6">
+      <div class="integration-step">
+        <h3><span class="step-number">2</span> {% trans "Découvrir nos activités" %}</h3>
+        <p>
+          {% blocktrans %}
+          Consultez notre calendrier d'événements et inscrivez-vous aux activités qui vous intéressent.
+          C'est l'occasion idéale pour rencontrer d'autres membres.
+          {% endblocktrans %}
+        </p>
+        <a href="#" class="btn btn-outline-primary">
+          <i class="fas fa-calendar-alt"></i> {% trans "Voir les événements" %}
+        </a>
+      </div>
+    </div>
+    
+    <div class="col-md-6">
+      <div class="integration-step">
+        <h3><span class="step-number">3</span> {% trans "Régler votre cotisation" %}</h3>
+        <p>
+          {% blocktrans %}
+          Si ce n'est pas déjà fait, n'oubliez pas de régler votre cotisation annuelle. Cela vous 
+          permettra d'accéder à tous nos services et activités.
+          {% endblocktrans %}
+        </p>
+        <a href="#" class="btn btn-outline-primary">
+          <i class="fas fa-credit-card"></i> {% trans "Gérer mes cotisations" %}
+        </a>
+      </div>
+    </div>
+    
+    <div class="col-md-6">
+      <div class="integration-step">
+        <h3><span class="step-number">4</span> {% trans "Rejoindre notre communauté" %}</h3>
+        <p>
+          {% blocktrans %}
+          Participez à nos discussions, posez vos questions et partagez votre expérience avec les 
+          autres membres de l'association.
+          {% endblocktrans %}
+        </p>
+        <a href="#" class="btn btn-outline-primary">
+          <i class="fas fa-users"></i> {% trans "Forum des membres" %}
+        </a>
+      </div>
+    </div>
+  </div>
+  
+  <!-- FAQ -->
+  <div class="card shadow-sm mt-5">
+    <div class="card-header bg-light">
+      <h2 class="mb-0">{% trans "Questions fréquentes" %}</h2>
+    </div>
+    <div class="card-body">
+      <div class="faq-item">
+        <p class="faq-question" data-bs-toggle="collapse" data-bs-target="#faq1">
+          <i class="fas fa-chevron-right me-2"></i> {% trans "Comment puis-je modifier mes informations personnelles ?" %}
+        </p>
+        <div class="collapse" id="faq1">
+          <div class="card card-body">
+            {% blocktrans %}
+            Vous pouvez modifier vos informations personnelles en accédant à votre profil depuis le menu 
+            "Mon compte" puis "Modifier mon profil". Vous pourrez y mettre à jour vos coordonnées, 
+            votre photo, et d'autres informations.
+            {% endblocktrans %}
+          </div>
+        </div>
+      </div>
+      
+      <div class="faq-item">
+        <p class="faq-question" data-bs-toggle="collapse" data-bs-target="#faq2">
+          <i class="fas fa-chevron-right me-2"></i> {% trans "Comment puis-je m'inscrire à un événement ?" %}
+        </p>
+        <div class="collapse" id="faq2">
+          <div class="card card-body">
+            {% blocktrans %}
+            Pour vous inscrire à un événement, consultez la page "Événements" où vous trouverez 
+            la liste de toutes nos activités à venir. Cliquez sur l'événement qui vous intéresse, 
+            puis sur le bouton "S'inscrire".
+            {% endblocktrans %}
+          </div>
+        </div>
+      </div>
+      
+      <div class="faq-item">
+        <p class="faq-question" data-bs-toggle="collapse" data-bs-target="#faq3">
+          <i class="fas fa-chevron-right me-2"></i> {% trans "Comment puis-je contacter d'autres membres ?" %}
+        </p>
+        <div class="collapse" id="faq3">
+          <div class="card card-body">
+            {% blocktrans %}
+            Le meilleur moyen de contacter d'autres membres est de participer à nos événements et 
+            activités. Vous pouvez également utiliser notre forum de discussion interne accessible 
+            depuis votre espace membre.
+            {% endblocktrans %}
+          </div>
+        </div>
+      </div>
+      
+      <div class="faq-item">
+        <p class="faq-question" data-bs-toggle="collapse" data-bs-target="#faq4">
+          <i class="fas fa-chevron-right me-2"></i> {% trans "Comment puis-je régler ma cotisation ?" %}
+        </p>
+        <div class="collapse" id="faq4">
+          <div class="card card-body">
+            {% blocktrans %}
+            Vous pouvez régler votre cotisation en ligne depuis la section "Mes cotisations" de votre 
+            espace membre. Nous acceptons les paiements par carte bancaire, virement ou chèque.
+            {% endblocktrans %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Ressources utiles -->
+  <div class="card shadow-sm mt-5">
+    <div class="card-header bg-light">
+      <h2 class="mb-0">{% trans "Ressources utiles" %}</h2>
+    </div>
+    <div class="card-body">
+      <ul class="resources-list">
+        <li>
+          <i class="fas fa-file-pdf text-danger me-2"></i>
+          <a href="#">{% trans "Statuts de l'association" %}</a>
+        </li>
+        <li>
+          <i class="fas fa-file-alt text-primary me-2"></i>
+          <a href="#">{% trans "Règlement intérieur" %}</a>
+        </li>
+        <li>
+          <i class="fas fa-book text-success me-2"></i>
+          <a href="#">{% trans "Guide du membre" %}</a>
+        </li>
+        <li>
+          <i class="fas fa-map-marked-alt text-warning me-2"></i>
+          <a href="#">{% trans "Où nous trouver" %}</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+  
+  <!-- Contact -->
+  <div class="card shadow-sm mt-5 mb-5">
+    <div class="card-header bg-light">
+      <h2 class="mb-0">{% trans "Besoin d'aide ?" %}</h2>
+    </div>
+    <div class="card-body">
+      <p>
+        {% blocktrans %}
+        Notre équipe est à votre disposition pour répondre à toutes vos questions. N'hésitez pas à nous contacter :
+        {% endblocktrans %}
+      </p>
+      <div class="row">
+        <div class="col-md-6">
+          <div class="card mb-3">
+            <div class="card-body text-center">
+              <i class="fas fa-envelope fa-3x text-primary mb-3"></i>
+              <h5 class="card-title">{% trans "Par email" %}</h5>
+              <p class="card-text">contact@association.org</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card mb-3">
+            <div class="card-body text-center">
+              <i class="fas fa-phone fa-3x text-primary mb-3"></i>
+              <h5 class="card-title">{% trans "Par téléphone" %}</h5>
+              <p class="card-text">01 23 45 67 89</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Animation pour les questions FAQ
+    const faqQuestions = document.querySelectorAll('.faq-question');
+    faqQuestions.forEach(question => {
+      question.addEventListener('click', function() {
+        const icon = this.querySelector('i');
+        if (icon.classList.contains('fa-chevron-right')) {
+          icon.classList.remove('fa-chevron-right');
+          icon.classList.add('fa-chevron-down');
+        } else {
+          icon.classList.remove('fa-chevron-down');
+          icon.classList.add('fa-chevron-right');
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

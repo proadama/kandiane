@@ -7,7 +7,7 @@ from datetime import datetime
 import traceback
 import sys
 from django.http import HttpResponseRedirect
-
+from django.conf import settings
 from django.db.models.functions import ExtractMonth
 from django.contrib import messages
 from django.db import transaction
@@ -290,6 +290,8 @@ class MembreCreateView(StaffRequiredMixin, CreateView):
         kwargs['user'] = self.request.user
         return kwargs
     
+    # Modifier dans apps/membres/views.py - classe MembreCreateView, méthode form_valid
+
     def form_valid(self, form):
         try:
             # Enregistrer le membre
@@ -325,19 +327,44 @@ class MembreCreateView(StaffRequiredMixin, CreateView):
                 membre.utilisateur = user
                 membre.save(update_fields=['utilisateur'])
                 
-                # Message avec identifiants
-                messages.success(
-                    self.request,
-                    _("Le membre %(name)s a été créé avec succès. Un compte utilisateur a été créé avec les identifiants:\nNom d'utilisateur: %(username)s\nMot de passe: %(password)s") % {
-                        'name': membre.nom_complet,
-                        'username': username,
-                        'password': password
-                    }
-                )
+                # Message amélioré avec HTML pour une meilleure présentation
+                message_html = f"""
+                <h5><i class="fas fa-check-circle text-success me-2"></i>{_("Membre créé avec succès!")}</h5>
+                <p>{_("Le membre")} <strong>{membre.nom_complet}</strong> {_("a été créé et un compte utilisateur a été généré.")}</p>
+                <div class="alert alert-info p-2 mt-2 mb-0">
+                    <strong>{_("Identifiants de connexion")}:</strong><br>
+                    <span class="badge bg-secondary me-1">{_("Nom d'utilisateur")}:</span> {username}<br>
+                    <span class="badge bg-secondary me-1">{_("Mot de passe")}:</span> {password}
+                </div>
+                """
+                messages.success(self.request, message_html)
+
+                # Envoyer un email de bienvenue
+                subject = _("Bienvenue à l'association")
+                message = _(f"Bonjour {membre.prenom},\n\n"
+                        f"Votre compte a été créé avec succès.\n"
+                        f"Nom d'utilisateur: {username}\n"
+                        f"Mot de passe: {password}\n\n"
+                        f"Nous vous invitons à consulter le guide d'intégration: {self.request.build_absolute_uri(reverse('membres:guide_integration'))}\n\n"
+                        f"Cordialement,\n"
+                        f"L'équipe")
+                
+                from django.core.mail import send_mail
+                try:
+                    send_mail(
+                        subject,
+                        message,
+                        'noreply@association.org',  # Remplacer par votre email
+                        [membre.email],
+                        fail_silently=True,
+                    )
+                except Exception as e:
+                    logger.error(f"Erreur lors de l'envoi de l'email de bienvenue: {str(e)}")
             else:
                 messages.success(
                     self.request, 
-                    _("Le membre %(name)s a été créé avec succès.") % {'name': membre.nom_complet}
+                    f"<h5><i class='fas fa-check-circle text-success me-2'></i>{_('Membre créé!')}</h5>"
+                    f"<p>{_('Le membre')} <strong>{membre.nom_complet}</strong> {_('a été créé avec succès.')}</p>"
                 )
             
             # Ajouter un enregistrement dans l'historique
@@ -357,7 +384,7 @@ class MembreCreateView(StaffRequiredMixin, CreateView):
             # Journaliser l'erreur
             logger.error(f"Erreur lors de la création d'un membre: {str(e)}")
             # Afficher un message d'erreur à l'utilisateur
-            messages.error(self.request, f"Une erreur s'est produite: {str(e)}")
+            messages.error(self.request, f"<h5><i class='fas fa-exclamation-triangle text-danger me-2'></i>{_('Erreur')}</h5><p>{str(e)}</p>")
             # Re-afficher le formulaire avec les données
             return self.form_invalid(form)
 
@@ -429,12 +456,48 @@ class MembreCreateView(StaffRequiredMixin, CreateView):
                     last_name=membre.nom
                 )
                 print(f"Utilisateur créé avec ID: {user.id}")
-                
+
                 # Lier à ce membre
                 membre.utilisateur = user
                 membre.save(update_fields=['utilisateur'])
                 print("Membre mis à jour avec utilisateur")
-                
+
+                # Vérification d'email si la fonctionnalité est activée
+                if hasattr(settings, 'ACCOUNT_EMAIL_VERIFICATION_REQUIRED') and settings.ACCOUNT_EMAIL_VERIFICATION_REQUIRED:
+                    try:
+                        # Générer un token de vérification
+                        token = user.generate_email_verification_token()
+                        
+                        # Préparer le lien de vérification
+                        verification_url = self.request.build_absolute_uri(
+                            reverse('email_verify', kwargs={'token': token})
+                        )
+                        
+                        # Envoyer l'email de vérification
+                        context = {
+                            'user': user,
+                            'verification_url': verification_url
+                        }
+                        
+                        from apps.core.services import EmailService
+                        EmailService.send_template_email(
+                            'emails/email_verification',
+                            context,
+                            _("Vérification de votre adresse email"),
+                            user.email
+                        )
+                        
+                        # Adapter le message de succès
+                        messages.info(
+                            self.request,
+                            _("Un email de vérification a été envoyé à %(email)s. "
+                            "Veuillez cliquer sur le lien dans cet email pour activer votre compte.") % {'email': user.email}
+                        )
+                    except Exception as email_error:
+                        # Loguer l'erreur mais ne pas interrompre le processus
+                        print(f"Erreur lors de l'envoi de l'email de vérification: {str(email_error)}")
+                        logger.error(f"Erreur lors de l'envoi de l'email de vérification: {str(email_error)}")
+
                 # Message avec identifiants
                 messages.success(
                     self.request,
@@ -1264,3 +1327,32 @@ class MembreUpdateView(StaffRequiredMixin, UpdateView):
             _("Le membre %(name)s a été modifié avec succès.") % {'name': membre.nom_complet}
         )
         return super().form_valid(form)
+    
+# Ajouter dans apps/membres/views.py
+
+class GuideIntegrationView(StaffRequiredMixin, TemplateView):
+    """
+    Vue pour afficher le guide d'intégration pour les nouveaux membres
+    """
+    template_name = 'membres/guide_integration.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Récupérer le membre associé à l'utilisateur connecté
+        try:
+            context['membre'] = Membre.objects.get(utilisateur=self.request.user)
+        except Membre.DoesNotExist:
+            context['membre'] = None
+            
+        # Informations supplémentaires pour personnaliser le guide
+        if 'pk' in kwargs:
+            try:
+                membre = Membre.objects.get(pk=kwargs['pk'])
+                # Vérifier que l'utilisateur est administrateur ou le propriétaire du profil
+                if self.request.user.is_staff or (context['membre'] and context['membre'].pk == membre.pk):
+                    context['membre'] = membre
+            except Membre.DoesNotExist:
+                pass
+        
+        return context

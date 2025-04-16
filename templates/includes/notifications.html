@@ -1,0 +1,61 @@
+# Créer un nouveau fichier: templates/includes/notifications.html
+
+{% load i18n %}
+
+<div id="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999; width: 350px;"></div>
+
+<script>
+// Fonction pour créer une notification
+function createNotification(type, message, autoDismiss = true, dismissTime = 8000) {
+    const container = document.getElementById('notification-container');
+    const notification = document.createElement('div');
+    
+    // Classes et styles de base
+    notification.className = `alert alert-${type} alert-dismissible fade show shadow-sm`;
+    notification.style.marginBottom = '10px';
+    notification.style.transition = 'all 0.5s ease';
+    notification.style.opacity = '0';
+    
+    // Contenu de la notification
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    // Ajouter au container
+    container.appendChild(notification);
+    
+    // Animation d'entrée
+    setTimeout(() => {
+        notification.style.opacity = '1';
+    }, 50);
+    
+    // Auto-dismiss après un délai
+    if (autoDismiss) {
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 500);
+        }, dismissTime);
+    }
+    
+    // Retourner l'élément pour manipulation ultérieure
+    return notification;
+}
+
+// Fonction pour afficher les notifications Django
+function displayDjangoMessages() {
+    const messages = JSON.parse(document.getElementById('django-messages-data').textContent || '[]');
+    messages.forEach(message => {
+        createNotification(message.tags, message.message);
+    });
+}
+
+// Initialisation au chargement
+document.addEventListener('DOMContentLoaded', function() {
+    displayDjangoMessages();
+});
+</script>

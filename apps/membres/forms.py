@@ -2,7 +2,8 @@ from django import forms
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
-
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from apps.core.models import Statut
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, HistoriqueMembre
 
@@ -31,7 +32,14 @@ class MembreForm(forms.ModelForm):
         label=_("Mot de passe"),
         required=False,
         widget=forms.PasswordInput,
-        help_text=_("Laissez vide pour générer un mot de passe aléatoire")
+        help_text=_("Laissez vide pour générer un mot de passe aléatoire ou entrez un mot de passe fort")
+    )
+    
+    password_confirm = forms.CharField(
+        label=_("Confirmer le mot de passe"),
+        required=False,
+        widget=forms.PasswordInput,
+        help_text=_("Entrez à nouveau le mot de passe pour confirmation")
     )
     
     class Meta:
@@ -92,13 +100,24 @@ class MembreForm(forms.ModelForm):
         """Validation globale du formulaire"""
         cleaned_data = super().clean()
         
-        # S'assurer que le mot de passe est fourni si creer_compte est coché
+        # Vérifier que les mots de passe correspondent
         creer_compte = cleaned_data.get('creer_compte')
         password = cleaned_data.get('password')
+        password_confirm = cleaned_data.get('password_confirm')
         
         if creer_compte and not self.instance.utilisateur:
-            # Le mot de passe vide est acceptable car on en générera un aléatoire
-            pass
+            if password:
+                # Vérifier que les mots de passe correspondent
+                if password != password_confirm:
+                    self.add_error('password_confirm', _("Les mots de passe ne correspondent pas."))
+                
+                # Vérifier la force du mot de passe avec les validateurs Django
+                try:
+                    # Utiliser validate_password pour vérifier la conformité du mot de passe
+                    validate_password(password)
+                except DjangoValidationError as e:
+                    # Ajouter chaque erreur au champ password
+                    self.add_error('password', e)
         
         return cleaned_data
     

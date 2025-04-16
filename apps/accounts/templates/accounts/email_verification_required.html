@@ -1,0 +1,63 @@
+# Créer un nouveau fichier: templates/accounts/email_verification_required.html
+
+{% extends "layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Vérification d'email requise" %}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h1 class="h3 mb-0">{% trans "Vérification d'email requise" %}</h1>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <i class="fas fa-envelope fa-4x text-primary mb-3"></i>
+                        <p class="lead">
+                            {% trans "Veuillez vérifier votre adresse email pour activer votre compte." %}
+                        </p>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <p>
+                            <i class="fas fa-info-circle me-2"></i>
+                            {% trans "Un email de vérification a été envoyé à votre adresse email. Veuillez cliquer sur le lien dans cet email pour activer votre compte." %}
+                        </p>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <p>{% trans "Vous n'avez pas reçu l'email de vérification ? Veuillez vérifier votre dossier de spam ou demander un nouveau lien de vérification." %}</p>
+                        
+                        <form method="post" class="mt-3">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label for="email" class="form-label">{% trans "Votre adresse email" %}</label>
+                                <input type="email" class="form-control" id="email" name="email" required>
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-paper-plane me-2"></i>
+                                    {% trans "Demander un nouveau lien de vérification" %}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="text-center">
+                        <p>{% trans "Vous avez déjà vérifié votre compte ?" %}</p>
+                        <a href="{% url 'login' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-sign-in-alt me-2"></i>
+                            {% trans "Se connecter" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

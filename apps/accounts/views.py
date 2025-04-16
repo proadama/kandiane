@@ -1,7 +1,7 @@
 # apps/accounts/views.py
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.views import LoginView
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
@@ -9,16 +9,15 @@ from django.contrib import messages
 from django.views.generic import CreateView, ListView, UpdateView, DeleteView
 from django.utils import timezone
 from django.urls import reverse_lazy
-from django.http import JsonResponse, HttpResponseRedirect
+from django.http import JsonResponse
 from django.utils.translation import gettext_lazy as _
 from django.db.models import Q
 from django.views.decorators.http import require_POST
-from django.template.loader import render_to_string
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth import logout
 from django.shortcuts import redirect
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, RedirectView
 from django.contrib.auth.forms import PasswordResetForm
 from django.core.exceptions import ValidationError
 from django.contrib.auth.views import LoginView, PasswordResetView
@@ -29,8 +28,10 @@ from .forms import (
     CustomAuthenticationForm
 )
 from .middleware import RolePermissionMiddleware
-
 import logging
+from django.urls import reverse
+from apps.core.services import EmailService
+
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
@@ -349,3 +350,68 @@ class TermsView(TemplateView):
     Vue pour afficher les termes et conditions d'utilisation.
     """
     template_name = 'accounts/terms.html'
+
+class EmailVerificationView(RedirectView):
+    """
+    Vue pour vérifier l'email d'un utilisateur via un token
+    """
+    def get_redirect_url(self, *args, **kwargs):
+        token = kwargs.get('token')
+        user = get_object_or_404(CustomUser, email_verification_token=token)
+        
+        if user.verify_email(token):
+            messages.success(self.request, _("Votre adresse email a été vérifiée avec succès. Vous pouvez maintenant vous connecter."))
+            return reverse('login')
+        else:
+            messages.error(self.request, _("Le lien de vérification a expiré ou est invalide. Veuillez demander un nouveau lien."))
+            return reverse('email_verification_required')
+
+class EmailVerificationRequiredView(TemplateView):
+    """
+    Vue affichée lorsque la vérification d'email est nécessaire
+    """
+    template_name = 'accounts/email_verification_required.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Ajouter des infos au contexte si nécessaire
+        return context
+    
+    def post(self, request, *args, **kwargs):
+        """
+        Gère la demande de renvoi du lien de vérification
+        """
+        email = request.POST.get('email')
+        if email:
+            try:
+                user = CustomUser.objects.get(email=email)
+                if not user.is_email_verified:
+                    # Générer un nouveau token
+                    token = user.generate_email_verification_token()
+                    
+                    # Préparer le lien de vérification
+                    verification_url = request.build_absolute_uri(
+                        reverse('email_verify', kwargs={'token': token})
+                    )
+                    
+                    # Envoyer l'email de vérification
+                    context = {
+                        'user': user,
+                        'verification_url': verification_url
+                    }
+                    
+                    EmailService.send_template_email(
+                        'emails/email_verification',
+                        context,
+                        _("Vérification de votre adresse email"),
+                        user.email
+                    )
+                    
+                    messages.success(request, _("Un nouveau lien de vérification a été envoyé à votre adresse email."))
+                else:
+                    messages.info(request, _("Votre adresse email est déjà vérifiée. Vous pouvez vous connecter."))
+            except CustomUser.DoesNotExist:
+                # Ne pas divulguer l'existence ou non de l'utilisateur
+                messages.success(request, _("Si cette adresse est associée à un compte, un email de vérification sera envoyé."))
+        
+        return self.render_to_response(self.get_context_data())

@@ -1,0 +1,129 @@
+# Créer un nouveau fichier: templates/emails/welcome_email.html
+
+{% load i18n %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% trans "Bienvenue à l'association" %}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            background-color: #f8f9fa;
+            border-radius: 5px 5px 0 0;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #0d6efd;
+            margin: 0;
+        }
+        .content {
+            padding: 0 20px 20px;
+        }
+        .credentials {
+            background-color: #f1f8ff;
+            border-left: 4px solid #0d6efd;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .credentials p {
+            margin: 5px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #0d6efd;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .steps {
+            margin: 25px 0;
+        }
+        .step {
+            margin-bottom: 15px;
+            padding-left: 25px;
+            position: relative;
+        }
+        .step:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #0d6efd;
+            font-weight: bold;
+        }
+        .footer {
+            text-align: center;
+            padding: 15px 0;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{% trans "Bienvenue à l'association" %}</h1>
+        </div>
+        
+        <div class="content">
+            <p>{% trans "Bonjour" %} {{ membre.prenom }},</p>
+            
+            <p>{% trans "Nous sommes ravis de vous accueillir comme nouveau membre de notre association. Votre compte a été créé avec succès." %}</p>
+            
+            <div class="credentials">
+                <h3>{% trans "Vos identifiants de connexion" %}</h3>
+                <p><strong>{% trans "Nom d'utilisateur" %}:</strong> {{ username }}</p>
+                <p><strong>{% trans "Mot de passe" %}:</strong> {{ password }}</p>
+                <p>{% trans "Nous vous recommandons de changer ce mot de passe lors de votre première connexion." %}</p>
+            </div>
+            
+            <p>{% trans "Pour commencer votre aventure avec nous, nous vous invitons à consulter notre guide d'intégration:" %}</p>
+            
+            <center>
+                <a href="{{ guide_url }}" class="button">{% trans "Accéder au guide d'intégration" %}</a>
+            </center>
+            
+            <div class="steps">
+                <h3>{% trans "Prochaines étapes" %}:</h3>
+                <div class="step">{% trans "Compléter votre profil" %}</div>
+                <div class="step">{% trans "Découvrir nos événements et activités" %}</div>
+                <div class="step">{% trans "Régler votre cotisation annuelle" %}</div>
+                <div class="step">{% trans "Rencontrer les autres membres" %}</div>
+            </div>
+            
+            <p>{% trans "Si vous avez des questions, n'hésitez pas à nous contacter." %}</p>
+            
+            <p>
+                {% trans "Cordialement," %}<br>
+                {% trans "L'équipe de l'association" %}
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>© {% now "Y" %} {% trans "Association" %} - {% trans "Tous droits réservés" %}</p>
+            <p>{% trans "Cet email a été envoyé à" %} {{ membre.email }}</p>
+        </div>
+    </div>
+</body>
+</html>
