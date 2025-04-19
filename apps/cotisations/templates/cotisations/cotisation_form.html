@@ -1,0 +1,710 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block breadcrumb %}
+{% if form.instance.pk %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_detail' pk=form.instance.pk %}">{{ form.instance.reference }}</a></li>
+<li class="breadcrumb-item active">{% trans "Modifier" %}</li>
+{% else %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item active">{% trans "Nouvelle cotisation" %}</li>
+{% endif %}
+{% endblock %}
+
+{% block page_title %}
+{% if form.instance.pk %}
+{% trans "Modifier la cotisation" %} {{ form.instance.reference }}
+{% else %}
+{% trans "Nouvelle cotisation" %}
+{% endif %}
+{% endblock %}
+
+{% block cotisations_content %}
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" id="cotisationForm" novalidate>
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        {% trans "Veuillez corriger les erreurs ci-dessous." %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row g-3">
+                        <!-- Première section - Informations de base -->
+                        <div class="col-12">
+                            <h5 class="border-bottom pb-2">{% trans "Informations de base" %}</h5>
+                        </div>
+                        
+                        <!-- Membre -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.membre.errors %} has-error{% endif %}">
+                                {{ form.membre.label_tag }}
+                                {{ form.membre }}
+                                {% if form.membre.help_text %}
+                                <small class="form-text text-muted">{{ form.membre.help_text }}</small>
+                                {% endif %}
+                                {% if form.membre.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.membre.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Type de membre -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.type_membre.errors %} has-error{% endif %}">
+                                {{ form.type_membre.label_tag }}
+                                {{ form.type_membre }}
+                                {% if form.type_membre.help_text %}
+                                <small class="form-text text-muted">{{ form.type_membre.help_text }}</small>
+                                {% endif %}
+                                {% if form.type_membre.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.type_membre.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Deuxième section - Montant et barème -->
+                        <div class="col-12 mt-4">
+                            <h5 class="border-bottom pb-2">{% trans "Montant et barème" %}</h5>
+                        </div>
+                        
+                        {% if not form.instance.pk %}
+                        <!-- Utiliser barème (seulement pour la création) -->
+                        <div class="col-md-12">
+                            <div class="form-check mb-3">
+                                {{ form.utiliser_bareme }}
+                                {{ form.utiliser_bareme.label_tag }}
+                                {% if form.utiliser_bareme.help_text %}
+                                <small class="form-text text-muted d-block">{{ form.utiliser_bareme.help_text }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Barème -->
+                        <div class="col-md-6" id="baremeContainer">
+                            <div class="form-group{% if form.bareme.errors %} has-error{% endif %}">
+                                {{ form.bareme.label_tag }}
+                                {{ form.bareme }}
+                                {% if form.bareme.help_text %}
+                                <small class="form-text text-muted">{{ form.bareme.help_text }}</small>
+                                {% endif %}
+                                {% if form.bareme.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.bareme.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Montant -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.montant.errors %} has-error{% endif %}">
+                                {{ form.montant.label_tag }}
+                                <div class="input-group">
+                                    {{ form.montant }}
+                                    <span class="input-group-text">€</span>
+                                </div>
+                                {% if form.montant.help_text %}
+                                <small class="form-text text-muted">{{ form.montant.help_text }}</small>
+                                {% endif %}
+                                {% if form.montant.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.montant.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Troisième section - Référence -->
+                        <div class="col-12 mt-4">
+                            <h5 class="border-bottom pb-2">{% trans "Référence" %}</h5>
+                        </div>
+                        
+                        {% if not form.instance.pk %}
+                        <!-- Générer référence (seulement pour la création) -->
+                        <div class="col-md-12">
+                            <div class="form-check mb-3">
+                                {{ form.generer_reference }}
+                                {{ form.generer_reference.label_tag }}
+                                {% if form.generer_reference.help_text %}
+                                <small class="form-text text-muted d-block">{{ form.generer_reference.help_text }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Référence -->
+                        <div class="col-md-12" id="referenceContainer" {% if not form.instance.pk and form.initial.generer_reference %}style="display:none;"{% endif %}>
+                            <div class="form-group{% if form.reference.errors %} has-error{% endif %}">
+                                {{ form.reference.label_tag }}
+                                {{ form.reference }}
+                                {% if form.reference.help_text %}
+                                <small class="form-text text-muted">{{ form.reference.help_text }}</small>
+                                {% endif %}
+                                {% if form.reference.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.reference.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Quatrième section - Dates -->
+                        <div class="col-12 mt-4">
+                            <h5 class="border-bottom pb-2">{% trans "Dates" %}</h5>
+                        </div>
+                        
+                        <!-- Date d'émission -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.date_emission.errors %} has-error{% endif %}">
+                                {{ form.date_emission.label_tag }}
+                                {{ form.date_emission }}
+                                {% if form.date_emission.help_text %}
+                                <small class="form-text text-muted">{{ form.date_emission.help_text }}</small>
+                                {% endif %}
+                                {% if form.date_emission.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.date_emission.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Date d'échéance -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.date_echeance.errors %} has-error{% endif %}">
+                                {{ form.date_echeance.label_tag }}
+                                {{ form.date_echeance }}
+                                {% if form.date_echeance.help_text %}
+                                <small class="form-text text-muted">{{ form.date_echeance.help_text }}</small>
+                                {% endif %}
+                                {% if form.date_echeance.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.date_echeance.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Période début -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.periode_debut.errors %} has-error{% endif %}">
+                                {{ form.periode_debut.label_tag }}
+                                {{ form.periode_debut }}
+                                {% if form.periode_debut.help_text %}
+                                <small class="form-text text-muted">{{ form.periode_debut.help_text }}</small>
+                                {% endif %}
+                                {% if form.periode_debut.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.periode_debut.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Période fin -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.periode_fin.errors %} has-error{% endif %}">
+                                {{ form.periode_fin.label_tag }}
+                                {{ form.periode_fin }}
+                                {% if form.periode_fin.help_text %}
+                                <small class="form-text text-muted">{{ form.periode_fin.help_text }}</small>
+                                {% endif %}
+                                {% if form.periode_fin.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.periode_fin.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Cinquième section - Statut et commentaire -->
+                        <div class="col-12 mt-4">
+                            <h5 class="border-bottom pb-2">{% trans "Informations complémentaires" %}</h5>
+                        </div>
+                        
+                        <!-- Statut -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.statut.errors %} has-error{% endif %}">
+                                {{ form.statut.label_tag }}
+                                {{ form.statut }}
+                                {% if form.statut.help_text %}
+                                <small class="form-text text-muted">{{ form.statut.help_text }}</small>
+                                {% endif %}
+                                {% if form.statut.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.statut.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Commentaire -->
+                        <div class="col-md-12 mt-3">
+                            <div class="form-group{% if form.commentaire.errors %} has-error{% endif %}">
+                                {{ form.commentaire.label_tag }}
+                                {{ form.commentaire }}
+                                {% if form.commentaire.help_text %}
+                                <small class="form-text text-muted">{{ form.commentaire.help_text }}</small>
+                                {% endif %}
+                                {% if form.commentaire.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.commentaire.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Boutons -->
+                        <div class="col-12 mt-4 d-flex justify-content-between">
+                            {% if form.instance.pk %}
+                            <a href="{% url 'cotisations:cotisation_detail' pk=form.instance.pk %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> {% trans "Annuler" %}
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> {% trans "Enregistrer les modifications" %}
+                            </button>
+                            {% else %}
+                            <a href="{% url 'cotisations:cotisation_liste' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> {% trans "Annuler" %}
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> {% trans "Créer la cotisation" %}
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Mettre à jour les templates pour inclure ce fichier
+ ajoutez cette ligne à la fin du bloc {% block extra_js %} -->
+<script src="{% static 'js/cotisations/form-validation.js' %}"></script>
+<script src="{% static 'js/cotisations/cotisations.js' %}"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Gestion de l'utilisation du barème
+    const utiliserBaremeCheckbox = document.getElementById('id_utiliser_bareme');
+    const baremeSelect = document.getElementById('id_bareme');
+    const montantInput = document.getElementById('id_montant');
+    
+    if (utiliserBaremeCheckbox) {
+        utiliserBaremeCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                montantInput.readOnly = true;
+                if (baremeSelect.value) {
+                    // Récupérer le montant du barème sélectionné
+                    fetchBaremeMontant(baremeSelect.value);
+                }
+            } else {
+                montantInput.readOnly = false;
+            }
+        });
+        
+        // Déclencher l'événement au chargement
+        if (utiliserBaremeCheckbox.checked) {
+            montantInput.readOnly = true;
+        }
+    }
+    
+    // Mettre à jour le montant quand le barème change
+    if (baremeSelect) {
+        baremeSelect.addEventListener('change', function() {
+            if (utiliserBaremeCheckbox && utiliserBaremeCheckbox.checked) {
+                fetchBaremeMontant(this.value);
+            }
+        });
+    }
+    
+    // Fonction pour récupérer le montant d'un barème via API
+    function fetchBaremeMontant(baremeId) {
+        if (!baremeId) return;
+        
+        fetch(`{% url 'cotisations:api_calculer_montant' %}?bareme_id=${baremeId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    montantInput.value = data.montant;
+                }
+            })
+            .catch(error => console.error('Erreur lors de la récupération du montant:', error));
+    }
+    
+    // Mettre à jour les barèmes disponibles en fonction du type de membre
+    const typeMembreSelect = document.getElementById('id_type_membre');
+    if (typeMembreSelect) {
+        typeMembreSelect.addEventListener('change', function() {
+            const typeId = this.value;
+            if (!typeId) return;
+            
+            // Nettoyer le select des barèmes
+            baremeSelect.innerHTML = '';
+            baremeSelect.disabled = true;
+            
+            // Requête AJAX pour obtenir les barèmes pour ce type
+            fetch(`/api/cotisations/baremes/?type_membre=${typeId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.baremes && data.baremes.length > 0) {
+                        // Ajouter une option vide
+                        const emptyOption = document.createElement('option');
+                        emptyOption.value = '';
+                        emptyOption.textContent = '---------';
+                        baremeSelect.appendChild(emptyOption);
+                        
+                        // Ajouter les barèmes
+                        data.baremes.forEach(bareme => {
+                            const option = document.createElement('option');
+                            option.value = bareme.id;
+                            option.textContent = `${bareme.montant} € (${bareme.periodicite})`;
+                            baremeSelect.appendChild(option);
+                        });
+                        
+                        baremeSelect.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Erreur lors de la récupération des barèmes:', error);
+                    baremeSelect.disabled = false;
+                });
+        });
+    }
+    
+    // Gestion de la génération de référence
+    const genererReferenceCheckbox = document.getElementById('id_generer_reference');
+    const referenceContainer = document.getElementById('referenceContainer');
+    const referenceInput = document.getElementById('id_reference');
+    
+    if (genererReferenceCheckbox && referenceContainer) {
+        genererReferenceCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                referenceContainer.style.display = 'none';
+                referenceInput.required = false;
+            } else {
+                referenceContainer.style.display = 'block';
+                referenceInput.required = true;
+            }
+        });
+    }
+    
+    // Validation côté client
+    const cotisationForm = document.getElementById('cotisationForm');
+    if (cotisationForm) {
+        cotisationForm.addEventListener('submit', function(event) {
+            let isValid = true;
+            
+            // Vérifier si le membre est sélectionné
+            const membreSelect = document.getElementById('id_membre');
+            if (!membreSelect.value) {
+                isValid = false;
+                highlightField(membreSelect, '{% trans "Un membre doit être sélectionné." %}');
+            }
+            
+            // Vérifier si le montant est valide
+            if (montantInput.value <= 0) {
+                isValid = false;
+                highlightField(montantInput, '{% trans "Le montant doit être supérieur à zéro." %}');
+            }
+            
+            // Vérifier les dates
+            const dateEmission = document.getElementById('id_date_emission');
+            const dateEcheance = document.getElementById('id_date_echeance');
+            
+            if (new Date(dateEcheance.value) < new Date(dateEmission.value)) {
+                isValid = false;
+                highlightField(dateEcheance, '{% trans "La date d\'échéance doit être postérieure à la date d\'émission." %}');
+            }
+            
+            // Vérifier la référence si nécessaire
+            if (genererReferenceCheckbox && !genererReferenceCheckbox.checked && !referenceInput.value) {
+                isValid = false;
+                highlightField(referenceInput, '{% trans "Une référence est requise si la génération automatique est désactivée." %}');
+            }
+            
+            if (!isValid) {
+                event.preventDefault();
+            }
+        });
+    }
+    
+    // Fonction pour mettre en évidence un champ en erreur
+    function highlightField(field, message) {
+        field.classList.add('is-invalid');
+        
+        // Ajouter un message d'erreur si pas déjà présent
+        const errorElem = field.parentNode.querySelector('.invalid-feedback');
+        if (!errorElem) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'invalid-feedback d-block';
+            errorDiv.textContent = message;
+            
+            if (field.parentNode.classList.contains('input-group')) {
+                field.parentNode.parentNode.appendChild(errorDiv);
+            } else {
+                field.parentNode.appendChild(errorDiv);
+            }
+        }
+    }
+
+    // Script pour calculer automatiquement le montant selon le barème
+document.addEventListener('DOMContentLoaded', function() {
+    // Éléments du DOM
+    const utiliserBaremeCheckbox = document.getElementById('id_utiliser_bareme');
+    const baremeSelect = document.getElementById('id_bareme');
+    const typeMembreSelect = document.getElementById('id_type_membre');
+    const montantInput = document.getElementById('id_montant');
+    const baremeContainer = document.getElementById('baremeContainer');
+    
+    // Fonction pour récupérer les barèmes disponibles pour un type de membre
+    function chargerBaremes(typeMembreId) {
+        if (!typeMembreId) {
+            // Vider le select des barèmes si pas de type sélectionné
+            baremeSelect.innerHTML = '<option value="">---------</option>';
+            baremeSelect.disabled = true;
+            return;
+        }
+        
+        // Afficher un indicateur de chargement
+        baremeSelect.innerHTML = '<option value="">{% trans "Chargement..." %}</option>';
+        baremeSelect.disabled = true;
+        
+        // Requête AJAX pour récupérer les barèmes pour ce type de membre
+        fetch(`{% url 'cotisations:api_baremes_par_type' %}?type_membre=${typeMembreId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Erreur réseau');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Reconstruire le select des barèmes
+                    baremeSelect.innerHTML = '<option value="">---------</option>';
+                    
+                    if (data.baremes && data.baremes.length > 0) {
+                        data.baremes.forEach(bareme => {
+                            const option = document.createElement('option');
+                            option.value = bareme.id;
+                            
+                            // Formater l'option avec des informations utiles
+                            let label = `${bareme.montant} € (${bareme.periodicite_display})`;
+                            if (bareme.est_actif) {
+                                label += ' - {% trans "Actif" %}';
+                            } else if (bareme.est_futur) {
+                                label += ' - {% trans "Futur" %}';
+                            }
+                            
+                            option.textContent = label;
+                            option.dataset.montant = bareme.montant;
+                            option.dataset.periodicite = bareme.periodicite;
+                            
+                            baremeSelect.appendChild(option);
+                        });
+                        
+                        // Sélectionner automatiquement le barème actif par défaut
+                        const baremeActif = Array.from(baremeSelect.options).find(option => 
+                            option.text.includes('{% trans "Actif" %}')
+                        );
+                        
+                        if (baremeActif) {
+                            baremeActif.selected = true;
+                            baremeSelect.dispatchEvent(new Event('change'));
+                        }
+                        
+                        baremeSelect.disabled = false;
+                    } else {
+                        // Aucun barème trouvé
+                        const option = document.createElement('option');
+                        option.value = "";
+                        option.textContent = "{% trans 'Aucun barème disponible' %}";
+                        baremeSelect.appendChild(option);
+                    }
+                } else {
+                    // Erreur dans la réponse
+                    afficherErreur(data.message || '{% trans "Erreur lors du chargement des barèmes" %}');
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                afficherErreur('{% trans "Erreur lors de la communication avec le serveur" %}');
+                baremeSelect.innerHTML = '<option value="">---------</option>';
+            })
+            .finally(() => {
+                baremeSelect.disabled = false;
+            });
+    }
+    
+    // Fonction pour calculer le montant depuis le barème sélectionné
+    function calculerMontantBareme() {
+        if (!baremeSelect.value) {
+            return;
+        }
+        
+        // Si l'option sélectionnée contient déjà le montant via dataset
+        const selectedOption = baremeSelect.options[baremeSelect.selectedIndex];
+        if (selectedOption && selectedOption.dataset.montant) {
+            if (utiliserBaremeCheckbox && utiliserBaremeCheckbox.checked) {
+                montantInput.value = selectedOption.dataset.montant;
+                montantInput.readOnly = true;
+                
+                // Mettre à jour les dates selon la périodicité si nécessaire
+                ajusterDates(selectedOption.dataset.periodicite);
+            }
+            return;
+        }
+        
+        // Sinon, faire une requête API
+        fetch(`{% url 'cotisations:api_calculer_montant' %}?bareme_id=${baremeSelect.value}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Erreur réseau');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    if (utiliserBaremeCheckbox && utiliserBaremeCheckbox.checked) {
+                        montantInput.value = data.montant;
+                        montantInput.readOnly = true;
+                        
+                        // Mettre à jour les dates selon la périodicité
+                        ajusterDates(data.periodicite_code);
+                    }
+                } else {
+                    afficherErreur(data.message || '{% trans "Erreur lors du calcul du montant" %}');
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                afficherErreur('{% trans "Erreur lors de la communication avec le serveur" %}');
+            });
+    }
+    
+    // Fonction pour ajuster les dates selon la périodicité
+    function ajusterDates(periodicite) {
+        // Récupérer les champs de date
+        const periodeDebutInput = document.getElementById('id_periode_debut');
+        const periodeFinInput = document.getElementById('id_periode_fin');
+        
+        if (!periodeDebutInput || !periodeFinInput) {
+            return;
+        }
+        
+        // Si la date de début n'est pas définie, utiliser aujourd'hui
+        if (!periodeDebutInput.value) {
+            const today = new Date();
+            periodeDebutInput.value = today.toISOString().split('T')[0];
+        }
+        
+        // Calculer la date de fin selon la périodicité
+        const dateDebut = new Date(periodeDebutInput.value);
+        let dateFin = new Date(dateDebut);
+        
+        switch (periodicite) {
+            case 'mensuelle':
+                dateFin.setMonth(dateDebut.getMonth() + 1);
+                dateFin.setDate(dateDebut.getDate() - 1);
+                break;
+            case 'trimestrielle':
+                dateFin.setMonth(dateDebut.getMonth() + 3);
+                dateFin.setDate(dateDebut.getDate() - 1);
+                break;
+            case 'semestrielle':
+                dateFin.setMonth(dateDebut.getMonth() + 6);
+                dateFin.setDate(dateDebut.getDate() - 1);
+                break;
+            case 'annuelle':
+            default:
+                dateFin.setFullYear(dateDebut.getFullYear() + 1);
+                dateFin.setDate(dateDebut.getDate() - 1);
+                break;
+        }
+        
+        // Formater la date au format YYYY-MM-DD pour l'input
+        const year = dateFin.getFullYear();
+        const month = String(dateFin.getMonth() + 1).padStart(2, '0');
+        const day = String(dateFin.getDate()).padStart(2, '0');
+        periodeFinInput.value = `${year}-${month}-${day}`;
+    }
+    
+    // Fonction pour afficher un message d'erreur
+    function afficherErreur(message) {
+        // Créer ou mettre à jour un élément d'alerte
+        let alerteElem = document.getElementById('alerte-bareme');
+        if (!alerteElem) {
+            alerteElem = document.createElement('div');
+            alerteElem.id = 'alerte-bareme';
+            alerteElem.className = 'alert alert-danger mt-2';
+            alerteElem.role = 'alert';
+            baremeContainer.appendChild(alerteElem);
+        }
+        
+        alerteElem.textContent = message;
+        
+        // Faire disparaître l'alerte après 5 secondes
+        setTimeout(() => {
+            alerteElem.style.display = 'none';
+        }, 5000);
+    }
+    
+    // Gestion des événements
+    if (typeMembreSelect) {
+        typeMembreSelect.addEventListener('change', function() {
+            chargerBaremes(this.value);
+        });
+        
+        // Initialiser les barèmes au chargement si un type est sélectionné
+        if (typeMembreSelect.value) {
+            chargerBaremes(typeMembreSelect.value);
+        }
+    }
+    
+    if (baremeSelect) {
+        baremeSelect.addEventListener('change', function() {
+            calculerMontantBareme();
+        });
+    }
+    
+    if (utiliserBaremeCheckbox) {
+        utiliserBaremeCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                montantInput.readOnly = true;
+                baremeContainer.style.display = 'block';
+                
+                // Recalculer le montant si un barème est déjà sélectionné
+                if (baremeSelect.value) {
+                    calculerMontantBareme();
+                }
+            } else {
+                montantInput.readOnly = false;
+                // On garde le container visible pour permettre la sélection
+            }
+        });
+        
+        // Initialiser l'état du champ montant au chargement
+        if (utiliserBaremeCheckbox.checked) {
+            montantInput.readOnly = true;
+        }
+    }
+});    
+});
+</script>
+{% endblock %}

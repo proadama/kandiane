@@ -32,6 +32,7 @@ urlpatterns = [
     path('', include('apps.core.urls')),
     path('accounts/', include('apps.accounts.urls')),
     path('membres/', include('apps.membres.urls')),
+    path('cotisations/', include('apps.cotisations.urls')),
     path('favicon.ico', RedirectView.as_view(url='/static/img/favicon.ico')),
 ]
 

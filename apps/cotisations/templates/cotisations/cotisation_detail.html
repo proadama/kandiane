@@ -1,0 +1,727 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item active">{{ cotisation.reference }}</li>
+{% endblock %}
+
+{% block page_title %}
+{% trans "Détails de la cotisation" %} {{ cotisation.reference }}
+{% endblock %}
+
+{% block actions %}
+<div class="btn-group">
+    <a href="{% url 'cotisations:cotisation_modifier' pk=cotisation.pk %}" class="btn btn-outline-secondary">
+        <i class="fas fa-edit"></i> {% trans "Modifier" %}
+    </a>
+    <a href="{% url 'cotisations:paiement_creer' cotisation_id=cotisation.pk %}" class="btn btn-success">
+        <i class="fas fa-money-bill-wave"></i> {% trans "Ajouter un paiement" %}
+    </a>
+    <a href="{% url 'cotisations:rappel_creer' cotisation_id=cotisation.pk %}" class="btn btn-warning">
+        <i class="fas fa-bell"></i> {% trans "Créer un rappel" %}
+    </a>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#paiementModal">
+        <i class="fas fa-plus-circle"></i> {% trans "Paiement rapide" %}
+    </button>
+</div>
+{% endblock %}
+<!--
+Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block cotisations_content %}:
+-->
+<!-- Modal pour l'ajout rapide de rappel -->
+<div class="modal fade" id="rappelModal" tabindex="-1" aria-labelledby="rappelModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rappelModalLabel">{% trans "Créer un rappel" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="rappelAjaxForm" data-cotisation-id="{{ cotisation.pk }}">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="formTypeRappel" class="form-label">{% trans "Type de rappel" %}</label>
+                                <select class="form-select" id="formTypeRappel" name="type_rappel" required>
+                                    <option value="">{% trans "Sélectionnez un type" %}</option>
+                                    <option value="email" selected>{% trans "Email" %}</option>
+                                    <option value="sms">{% trans "SMS" %}</option>
+                                    <option value="courrier">{% trans "Courrier" %}</option>
+                                    <option value="appel">{% trans "Appel téléphonique" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="formNiveau" class="form-label">{% trans "Niveau de rappel" %}</label>
+                                <input type="number" class="form-select" id="formNiveau" name="niveau" value="1" min="1" required>
+                                <div class="form-text">
+                                    {% trans "1: Premier rappel, 2: Relance, 3: Mise en demeure, etc." %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formContenu" class="form-label">{% trans "Contenu du rappel" %}</label>
+                        <div class="mb-2">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'Modèles de rappel' %}">
+                                <button type="button" class="btn btn-outline-secondary" id="templateDefault">{% trans "Modèle standard" %}</button>
+                                <button type="button" class="btn btn-outline-secondary" id="templateUrgent">{% trans "Modèle urgent" %}</button>
+                                <button type="button" class="btn btn-outline-secondary" id="templateFormal">{% trans "Modèle formel" %}</button>
+                            </div>
+                        </div>
+                        <textarea class="form-control" id="formContenu" name="contenu" rows="8" required></textarea>
+                        <div class="form-text">
+                            {% trans "Variables disponibles: {prenom}, {nom}, {reference}, {montant}, {date_echeance}" %}
+                        </div>
+                    </div>
+                    
+                    <!-- Options d'envoi -->
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <h6>{% trans "Options d'envoi" %}</h6>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="envoyerImmediatement" checked>
+                                <label class="form-check-label" for="envoyerImmediatement">
+                                    {% trans "Envoyer immédiatement" %}
+                                </label>
+                            </div>
+                            <div id="optionsPlanification" style="display: none;">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="formDatePlanification" class="form-label">{% trans "Date d'envoi" %}</label>
+                                        <input type="date" class="form-control" id="formDatePlanification" name="date_planification" min="{{ now|date:'Y-m-d' }}">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="formHeurePlanification" class="form-label">{% trans "Heure d'envoi" %}</label>
+                                        <input type="time" class="form-control" id="formHeurePlanification" name="heure_planification">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
+                <button type="button" class="btn btn-warning" id="submitRappel">
+                    <i class="fas fa-bell"></i> {% trans "Créer le rappel" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block cotisations_content %}
+<div id="cotisationDetail" data-cotisation-id="{{ cotisation.pk }}">
+    <div class="row">
+        <!-- Informations principales de la cotisation -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Informations générales" %}</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">{% trans "Référence" %}</dt>
+                        <dd class="col-sm-7">{{ cotisation.reference }}</dd>
+                        
+                        <dt class="col-sm-5">{% trans "Membre" %}</dt>
+                        <dd class="col-sm-7">
+                            <a href="{% url 'membres:membre_detail' pk=cotisation.membre.pk %}">
+                                {{ cotisation.membre.prenom }} {{ cotisation.membre.nom }}
+                            </a>
+                            <br><small class="text-muted">{{ cotisation.membre.email }}</small>
+                        </dd>
+                        
+                        <dt class="col-sm-5">{% trans "Date d'émission" %}</dt>
+                        <dd class="col-sm-7">{{ cotisation.date_emission|date:"d/m/Y" }}</dd>
+                        
+                        <dt class="col-sm-5">{% trans "Date d'échéance" %}</dt>
+                        <dd class="col-sm-7">
+                            <span class="{% if cotisation.est_en_retard %}text-danger{% endif %}">
+                                {{ cotisation.date_echeance|date:"d/m/Y" }}
+                                {% if cotisation.est_en_retard %}
+                                <br><small class="text-danger">{{ cotisation.jours_retard }} {% trans "jours de retard" %}</small>
+                                {% endif %}
+                            </span>
+                        </dd>
+                        
+                        <dt class="col-sm-5">{% trans "Période couverte" %}</dt>
+                        <dd class="col-sm-7">
+                            {{ cotisation.periode_debut|date:"d/m/Y" }}
+                            {% if cotisation.periode_fin %}
+                            - {{ cotisation.periode_fin|date:"d/m/Y" }}
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Informations financières -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Informations financières" %}</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">{% trans "Type de membre" %}</dt>
+                        <dd class="col-sm-7">{{ cotisation.type_membre.libelle }}</dd>
+                        
+                        <dt class="col-sm-5">{% trans "Barème" %}</dt>
+                        <dd class="col-sm-7">
+                            {% if cotisation.bareme %}
+                            {{ cotisation.bareme.montant|floatformat:2 }} € ({{ cotisation.bareme.get_periodicite_display }})
+                            {% else %}
+                            <span class="text-muted">{% trans "Non spécifié" %}</span>
+                            {% endif %}
+                        </dd>
+                        
+                        <dt class="col-sm-5">{% trans "Montant total" %}</dt>
+                        <dd class="col-sm-7">{{ cotisation.montant|floatformat:2 }} €</dd>
+                        
+                        <dt class="col-sm-5">{% trans "Montant payé" %}</dt>
+                        <dd class="col-sm-7">
+                            <span id="totalPaye">{{ cotisation.montant|sub:cotisation.montant_restant|floatformat:2 }} €</span>
+                        </dd>
+                        
+                        <dt class="col-sm-5">{% trans "Montant restant" %}</dt>
+                        <dd class="col-sm-7">
+                            <span id="montantRestant" 
+                                  class="fw-bold {% if cotisation.montant_restant > 0 %}text-danger{% else %}text-success{% endif %}"
+                                  data-value="{{ cotisation.montant_restant }}">
+                                {{ cotisation.montant_restant|floatformat:2 }} €
+                            </span>
+                        </dd>
+                        
+                        <dt class="col-sm-5">{% trans "Statut" %}</dt>
+                        <dd class="col-sm-7">
+                            <span id="statutPaiement" class="badge 
+                                {% if cotisation.statut_paiement == 'non_payee' %}bg-danger
+                                {% elif cotisation.statut_paiement == 'partiellement_payee' %}bg-warning
+                                {% else %}bg-success{% endif %}">
+                                {{ cotisation.get_statut_paiement_display }}
+                            </span>
+                        </dd>
+                    </dl>
+                    
+                    <!-- Barre de progression du paiement -->
+                    <div class="mt-4">
+                        <h6 class="mb-2">{% trans "Progression du paiement" %}</h6>
+                        <div class="progress" style="height: 20px;">
+                            <div id="progressPaiement" class="progress-bar 
+                                {% if cotisation.statut_paiement == 'non_payee' %}bg-danger
+                                {% elif cotisation.statut_paiement == 'partiellement_payee' %}bg-warning
+                                {% else %}bg-success{% endif %}" 
+                                 role="progressbar" 
+                                 data-montant-total="{{ cotisation.montant }}"
+                                 style="width: {{ cotisation.montant|sub:cotisation.montant_restant|div:cotisation.montant|mul:100|floatformat:0 }}%;" 
+                                 aria-valuenow="{{ cotisation.montant|sub:cotisation.montant_restant|div:cotisation.montant|mul:100|floatformat:0 }}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                                {{ cotisation.montant|sub:cotisation.montant_restant|div:cotisation.montant|mul:100|floatformat:0 }}%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Liste des paiements -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <h5 class="card-title mb-0">{% trans "Paiements" %}</h5>
+                    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#paiementModal">
+                        <i class="fas fa-plus"></i> {% trans "Ajouter un paiement" %}
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if paiements %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="paiementsList">
+                            <thead>
+                                <tr>
+                                    <th>{% trans "Date" %}</th>
+                                    <th>{% trans "Montant" %}</th>
+                                    <th>{% trans "Mode" %}</th>
+                                    <th>{% trans "Type" %}</th>
+                                    <th>{% trans "Référence" %}</th>
+                                    <th class="text-center">{% trans "Actions" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for paiement in paiements %}
+                                <tr id="paiement-{{ paiement.id }}">
+                                    <td>{{ paiement.date_paiement|date:"d/m/Y H:i" }}</td>
+                                    <td>{{ paiement.montant|floatformat:2 }} €</td>
+                                    <td>{{ paiement.mode_paiement }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if paiement.type_transaction == 'paiement' %}bg-success
+                                            {% elif paiement.type_transaction == 'remboursement' %}bg-warning
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ paiement.get_type_transaction_display }}
+                                        </span>
+                                    </td>
+                                    <td>{{ paiement.reference_paiement|default:"-" }}</td>
+                                    <td class="text-center">
+                                        <div class="btn-group">
+                                            <a href="{% url 'cotisations:paiement_detail' pk=paiement.pk %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{% url 'cotisations:paiement_modifier' pk=paiement.pk %}" class="btn btn-sm btn-outline-secondary">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <a href="{% url 'cotisations:paiement_supprimer' pk=paiement.pk %}" class="btn btn-sm btn-outline-danger">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                            {% if paiement.type_transaction == 'paiement' %}
+                                            <a href="{% url 'cotisations:api_generer_recu' paiement_id=paiement.pk %}" class="btn btn-sm btn-outline-info" title="{% trans 'Générer un reçu' %}">
+                                                <i class="fas fa-file-invoice"></i>
+                                            </a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info" id="noPaiementsMessage">
+                        <i class="fas fa-info-circle me-2"></i>
+                        {% trans "Aucun paiement n'a été enregistré pour cette cotisation." %}
+                        <button type="button" class="btn btn-sm btn-outline-primary ms-3" data-bs-toggle="modal" data-bs-target="#paiementModal">
+                            {% trans "Ajouter un paiement" %}
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Liste des rappels -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <h5 class="card-title mb-0">{% trans "Rappels" %}</h5>
+                    <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#rappelModal">
+                        <i class="fas fa-plus"></i> {% trans "Créer un rappel" %}
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if rappels %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="rappelsList">
+                            <thead>
+                                <tr>
+                                    <th>{% trans "Date" %}</th>
+                                    <th>{% trans "Type" %}</th>
+                                    <th>{% trans "Niveau" %}</th>
+                                    <th>{% trans "État" %}</th>
+                                    <th>{% trans "Contenu" %}</th>
+                                    <th class="text-center">{% trans "Actions" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rappel in rappels %}
+                                <tr id="rappel-{{ rappel.id }}">
+                                    <td>{{ rappel.date_envoi|date:"d/m/Y H:i" }}</td>
+                                    <td>{{ rappel.get_type_rappel_display }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if rappel.niveau == 1 %}bg-info
+                                            {% elif rappel.niveau == 2 %}bg-warning
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ rappel.niveau }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if rappel.etat == 'planifie' %}bg-secondary
+                                            {% elif rappel.etat == 'envoye' %}bg-success
+                                            {% elif rappel.etat == 'echoue' %}bg-danger
+                                            {% else %}bg-info{% endif %}">
+                                            {{ rappel.get_etat_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-link voir-contenu"
+                                                data-contenu="{{ rappel.contenu|escape }}"
+                                                data-bs-toggle="modal" data-bs-target="#contenuModal">
+                                            {% trans "Voir le contenu" %}
+                                        </button>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group">
+                                            {% if rappel.etat == 'planifie' %}
+                                            <a href="{% url 'cotisations:envoyer_rappel' rappel_id=rappel.pk %}" class="btn btn-sm btn-outline-success">
+                                                <i class="fas fa-paper-plane"></i> {% trans "Envoyer" %}
+                                            </a>
+                                            {% endif %}
+                                            <a href="{% url 'cotisations:rappel_detail' pk=rappel.pk %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info" id="noRappelsMessage">
+                        <i class="fas fa-info-circle me-2"></i>
+                        {% trans "Aucun rappel n'a été créé pour cette cotisation." %}
+                        <button type="button" class="btn btn-sm btn-outline-primary ms-3" data-bs-toggle="modal" data-bs-target="#rappelModal">
+                            {% trans "Créer un rappel" %}
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Historique des modifications -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Historique" %}</h5>
+                </div>
+                <div class="card-body">
+                    {% if historique %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>{% trans "Date" %}</th>
+                                    <th>{% trans "Action" %}</th>
+                                    <th>{% trans "Utilisateur" %}</th>
+                                    <th>{% trans "Détails" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in historique %}
+                                <tr>
+                                    <td>{{ entry.date_action|date:"d/m/Y H:i" }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if entry.action == 'creation' %}bg-success
+                                            {% elif entry.action == 'modification' %}bg-info
+                                            {% elif entry.action == 'suppression' %}bg-danger
+                                            {% elif entry.action == 'paiement_ajoute' %}bg-primary
+                                            {% elif entry.action == 'paiement_supprime' %}bg-warning
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ entry.get_action_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if entry.utilisateur %}
+                                        {{ entry.utilisateur.username }}
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-link voir-details"
+                                                data-details="{{ entry.details|json_script:'details-'|slice:'12:-14' }}"
+                                                data-bs-toggle="modal" data-bs-target="#detailsModal">
+                                            {% trans "Voir les détails" %}
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        {% trans "Aucun historique disponible pour cette cotisation." %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour l'ajout rapide de paiement -->
+<div class="modal fade" id="paiementModal" tabindex="-1" aria-labelledby="paiementModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="paiementModalLabel">{% trans "Ajouter un paiement" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="paiementAjaxForm" data-cotisation-id="{{ cotisation.pk }}">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="formMontant" class="form-label">{% trans "Montant" %}</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="formMontant" name="montant" value="{{ cotisation.montant_restant|floatformat:2 }}" min="0.01" step="0.01" required>
+                            <span class="input-group-text">€</span>
+                        </div>
+                        <div class="form-text">
+                            {% trans "Montant maximum autorisé" %}: {{ cotisation.montant_restant|floatformat:2 }} €
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formModePaiement" class="form-label">{% trans "Mode de paiement" %}</label>
+                        <select class="form-select" id="formModePaiement" name="mode_paiement" required>
+                            <option value="">{% trans "Sélectionnez un mode de paiement" %}</option>
+                            {% for mode in modes_paiement %}
+                            <option value="{{ mode.id }}">{{ mode.libelle }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formTypeTransaction" class="form-label">{% trans "Type de transaction" %}</label>
+                        <select class="form-select" id="formTypeTransaction" name="type_transaction">
+                            <option value="paiement">{% trans "Paiement" %}</option>
+                            <option value="remboursement">{% trans "Remboursement" %}</option>
+                            <option value="rejet">{% trans "Rejet" %}</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formDatePaiement" class="form-label">{% trans "Date de paiement" %}</label>
+                        <input type="datetime-local" class="form-control" id="formDatePaiement" name="date_paiement" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formReference" class="form-label">{% trans "Référence de paiement" %}</label>
+                        <input type="text" class="form-control" id="formReference" name="reference_paiement" placeholder="{% trans 'Ex: VIREMENT-123456' %}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formCommentaire" class="form-label">{% trans "Commentaire" %}</label>
+                        <textarea class="form-control" id="formCommentaire" name="commentaire" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
+                <button type="button" class="btn btn-success" id="submitPaiement">{% trans "Enregistrer le paiement" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour afficher le contenu des rappels -->
+<div class="modal fade" id="contenuModal" tabindex="-1" aria-labelledby="contenuModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="contenuModalLabel">{% trans "Contenu du rappel" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="contenuRappel" class="p-3 bg-light rounded"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Fermer" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour afficher les détails de l'historique -->
+<div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detailsModalLabel">{% trans "Détails de l'action" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="detailsHistorique" class="p-3 bg-light rounded">
+                    <table class="table table-sm">
+                        <tbody id="detailsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Fermer" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Styles pour l'animation des nouveaux éléments */
+.new-item {
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    background-color: rgba(40, 167, 69, 0.1);
+}
+
+.new-item.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Bibliothèques JS externes -->
+<script src="{% static 'js/cotisations/form-validation.js' %}"></script>
+<script src="{% static 'js/cotisations/cotisations.js' %}"></script>
+<script src="{% static 'js/cotisations/paiement-ajax.js' %}"></script>
+<script src="{% static 'js/cotisations/rappel-ajax.js' %}"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Préremplir la date de paiement avec la date et l'heure actuelles
+    const dateInput = document.getElementById('formDatePaiement');
+    if (dateInput) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        
+        dateInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+    
+    // Initialiser le bouton submitPaiement
+    const submitPaiementBtn = document.getElementById('submitPaiement');
+    if (submitPaiementBtn) {
+        submitPaiementBtn.addEventListener('click', function() {
+            document.getElementById('paiementAjaxForm').dispatchEvent(new Event('submit'));
+        });
+    }
+    
+    // Afficher le contenu du rappel
+    const voirContenuBtns = document.querySelectorAll('.voir-contenu');
+    const contenuRappel = document.getElementById('contenuRappel');
+    
+    voirContenuBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            contenuRappel.textContent = this.getAttribute('data-contenu');
+        });
+    });
+    
+    // Afficher les détails de l'historique
+    const voirDetailsBtns = document.querySelectorAll('.voir-details');
+    const detailsTableBody = document.getElementById('detailsTableBody');
+    
+    voirDetailsBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const detailsStr = this.getAttribute('data-details');
+            try {
+                const details = JSON.parse(detailsStr);
+                detailsTableBody.innerHTML = '';
+                
+                // Créer les lignes du tableau pour chaque clé/valeur
+                for (const [key, value] of Object.entries(details)) {
+                    const row = document.createElement('tr');
+                    
+                    // Formater la clé
+                    const keyCell = document.createElement('th');
+                    keyCell.textContent = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
+                    row.appendChild(keyCell);
+                    
+                    // Formater la valeur
+                    const valueCell = document.createElement('td');
+                    
+                    if (key === 'before' || key === 'after') {
+                        // Si c'est avant/après, récursion
+                        const valueTable = document.createElement('table');
+                        valueTable.className = 'table table-sm table-bordered mb-0';
+                        
+                        for (const [subKey, subValue] of Object.entries(value)) {
+                            const subRow = document.createElement('tr');
+                            
+                            const subKeyCell = document.createElement('th');
+                            subKeyCell.style.width = '40%';
+                            subKeyCell.textContent = subKey.charAt(0).toUpperCase() + subKey.slice(1).replace(/_/g, ' ');
+                            subRow.appendChild(subKeyCell);
+                            
+                            const subValueCell = document.createElement('td');
+                            subValueCell.textContent = subValue;
+                            subRow.appendChild(subValueCell);
+                            
+                            valueTable.appendChild(subRow);
+                        }
+                        
+                        valueCell.appendChild(valueTable);
+                    } else {
+                        valueCell.textContent = typeof value === 'object' ? JSON.stringify(value) : value;
+                    }
+                    
+                    row.appendChild(valueCell);
+                    detailsTableBody.appendChild(row);
+                }
+            } catch (e) {
+                console.error('Erreur lors du parsing des détails:', e);
+                detailsTableBody.innerHTML = '<tr><td>Erreur lors du chargement des détails.</td></tr>';
+            }
+        });
+    });
+});
+
+// Initialiser le bouton submitRappel
+const submitRappelBtn = document.getElementById('submitRappel');
+if (submitRappelBtn) {
+    submitRappelBtn.addEventListener('click', function() {
+        document.getElementById('rappelAjaxForm').dispatchEvent(new Event('submit'));
+    });
+}
+
+// Ajouter les classes .membre-nom, .membre-prenom, etc. pour extraction des données
+const membreNomElement = document.querySelector('dd:has(+ dt:contains("Membre"))');
+if (membreNomElement) {
+    // Extraire le prénom et le nom
+    const nomComplet = membreNomElement.textContent.trim();
+    const parts = nomComplet.split(' ');
+    
+    if (parts.length >= 2) {
+        // Ajouter des spans avec classes pour faciliter l'extraction
+        const prenom = parts[0];
+        const nom = parts.slice(1).join(' ');
+        
+        membreNomElement.innerHTML = `<span class="membre-prenom">${prenom}</span> <span class="membre-nom">${nom}</span>`;
+    }
+}
+
+// Ajouter des classes aux autres éléments pour extraction
+document.querySelectorAll('dt').forEach(dt => {
+    if (dt.textContent.includes('Référence')) {
+        const dd = dt.nextElementSibling;
+        if (dd) dd.classList.add('cotisation-reference');
+    } else if (dt.textContent.includes('Échéance')) {
+        const dd = dt.nextElementSibling;
+        if (dd) dd.classList.add('cotisation-echeance');
+    } else if (dt.textContent.includes('Email')) {
+        const dd = dt.nextElementSibling;
+        if (dd) dd.classList.add('membre-email');
+    }
+});
+</script>
+{% endblock %}

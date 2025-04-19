@@ -1,0 +1,422 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block breadcrumb %}
+{% if form.instance.pk %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}">{{ cotisation.reference }}</a></li>
+<li class="breadcrumb-item active">{% trans "Modifier le rappel" %}</li>
+{% else %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}">{{ cotisation.reference }}</a></li>
+<li class="breadcrumb-item active">{% trans "Créer un rappel" %}</li>
+{% endif %}
+{% endblock %}
+
+{% block page_title %}
+{% if form.instance.pk %}
+{% trans "Modifier le rappel" %}
+{% else %}
+{% trans "Créer un rappel" %}
+{% endif %}
+{% endblock %}
+
+{% block cotisations_content %}
+<div class="row">
+    <!-- Informations sur la cotisation -->
+    {% if cotisation %}
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">{% trans "Détails de la cotisation" %}</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-5">{% trans "Référence" %}</dt>
+                    <dd class="col-sm-7">{{ cotisation.reference }}</dd>
+                    
+                    <dt class="col-sm-5">{% trans "Membre" %}</dt>
+                    <dd class="col-sm-7">
+                        {{ cotisation.membre.prenom }} {{ cotisation.membre.nom }}
+                        <br><small class="text-muted">{{ cotisation.membre.email }}</small>
+                    </dd>
+                    
+                    <dt class="col-sm-5">{% trans "Montant total" %}</dt>
+                    <dd class="col-sm-7">{{ cotisation.montant|floatformat:2 }} €</dd>
+                    
+                    <dt class="col-sm-5">{% trans "Montant restant" %}</dt>
+                    <dd class="col-sm-7">
+                        <span class="fw-bold {% if cotisation.montant_restant > 0 %}text-danger{% else %}text-success{% endif %}">
+                            {{ cotisation.montant_restant|floatformat:2 }} €
+                        </span>
+                    </dd>
+                    
+                    <dt class="col-sm-5">{% trans "Statut" %}</dt>
+                    <dd class="col-sm-7">
+                        {% if cotisation.statut_paiement == 'non_payee' %}
+                        <span class="badge bg-danger">{% trans "Non payée" %}</span>
+                        {% elif cotisation.statut_paiement == 'partiellement_payee' %}
+                        <span class="badge bg-warning">{% trans "Partiellement payée" %}</span>
+                        {% else %}
+                        <span class="badge bg-success">{% trans "Payée" %}</span>
+                        {% endif %}
+                    </dd>
+                    
+                    {% if cotisation.date_echeance %}
+                    <dt class="col-sm-5">{% trans "Échéance" %}</dt>
+                    <dd class="col-sm-7">
+                        <span class="{% if cotisation.est_en_retard %}text-danger{% endif %}">
+                            {{ cotisation.date_echeance|date:"d/m/Y" }}
+                            {% if cotisation.est_en_retard %}
+                            <br><small class="text-danger">{{ cotisation.jours_retard }} {% trans "jours de retard" %}</small>
+                            {% endif %}
+                        </span>
+                    </dd>
+                    {% endif %}
+                </dl>
+                
+                <!-- Liste des rappels précédents -->
+                {% with rappels_precedents=cotisation.rappels.all %}
+                {% if rappels_precedents %}
+                <hr>
+                <h6>{% trans "Rappels précédents" %}</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>{% trans "Date" %}</th>
+                                <th>{% trans "Type" %}</th>
+                                <th>{% trans "Niveau" %}</th>
+                                <th>{% trans "État" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rappel in rappels_precedents|dictsortreversed:"date_envoi"|slice:":3" %}
+                            <tr>
+                                <td>{{ rappel.date_envoi|date:"d/m/Y" }}</td>
+                                <td>{{ rappel.get_type_rappel_display }}</td>
+                                <td>{{ rappel.niveau }}</td>
+                                <td>
+                                    {% if rappel.etat == 'planifie' %}
+                                    <span class="badge bg-secondary">{% trans "Planifié" %}</span>
+                                    {% elif rappel.etat == 'envoye' %}
+                                    <span class="badge bg-success">{% trans "Envoyé" %}</span>
+                                    {% elif rappel.etat == 'echoue' %}
+                                    <span class="badge bg-danger">{% trans "Échoué" %}</span>
+                                    {% elif rappel.etat == 'lu' %}
+                                    <span class="badge bg-info">{% trans "Lu" %}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if rappels_precedents.count > 3 %}
+                <small class="text-muted">{% trans "Affichage des 3 derniers rappels sur" %} {{ rappels_precedents.count }}</small>
+                {% endif %}
+                {% endif %}
+                {% endwith %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Formulaire de rappel -->
+    <div class="col-lg-{% if cotisation %}8{% else %}12{% endif %}">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" id="rappelForm" novalidate>
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        {% trans "Veuillez corriger les erreurs ci-dessous." %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row g-3">
+                        <!-- Type de rappel -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.type_rappel.errors %} has-error{% endif %}">
+                                {{ form.type_rappel.label_tag }}
+                                {{ form.type_rappel }}
+                                {% if form.type_rappel.help_text %}
+                                <small class="form-text text-muted">{{ form.type_rappel.help_text }}</small>
+                                {% endif %}
+                                {% if form.type_rappel.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.type_rappel.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Niveau de rappel -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.niveau.errors %} has-error{% endif %}">
+                                {{ form.niveau.label_tag }}
+                                {{ form.niveau }}
+                                {% if form.niveau.help_text %}
+                                <small class="form-text text-muted">{{ form.niveau.help_text }}</small>
+                                {% endif %}
+                                <small class="form-text text-muted">
+                                    {% trans "1: Premier rappel, 2: Relance, 3: Mise en demeure, etc." %}
+                                </small>
+                                {% if form.niveau.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.niveau.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Contenu du rappel -->
+                        <div class="col-md-12 mt-3">
+                            <div class="form-group{% if form.contenu.errors %} has-error{% endif %}">
+                                {{ form.contenu.label_tag }}
+                                <div class="mb-2">
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'Modèles de rappel' %}">
+                                        <button type="button" class="btn btn-outline-secondary" id="templateDefault">{% trans "Modèle standard" %}</button>
+                                        <button type="button" class="btn btn-outline-secondary" id="templateUrgent">{% trans "Modèle urgent" %}</button>
+                                        <button type="button" class="btn btn-outline-secondary" id="templateFormal">{% trans "Modèle formel" %}</button>
+                                    </div>
+                                </div>
+                                {{ form.contenu }}
+                                {% if form.contenu.help_text %}
+                                <small class="form-text text-muted">{{ form.contenu.help_text }}</small>
+                                {% endif %}
+                                <small class="form-text text-muted">
+                                    {% trans "Vous pouvez utiliser les variables suivantes: {prenom}, {nom}, {reference}, {montant}, {date_echeance}" %}
+                                </small>
+                                {% if form.contenu.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.contenu.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Options d'envoi -->
+                        <div class="col-md-12 mt-4">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h5 class="card-title">{% trans "Options d'envoi" %}</h5>
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" id="envoyerImmediatement" checked>
+                                        <label class="form-check-label" for="envoyerImmediatement">
+                                            {% trans "Envoyer immédiatement" %}
+                                        </label>
+                                    </div>
+                                    <div id="optionsPlanification" style="display: none;">
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <label for="datePlanification" class="form-label">{% trans "Date d'envoi" %}</label>
+                                                <input type="date" class="form-control" id="datePlanification" min="{{ now|date:'Y-m-d' }}">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="heurePlanification" class="form-label">{% trans "Heure d'envoi" %}</label>
+                                                <input type="time" class="form-control" id="heurePlanification">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Boutons -->
+                        <div class="col-12 mt-4 d-flex justify-content-between">
+                            {% if cotisation %}
+                            <a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> {% trans "Annuler" %}
+                            </a>
+                            {% else %}
+                            <a href="{% url 'cotisations:rappel_liste' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> {% trans "Annuler" %}
+                            </a>
+                            {% endif %}
+                            
+                            {% if form.instance.pk %}
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> {% trans "Enregistrer les modifications" %}
+                            </button>
+                            {% else %}
+                            <button type="submit" class="btn btn-warning">
+                                <i class="fas fa-bell"></i> {% trans "Créer le rappel" %}
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+
+<!-- Mettre à jour les templates pour inclure ce fichier
+ ajoutez cette ligne à la fin du bloc {% block extra_js %} -->
+ <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Variables globales
+    const rappelForm = document.getElementById('rappelForm');
+    const contenuTextarea = document.getElementById('id_contenu');
+    const typeRappelSelect = document.getElementById('id_type_rappel');
+    const niveauInput = document.getElementById('id_niveau');
+    
+    // Gestion des modèles de rappel
+    const templateDefaultBtn = document.getElementById('templateDefault');
+    const templateUrgentBtn = document.getElementById('templateUrgent');
+    const templateFormalBtn = document.getElementById('templateFormal');
+    
+    if (templateDefaultBtn) {
+        templateDefaultBtn.addEventListener('click', function() {
+            contenuTextarea.value = `Cher/Chère {% if cotisation %}{{ cotisation.membre.prenom }}{% else %}{prenom}{% endif %},
+
+Nous vous rappelons que votre cotisation (réf. {% if cotisation %}{{ cotisation.reference }}{% else %}{reference}{% endif %}) d'un montant restant dû de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € est arrivée à échéance le {% if cotisation %}{{ cotisation.date_echeance|date:"d/m/Y" }}{% else %}{date_echeance}{% endif %}.
+
+Nous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.
+
+Cordialement,
+L'équipe de l'association`;
+        });
+    }
+    
+    if (templateUrgentBtn) {
+        templateUrgentBtn.addEventListener('click', function() {
+            contenuTextarea.value = `Cher/Chère {% if cotisation %}{{ cotisation.membre.prenom }}{% else %}{prenom}{% endif %},
+
+RAPPEL URGENT : Votre cotisation (réf. {% if cotisation %}{{ cotisation.reference }}{% else %}{reference}{% endif %}) d'un montant de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € est en retard de paiement depuis le {% if cotisation %}{{ cotisation.date_echeance|date:"d/m/Y" }}{% else %}{date_echeance}{% endif %}.
+
+Afin d'éviter toute procédure supplémentaire, nous vous invitons à régulariser cette situation sous 7 jours.
+
+Pour toute question ou difficulté, n'hésitez pas à nous contacter rapidement.
+
+Cordialement,
+L'équipe de l'association`;
+        });
+    }
+    
+    if (templateFormalBtn) {
+        templateFormalBtn.addEventListener('click', function() {
+            contenuTextarea.value = `Madame, Monsieur,
+
+Nous constatons qu'à ce jour, votre cotisation référencée {% if cotisation %}{{ cotisation.reference }}{% else %}{reference}{% endif %}, d'un montant de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € et échue le {% if cotisation %}{{ cotisation.date_echeance|date:"d/m/Y" }}{% else %}{date_echeance}{% endif %}, demeure impayée.
+
+Conformément à nos statuts, nous vous prions de bien vouloir procéder au règlement de cette somme dans un délai de 15 jours à compter de la réception du présent courrier.
+
+À défaut de paiement dans le délai imparti, nous nous verrons contraints d'appliquer les mesures prévues par le règlement intérieur.
+
+Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées.
+
+Le Trésorier
+Association XYZ`;
+        });
+    }
+    
+    // Gestion de l'envoi immédiat vs planifié
+    const envoyerImmediatementSwitch = document.getElementById('envoyerImmediatement');
+    const optionsPlanification = document.getElementById('optionsPlanification');
+    
+    if (envoyerImmediatementSwitch && optionsPlanification) {
+        envoyerImmediatementSwitch.addEventListener('change', function() {
+            if (this.checked) {
+                optionsPlanification.style.display = 'none';
+            } else {
+                optionsPlanification.style.display = 'block';
+            }
+        });
+    }
+    
+    // Validation du formulaire côté client
+    if (rappelForm) {
+        rappelForm.addEventListener('submit', function(event) {
+            let isValid = true;
+            
+            // Vérifier que le type de rappel est sélectionné
+            if (!typeRappelSelect.value) {
+                isValid = false;
+                highlightField(typeRappelSelect, '{% trans "Veuillez sélectionner un type de rappel." %}');
+            }
+            
+            // Vérifier que le contenu n'est pas vide
+            if (!contenuTextarea.value.trim()) {
+                isValid = false;
+                highlightField(contenuTextarea, '{% trans "Le contenu du rappel ne peut pas être vide." %}');
+            }
+            
+            // Vérifier le niveau du rappel
+            const niveau = parseInt(niveauInput.value);
+            if (isNaN(niveau) || niveau < 1) {
+                isValid = false;
+                highlightField(niveauInput, '{% trans "Le niveau doit être un nombre positif (1 ou plus)." %}');
+            }
+            
+            // Si on planifie l'envoi, vérifier les dates
+            if (!envoyerImmediatementSwitch.checked) {
+                const datePlanification = document.getElementById('datePlanification');
+                const heurePlanification = document.getElementById('heurePlanification');
+                
+                if (!datePlanification.value) {
+                    isValid = false;
+                    highlightField(datePlanification, '{% trans "Veuillez sélectionner une date d\'envoi." %}');
+                }
+                
+                if (!heurePlanification.value) {
+                    isValid = false;
+                    highlightField(heurePlanification, '{% trans "Veuillez sélectionner une heure d\'envoi." %}');
+                }
+            }
+            
+            if (!isValid) {
+                event.preventDefault();
+            }
+        });
+    }
+    
+    // Fonction pour mettre en évidence un champ en erreur
+    function highlightField(field, message) {
+        field.classList.add('is-invalid');
+        
+        // Ajouter un message d'erreur si pas déjà présent
+        const errorElem = field.parentNode.querySelector('.invalid-feedback');
+        if (!errorElem) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'invalid-feedback d-block';
+            errorDiv.textContent = message;
+            field.parentNode.appendChild(errorDiv);
+        }
+    }
+    
+    // Adapter le contenu en fonction du type de rappel
+    if (typeRappelSelect) {
+        typeRappelSelect.addEventListener('change', function() {
+            // Par exemple, proposer des modèles différents selon le type
+            const type = this.value;
+            if (type === 'email') {
+                // Activer les modèles email
+                templateDefaultBtn.disabled = false;
+                templateUrgentBtn.disabled = false;
+                templateFormalBtn.disabled = false;
+            } else if (type === 'sms') {
+                // Pour SMS, désactiver certains modèles trop longs
+                templateDefaultBtn.disabled = false;
+                templateUrgentBtn.disabled = false;
+                templateFormalBtn.disabled = true;
+                
+                // Proposer un modèle SMS plus court si le contenu est vide
+                if (!contenuTextarea.value.trim()) {
+                    contenuTextarea.value = `Rappel: Votre cotisation (ref. {% if cotisation %}{{ cotisation.reference }}{% else %}{reference}{% endif %}) de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € est due. Merci de régulariser rapidement.`;
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
