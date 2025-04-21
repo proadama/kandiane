@@ -71,10 +71,16 @@ class BaremeCotisation(BaseModel):
         return (self.date_debut_validite <= today and 
                 (self.date_fin_validite is None or self.date_fin_validite >= today))
     
+
     def clean(self):
         from django.core.exceptions import ValidationError
-        # Vérifier que la date de fin est postérieure à la date de début, si elle existe
-        if self.date_fin_validite and self.date_fin_validite < self.date_debut_validite:
+        
+        # Vérifier que le montant est positif
+        if self.montant is not None and self.montant <= 0:
+            raise ValidationError(_("Le montant doit être supérieur à zéro."))
+        
+        # Vérifier que la date de fin est postérieure à la date de début (si définie)
+        if self.date_fin_validite and self.date_debut_validite and self.date_fin_validite <= self.date_debut_validite:
             raise ValidationError(_("La date de fin de validité doit être postérieure à la date de début."))
 
 
@@ -265,11 +271,11 @@ class Cotisation(BaseModel):
         from django.core.exceptions import ValidationError
         
         # Vérifier que le montant est positif
-        if self.montant <= 0:
+        if self.montant is not None and self.montant <= 0:
             raise ValidationError(_("Le montant doit être supérieur à zéro."))
         
         # Vérifier que la date d'échéance est postérieure à la date d'émission
-        if self.date_echeance and self.date_echeance < self.date_emission:
+        if self.date_echeance and self.date_emission and self.date_echeance < self.date_emission:
             raise ValidationError(_("La date d'échéance doit être postérieure à la date d'émission."))
         
         # Vérifier les dates de période
@@ -339,6 +345,26 @@ class Cotisation(BaseModel):
         self._mettre_a_jour_statut_paiement()
         return self.montant_restant
     
+    def to_json_dict(self):
+        """
+        Convertit les données du modèle en dictionnaire compatible JSON.
+        Utilisé pour les champs JSON et l'historisation.
+        """
+        from decimal import Decimal
+        
+        # Créer un dictionnaire de base
+        data = {
+            'id': self.id,
+            'reference': self.reference,
+            'montant': float(self.montant) if isinstance(self.montant, Decimal) else self.montant,
+            'montant_restant': float(self.montant_restant) if isinstance(self.montant_restant, Decimal) else self.montant_restant,
+            'statut_paiement': self.statut_paiement,
+            'date_emission': self.date_emission.isoformat() if self.date_emission else None,
+            'date_echeance': self.date_echeance.isoformat() if self.date_echeance else None,
+        }
+        
+        return data
+
     @property
     def est_en_retard(self):
         """
@@ -503,7 +529,7 @@ class Paiement(BaseModel):
         from django.core.exceptions import ValidationError
         
         # Vérifier que le montant est positif
-        if self.montant <= 0:
+        if self.montant is not None and self.montant <= 0:
             raise ValidationError(_("Le montant doit être supérieur à zéro."))
 
 

@@ -173,6 +173,10 @@ LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
+# 8. Problème avec les URL login et l'authentification
+LOGIN_URL = 'accounts:login'  # À ajuster selon votre application
+LOGIN_REDIRECT_URL = 'core:home'
+
 # Durée d'inactivité avant déconnexion (en secondes)
 SESSION_IDLE_TIMEOUT = 1800  # 30 minutes
 

@@ -7,3 +7,6 @@ pillow==11.1.0
 sqlparse==0.5.3
 tzdata==2025.2
 openpyxl==3.1.2
+xlsxwriter==3.2.3
+chardet==5.2.0
+reportlab==4.4.0

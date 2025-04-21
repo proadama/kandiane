@@ -267,10 +267,12 @@ class PaiementForm(forms.ModelForm):
             instance.cotisation = self.cotisation
         
         # Enregistrer l'utilisateur qui crée/modifie le paiement
-        if self.user:
+        if self.user and hasattr(self.user, 'is_authenticated') and self.user.is_authenticated:
             if not self.instance.pk:
+                # Nouvel objet - utilisateur créateur
                 instance.cree_par = self.user
             else:
+                # Mise à jour - utilisateur modificateur
                 instance.modifie_par = self.user
         
         if commit:
@@ -348,7 +350,7 @@ class RappelForm(forms.ModelForm):
             instance.etat = 'planifie'
             
             # Enregistrer l'utilisateur qui crée le rappel
-            if self.user:
+            if self.user and hasattr(self.user, 'is_authenticated') and self.user.is_authenticated:
                 instance.cree_par = self.user
         
         if commit:

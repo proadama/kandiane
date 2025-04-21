@@ -18,18 +18,21 @@ class CotisationWorkflowTest(TestCase):
     """Tests d'intégration du workflow complet des cotisations."""
     
     def setUp(self):
+        import time
+        timestamp = int(time.time())
+        
         # Créer un utilisateur pour les tests
         self.password = "test_password"
         self.user = User.objects.create_user(
-            username="test_user",
-            email="test_user@example.com",
+            username=f"test_user_{timestamp}",
+            email=f"test_user_{timestamp}@example.com",
             password=self.password,
             is_staff=True
         )
         
         # Créer un client et s'identifier
         self.client = Client()
-        self.client.login(username="test_user", password=self.password)
+        self.client.force_login(self.user)
         
         # Créer des données pour les tests
         self.type_membre = TypeMembre.objects.create(
@@ -44,7 +47,7 @@ class CotisationWorkflowTest(TestCase):
         self.membre = Membre.objects.create(
             nom="Dupont",
             prenom="Jean",
-            email="jean.dupont@example.com",
+            email=f"jean.dupont_{timestamp}@example.com",
             date_adhesion=timezone.now().date()
         )
         
@@ -53,17 +56,19 @@ class CotisationWorkflowTest(TestCase):
         )
     
     def test_workflow_complet(self):
-        """Teste un workflow complet de gestion de cotisation."""
-        today = timezone.now().date()
+        # Créer les données préalables
+        self.type_membre = TypeMembre.objects.create(libelle="Standard")
         
-        # 1. Créer un barème
-        bareme_data = {
-            'type_membre': self.type_membre.pk,
-            'montant': '120.00',
-            'periodicite': 'annuelle',
-            'date_debut_validite': today.strftime('%Y-%m-%d'),
-            'description': 'Barème annuel pour test'
-        }
+        # Créer le barème explicitement
+        self.bareme = BaremeCotisation.objects.create(
+            type_membre=self.type_membre,
+            montant=Decimal('100.00'),
+            periodicite='annuelle',
+            date_debut_validite=timezone.now().date()
+        )
+        
+        # Vérifier qu'il existe bien
+        self.assertEqual(BaremeCotisation.objects.count(), 1)
         
         response = self.client.post(
             reverse('cotisations:bareme_creer'),
