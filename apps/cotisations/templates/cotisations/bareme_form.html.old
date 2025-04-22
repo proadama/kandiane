@@ -43,7 +43,7 @@
                         
                         <!-- Type de membre -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.type_membre.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.type_membre.errors %} has-error{% endif %}">
                                 {{ form.type_membre.label_tag }}
                                 {{ form.type_membre }}
                                 {% if form.type_membre.help_text %}
@@ -59,7 +59,7 @@
                         
                         <!-- Montant -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.montant.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.montant.errors %} has-error{% endif %}">
                                 {{ form.montant.label_tag }}
                                 <div class="input-group">
                                     {{ form.montant }}
@@ -78,7 +78,7 @@
                         
                         <!-- Périodicité -->
                         <div class="col-md-12">
-                            <div class="form-group{% if form.periodicite.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.periodicite.errors %} has-error{% endif %}">
                                 {{ form.periodicite.label_tag }}
                                 <div class="btn-group w-100" role="group" aria-label="{% trans 'Périodicité' %}">
                                     {% for value, label in form.fields.periodicite.choices %}
@@ -106,7 +106,7 @@
                         
                         <!-- Date de début de validité -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.date_debut_validite.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.date_debut_validite.errors %} has-error{% endif %}">
                                 {{ form.date_debut_validite.label_tag }}
                                 {{ form.date_debut_validite }}
                                 {% if form.date_debut_validite.help_text %}
@@ -125,7 +125,7 @@
                         
                         <!-- Date de fin de validité -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.date_fin_validite.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.date_fin_validite.errors %} has-error{% endif %}">
                                 {{ form.date_fin_validite.label_tag }}
                                 {{ form.date_fin_validite }}
                                 {% if form.date_fin_validite.help_text %}
@@ -149,7 +149,7 @@
                         
                         <!-- Description -->
                         <div class="col-md-12">
-                            <div class="form-group{% if form.description.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.description.errors %} has-error{% endif %}">
                                 {{ form.description.label_tag }}
                                 {{ form.description }}
                                 {% if form.description.help_text %}
@@ -244,7 +244,9 @@
 {% endblock %}
 
 {% block extra_js %}
-{{ block.super }}
+
+<!-- Mettre à jour les templates pour inclure ce fichier
+ ajoutez cette ligne à la fin du bloc {% block extra_js %} -->
 <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
 <script src="{% static 'js/cotisations/cotisations.js' %}"></script>
 
@@ -275,43 +277,26 @@ document.addEventListener('DOMContentLoaded', function() {
     // Fonctions utilitaires
     function formatDate(dateString) {
         if (!dateString) return '-';
-        try {
-            const date = new Date(dateString);
-            return date.toLocaleDateString('fr-FR');
-        } catch (e) {
-            console.error('Erreur lors du formatage de la date:', e);
-            return dateString || '-';
-        }
+        const date = new Date(dateString);
+        return date.toLocaleDateString('fr-FR');
     }
     
     function calculerStatut(dateDebut, dateFin) {
-        if (!dateDebut) return '<span class="badge bg-secondary">{% trans "Non défini" %}</span>';
-        
         const today = new Date();
-        today.setHours(0, 0, 0, 0); // Normaliser l'heure pour comparer uniquement les dates
+        const debut = new Date(dateDebut);
         
-        try {
-            const debut = new Date(dateDebut);
-            debut.setHours(0, 0, 0, 0);
-            
-            if (debut > today) {
-                return '<span class="badge bg-info">{% trans "Futur" %}</span>';
-            }
-            
-            if (dateFin) {
-                const fin = new Date(dateFin);
-                fin.setHours(0, 0, 0, 0);
-                
-                if (fin < today) {
-                    return '<span class="badge bg-secondary">{% trans "Expiré" %}</span>';
-                }
-            }
-            
-            return '<span class="badge bg-success">{% trans "Actif" %}</span>';
-        } catch (e) {
-            console.error('Erreur lors du calcul du statut:', e);
-            return '<span class="badge bg-secondary">{% trans "Erreur" %}</span>';
+        if (debut > today) {
+            return '<span class="badge bg-info">{% trans "Futur" %}</span>';
         }
+        
+        if (dateFin) {
+            const fin = new Date(dateFin);
+            if (fin < today) {
+                return '<span class="badge bg-secondary">{% trans "Expiré" %}</span>';
+            }
+        }
+        
+        return '<span class="badge bg-success">{% trans "Actif" %}</span>';
     }
     
     function calculerMontantAnnuel(montant, periodicite) {
@@ -400,24 +385,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const typeId = typeMembreSelect.value;
         const dateDebut = dateDebutInput.value;
         
-        // Afficher un indicateur de chargement
-        alerteBaremeTexte.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> {% trans "Vérification en cours..." %}';
-        alerteBaremeExistant.style.display = 'block';
-        alerteBaremeExistant.className = 'alert alert-info';
-        
         // Faire une requête AJAX pour vérifier
-        fetch(`{% url 'cotisations:api_verifier_bareme' %}?type_membre=${typeId}&date=${dateDebut}{% if form.instance.pk %}&exclude={{ form.instance.pk }}{% endif %}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Erreur réseau');
-                }
-                return response.json();
-            })
+        fetch(`/api/cotisations/verifier-bareme/?type_membre=${typeId}&date=${dateDebut}{% if form.instance.pk %}&exclude={{ form.instance.pk }}{% endif %}`)
+            .then(response => response.json())
             .then(data => {
                 if (data.exists) {
-                    alerteBaremeTexte.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i> ' + 
-                                                 (data.message || '{% trans "Un barème existe déjà pour ce type de membre à cette date." %}');
-                    alerteBaremeExistant.className = 'alert alert-warning';
+                    alerteBaremeTexte.textContent = data.message || '{% trans "Un barème existe déjà pour ce type de membre à cette date." %}';
                     alerteBaremeExistant.style.display = 'block';
                 } else {
                     alerteBaremeExistant.style.display = 'none';
@@ -425,14 +398,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Erreur lors de la vérification du barème:', error);
-                alerteBaremeTexte.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i> {% trans "Erreur lors de la vérification" %}';
-                alerteBaremeExistant.className = 'alert alert-danger';
-                alerteBaremeExistant.style.display = 'block';
-                
-                // Cacher l'alerte après 5 secondes en cas d'erreur
-                setTimeout(() => {
-                    alerteBaremeExistant.style.display = 'none';
-                }, 5000);
+                alerteBaremeExistant.style.display = 'none';
             });
     }
     
@@ -440,18 +406,14 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreview();
     
     // Ajouter les événements
-    if (typeMembreSelect) {
-        typeMembreSelect.addEventListener('change', function() {
-            updatePreview();
-            verifierBaremeExistant();
-        });
-    }
+    typeMembreSelect.addEventListener('change', function() {
+        updatePreview();
+        verifierBaremeExistant();
+    });
     
-    if (montantInput) {
-        montantInput.addEventListener('input', function() {
-            updatePreview();
-        });
-    }
+    montantInput.addEventListener('input', function() {
+        updatePreview();
+    });
     
     periodiciteRadios.forEach(radio => {
         radio.addEventListener('change', function() {
@@ -459,68 +421,55 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    if (dateDebutInput) {
-        dateDebutInput.addEventListener('change', function() {
-            updatePreview();
-            verifierBaremeExistant();
-            
-            // Mettre à jour la date minimale de fin
-            if (dateFinInput && this.value) {
-                dateFinInput.min = this.value;
-            }
-        });
-    }
+    dateDebutInput.addEventListener('change', function() {
+        updatePreview();
+        verifierBaremeExistant();
+        
+        // Mettre à jour la date minimale de fin
+        if (dateFinInput && this.value) {
+            dateFinInput.min = this.value;
+        }
+    });
     
-    if (dateFinInput) {
-        dateFinInput.addEventListener('change', function() {
-            updatePreview();
-        });
-    }
+    dateFinInput.addEventListener('change', function() {
+        updatePreview();
+    });
     
     // Validation du formulaire
-    if (baremeForm) {
-        baremeForm.addEventListener('submit', function(event) {
-            let isValid = true;
-            
-            // Vérifier que le type de membre est sélectionné
-            if (!typeMembreSelect.value) {
+    baremeForm.addEventListener('submit', function(event) {
+        let isValid = true;
+        
+        // Vérifier que le type de membre est sélectionné
+        if (!typeMembreSelect.value) {
+            isValid = false;
+            highlightField(typeMembreSelect, '{% trans "Veuillez sélectionner un type de membre." %}');
+        }
+        
+        // Vérifier le montant
+        const montant = parseFloat(montantInput.value);
+        if (isNaN(montant) || montant <= 0) {
+            isValid = false;
+            highlightField(montantInput, '{% trans "Le montant doit être un nombre positif." %}');
+        }
+        
+        // Vérifier la date de début
+        if (!dateDebutInput.value) {
+            isValid = false;
+            highlightField(dateDebutInput, '{% trans "La date de début de validité est requise." %}');
+        }
+        
+        // Vérifier la cohérence des dates
+        if (dateDebutInput.value && dateFinInput.value) {
+            if (new Date(dateFinInput.value) <= new Date(dateDebutInput.value)) {
                 isValid = false;
-                highlightField(typeMembreSelect, '{% trans "Veuillez sélectionner un type de membre." %}');
+                highlightField(dateFinInput, '{% trans "La date de fin doit être postérieure à la date de début." %}');
             }
-            
-            // Vérifier le montant
-            const montant = parseFloat(montantInput.value);
-            if (isNaN(montant) || montant <= 0) {
-                isValid = false;
-                highlightField(montantInput, '{% trans "Le montant doit être un nombre positif." %}');
-            }
-            
-            // Vérifier la date de début
-            if (!dateDebutInput.value) {
-                isValid = false;
-                highlightField(dateDebutInput, '{% trans "La date de début de validité est requise." %}');
-            }
-            
-            // Vérifier la cohérence des dates
-            if (dateDebutInput.value && dateFinInput.value) {
-                // Normaliser les dates pour comparer uniquement les dates sans l'heure
-                const debut = new Date(dateDebutInput.value);
-                debut.setHours(0, 0, 0, 0);
-                
-                const fin = new Date(dateFinInput.value);
-                fin.setHours(0, 0, 0, 0);
-                
-                if (fin <= debut) {
-                    isValid = false;
-                    highlightField(dateFinInput, '{% trans "La date de fin doit être postérieure à la date de début." %}');
-                }
-            }
-            
-            if (!isValid) {
-                event.preventDefault();
-            }
-        });
-    }
+        }
+        
+        if (!isValid) {
+            event.preventDefault();
+        }
+    });
     
     // Fonction pour mettre en évidence un champ en erreur
     function highlightField(field, message) {

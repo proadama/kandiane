@@ -44,7 +44,7 @@
                         
                         <!-- Membre -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.membre.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.membre.errors %} has-error{% endif %}">
                                 {{ form.membre.label_tag }}
                                 {{ form.membre }}
                                 {% if form.membre.help_text %}
@@ -60,7 +60,7 @@
                         
                         <!-- Type de membre -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.type_membre.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.type_membre.errors %} has-error{% endif %}">
                                 {{ form.type_membre.label_tag }}
                                 {{ form.type_membre }}
                                 {% if form.type_membre.help_text %}
@@ -94,7 +94,7 @@
                         
                         <!-- Barème -->
                         <div class="col-md-6" id="baremeContainer">
-                            <div class="form-group{% if form.bareme.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.bareme.errors %} has-error{% endif %}">
                                 {{ form.bareme.label_tag }}
                                 {{ form.bareme }}
                                 {% if form.bareme.help_text %}
@@ -105,14 +105,12 @@
                                     {{ form.bareme.errors }}
                                 </div>
                                 {% endif %}
-                                <!-- Élément pour afficher les alertes concernant le barème -->
-                                <div id="alerte-bareme" class="alert alert-danger mt-2" style="display: none;"></div>
                             </div>
                         </div>
                         
                         <!-- Montant -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.montant.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.montant.errors %} has-error{% endif %}">
                                 {{ form.montant.label_tag }}
                                 <div class="input-group">
                                     {{ form.montant }}
@@ -149,7 +147,7 @@
                         
                         <!-- Référence -->
                         <div class="col-md-12" id="referenceContainer" {% if not form.instance.pk and form.initial.generer_reference %}style="display:none;"{% endif %}>
-                            <div class="form-group{% if form.reference.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.reference.errors %} has-error{% endif %}">
                                 {{ form.reference.label_tag }}
                                 {{ form.reference }}
                                 {% if form.reference.help_text %}
@@ -170,7 +168,7 @@
                         
                         <!-- Date d'émission -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.date_emission.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.date_emission.errors %} has-error{% endif %}">
                                 {{ form.date_emission.label_tag }}
                                 {{ form.date_emission }}
                                 {% if form.date_emission.help_text %}
@@ -186,7 +184,7 @@
                         
                         <!-- Date d'échéance -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.date_echeance.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.date_echeance.errors %} has-error{% endif %}">
                                 {{ form.date_echeance.label_tag }}
                                 {{ form.date_echeance }}
                                 {% if form.date_echeance.help_text %}
@@ -202,7 +200,7 @@
                         
                         <!-- Période début -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.periode_debut.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.periode_debut.errors %} has-error{% endif %}">
                                 {{ form.periode_debut.label_tag }}
                                 {{ form.periode_debut }}
                                 {% if form.periode_debut.help_text %}
@@ -218,7 +216,7 @@
                         
                         <!-- Période fin -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.periode_fin.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.periode_fin.errors %} has-error{% endif %}">
                                 {{ form.periode_fin.label_tag }}
                                 {{ form.periode_fin }}
                                 {% if form.periode_fin.help_text %}
@@ -239,7 +237,7 @@
                         
                         <!-- Statut -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.statut.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.statut.errors %} has-error{% endif %}">
                                 {{ form.statut.label_tag }}
                                 {{ form.statut }}
                                 {% if form.statut.help_text %}
@@ -255,7 +253,7 @@
                         
                         <!-- Commentaire -->
                         <div class="col-md-12 mt-3">
-                            <div class="form-group{% if form.commentaire.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.commentaire.errors %} has-error{% endif %}">
                                 {{ form.commentaire.label_tag }}
                                 {{ form.commentaire }}
                                 {% if form.commentaire.help_text %}
@@ -297,10 +295,177 @@
 
 {% block extra_js %}
 {{ block.super }}
+<!-- Mettre à jour les templates pour inclure ce fichier
+ ajoutez cette ligne à la fin du bloc {% block extra_js %} -->
 <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
 <script src="{% static 'js/cotisations/cotisations.js' %}"></script>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Gestion de l'utilisation du barème
+    const utiliserBaremeCheckbox = document.getElementById('id_utiliser_bareme');
+    const baremeSelect = document.getElementById('id_bareme');
+    const montantInput = document.getElementById('id_montant');
+    
+    if (utiliserBaremeCheckbox) {
+        utiliserBaremeCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                montantInput.readOnly = true;
+                if (baremeSelect.value) {
+                    // Récupérer le montant du barème sélectionné
+                    fetchBaremeMontant(baremeSelect.value);
+                }
+            } else {
+                montantInput.readOnly = false;
+            }
+        });
+        
+        // Déclencher l'événement au chargement
+        if (utiliserBaremeCheckbox.checked) {
+            montantInput.readOnly = true;
+        }
+    }
+    
+    // Mettre à jour le montant quand le barème change
+    if (baremeSelect) {
+        baremeSelect.addEventListener('change', function() {
+            if (utiliserBaremeCheckbox && utiliserBaremeCheckbox.checked) {
+                fetchBaremeMontant(this.value);
+            }
+        });
+    }
+    
+    // Fonction pour récupérer le montant d'un barème via API
+    function fetchBaremeMontant(baremeId) {
+        if (!baremeId) return;
+        
+        fetch(`{% url 'cotisations:api_calculer_montant' %}?bareme_id=${baremeId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    montantInput.value = data.montant;
+                }
+            })
+            .catch(error => console.error('Erreur lors de la récupération du montant:', error));
+    }
+    
+    // Mettre à jour les barèmes disponibles en fonction du type de membre
+    const typeMembreSelect = document.getElementById('id_type_membre');
+    if (typeMembreSelect) {
+        typeMembreSelect.addEventListener('change', function() {
+            const typeId = this.value;
+            if (!typeId) return;
+            
+            // Nettoyer le select des barèmes
+            baremeSelect.innerHTML = '';
+            baremeSelect.disabled = true;
+            
+            // Requête AJAX pour obtenir les barèmes pour ce type
+            fetch(`/api/cotisations/baremes/?type_membre=${typeId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.baremes && data.baremes.length > 0) {
+                        // Ajouter une option vide
+                        const emptyOption = document.createElement('option');
+                        emptyOption.value = '';
+                        emptyOption.textContent = '---------';
+                        baremeSelect.appendChild(emptyOption);
+                        
+                        // Ajouter les barèmes
+                        data.baremes.forEach(bareme => {
+                            const option = document.createElement('option');
+                            option.value = bareme.id;
+                            option.textContent = `${bareme.montant} € (${bareme.periodicite})`;
+                            baremeSelect.appendChild(option);
+                        });
+                        
+                        baremeSelect.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Erreur lors de la récupération des barèmes:', error);
+                    baremeSelect.disabled = false;
+                });
+        });
+    }
+    
+    // Gestion de la génération de référence
+    const genererReferenceCheckbox = document.getElementById('id_generer_reference');
+    const referenceContainer = document.getElementById('referenceContainer');
+    const referenceInput = document.getElementById('id_reference');
+    
+    if (genererReferenceCheckbox && referenceContainer) {
+        genererReferenceCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                referenceContainer.style.display = 'none';
+                referenceInput.required = false;
+            } else {
+                referenceContainer.style.display = 'block';
+                referenceInput.required = true;
+            }
+        });
+    }
+    
+    // Validation côté client
+    const cotisationForm = document.getElementById('cotisationForm');
+    if (cotisationForm) {
+        cotisationForm.addEventListener('submit', function(event) {
+            let isValid = true;
+            
+            // Vérifier si le membre est sélectionné
+            const membreSelect = document.getElementById('id_membre');
+            if (!membreSelect.value) {
+                isValid = false;
+                highlightField(membreSelect, '{% trans "Un membre doit être sélectionné." %}');
+            }
+            
+            // Vérifier si le montant est valide
+            if (montantInput.value <= 0) {
+                isValid = false;
+                highlightField(montantInput, '{% trans "Le montant doit être supérieur à zéro." %}');
+            }
+            
+            // Vérifier les dates
+            const dateEmission = document.getElementById('id_date_emission');
+            const dateEcheance = document.getElementById('id_date_echeance');
+            
+            if (new Date(dateEcheance.value) < new Date(dateEmission.value)) {
+                isValid = false;
+                highlightField(dateEcheance, '{% trans "La date d\'échéance doit être postérieure à la date d\'émission." %}');
+            }
+            
+            // Vérifier la référence si nécessaire
+            if (genererReferenceCheckbox && !genererReferenceCheckbox.checked && !referenceInput.value) {
+                isValid = false;
+                highlightField(referenceInput, '{% trans "Une référence est requise si la génération automatique est désactivée." %}');
+            }
+            
+            if (!isValid) {
+                event.preventDefault();
+            }
+        });
+    }
+    
+    // Fonction pour mettre en évidence un champ en erreur
+    function highlightField(field, message) {
+        field.classList.add('is-invalid');
+        
+        // Ajouter un message d'erreur si pas déjà présent
+        const errorElem = field.parentNode.querySelector('.invalid-feedback');
+        if (!errorElem) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'invalid-feedback d-block';
+            errorDiv.textContent = message;
+            
+            if (field.parentNode.classList.contains('input-group')) {
+                field.parentNode.parentNode.appendChild(errorDiv);
+            } else {
+                field.parentNode.appendChild(errorDiv);
+            }
+        }
+    }
+
+    // Script pour calculer automatiquement le montant selon le barème
 document.addEventListener('DOMContentLoaded', function() {
     // Éléments du DOM
     const utiliserBaremeCheckbox = document.getElementById('id_utiliser_bareme');
@@ -308,10 +473,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const typeMembreSelect = document.getElementById('id_type_membre');
     const montantInput = document.getElementById('id_montant');
     const baremeContainer = document.getElementById('baremeContainer');
-    const genererReferenceCheckbox = document.getElementById('id_generer_reference');
-    const referenceContainer = document.getElementById('referenceContainer');
-    const referenceInput = document.getElementById('id_reference');
-    const cotisationForm = document.getElementById('cotisationForm');
     
     // Fonction pour récupérer les barèmes disponibles pour un type de membre
     function chargerBaremes(typeMembreId) {
@@ -489,18 +650,23 @@ document.addEventListener('DOMContentLoaded', function() {
     function afficherErreur(message) {
         // Créer ou mettre à jour un élément d'alerte
         let alerteElem = document.getElementById('alerte-bareme');
-        if (alerteElem) {
-            alerteElem.textContent = message;
-            alerteElem.style.display = 'block';
-            
-            // Faire disparaître l'alerte après 5 secondes
-            setTimeout(() => {
-                alerteElem.style.display = 'none';
-            }, 5000);
+        if (!alerteElem) {
+            alerteElem = document.createElement('div');
+            alerteElem.id = 'alerte-bareme';
+            alerteElem.className = 'alert alert-danger mt-2';
+            alerteElem.role = 'alert';
+            baremeContainer.appendChild(alerteElem);
         }
+        
+        alerteElem.textContent = message;
+        
+        // Faire disparaître l'alerte après 5 secondes
+        setTimeout(() => {
+            alerteElem.style.display = 'none';
+        }, 5000);
     }
     
-    // Gestion des événements pour le type de membre et le barème
+    // Gestion des événements
     if (typeMembreSelect) {
         typeMembreSelect.addEventListener('change', function() {
             chargerBaremes(this.value);
@@ -518,11 +684,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Gestion de l'utilisation du barème
     if (utiliserBaremeCheckbox) {
         utiliserBaremeCheckbox.addEventListener('change', function() {
             if (this.checked) {
                 montantInput.readOnly = true;
+                baremeContainer.style.display = 'block';
                 
                 // Recalculer le montant si un barème est déjà sélectionné
                 if (baremeSelect.value) {
@@ -530,6 +696,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } else {
                 montantInput.readOnly = false;
+                // On garde le container visible pour permettre la sélection
             }
         });
         
@@ -538,77 +705,7 @@ document.addEventListener('DOMContentLoaded', function() {
             montantInput.readOnly = true;
         }
     }
-    
-    // Gestion de la génération de référence
-    if (genererReferenceCheckbox && referenceContainer) {
-        genererReferenceCheckbox.addEventListener('change', function() {
-            if (this.checked) {
-                referenceContainer.style.display = 'none';
-                referenceInput.required = false;
-            } else {
-                referenceContainer.style.display = 'block';
-                referenceInput.required = true;
-            }
-        });
-    }
-    
-    // Validation côté client
-    if (cotisationForm) {
-        cotisationForm.addEventListener('submit', function(event) {
-            let isValid = true;
-            
-            // Vérifier si le membre est sélectionné
-            const membreSelect = document.getElementById('id_membre');
-            if (!membreSelect.value) {
-                isValid = false;
-                highlightField(membreSelect, '{% trans "Un membre doit être sélectionné." %}');
-            }
-            
-            // Vérifier si le montant est valide
-            if (montantInput.value <= 0) {
-                isValid = false;
-                highlightField(montantInput, '{% trans "Le montant doit être supérieur à zéro." %}');
-            }
-            
-            // Vérifier les dates
-            const dateEmission = document.getElementById('id_date_emission');
-            const dateEcheance = document.getElementById('id_date_echeance');
-            
-            if (new Date(dateEcheance.value) < new Date(dateEmission.value)) {
-                isValid = false;
-                highlightField(dateEcheance, '{% trans "La date d\'échéance doit être postérieure à la date d\'émission." %}');
-            }
-            
-            // Vérifier la référence si nécessaire
-            if (genererReferenceCheckbox && !genererReferenceCheckbox.checked && !referenceInput.value) {
-                isValid = false;
-                highlightField(referenceInput, '{% trans "Une référence est requise si la génération automatique est désactivée." %}');
-            }
-            
-            if (!isValid) {
-                event.preventDefault();
-            }
-        });
-    }
-    
-    // Fonction pour mettre en évidence un champ en erreur
-    function highlightField(field, message) {
-        field.classList.add('is-invalid');
-        
-        // Ajouter un message d'erreur si pas déjà présent
-        const errorElem = field.parentNode.querySelector('.invalid-feedback');
-        if (!errorElem) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'invalid-feedback d-block';
-            errorDiv.textContent = message;
-            
-            if (field.parentNode.classList.contains('input-group')) {
-                field.parentNode.parentNode.appendChild(errorDiv);
-            } else {
-                field.parentNode.appendChild(errorDiv);
-            }
-        }
-    }
+});    
 });
 </script>
 {% endblock %}

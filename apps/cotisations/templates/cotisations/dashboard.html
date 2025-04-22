@@ -1,6 +1,7 @@
 {# templates/cotisations/dashboard.html #}
 {% extends "cotisations/base.html" %}
 {% load i18n %}
+{% load custom_filters %}
 
 {% block breadcrumb %}
 <li class="breadcrumb-item active">{% trans "Tableau de bord" %}</li>
@@ -248,7 +249,7 @@
                 </div>
                 {% if cotisations_echeance.count > 5 %}
                 <div class="text-center mt-2">
-                    <a href="{% url 'cotisations:cotisation_liste' %}?date_echeance_debut={% now 'Y-m-d' %}&date_echeance_fin={{ now|date:'Y-m-d'|add_days:30 }}" class="btn btn-sm btn-outline-primary">
+                    <a href="{% url 'cotisations:cotisation_liste' %}?date_echeance_debut={% now 'Y-m-d' %}&date_echeance_fin={% now 'Y-m-d' %}" class="btn btn-sm btn-outline-primary">
                         {% trans "Voir toutes les cotisations arrivant à échéance" %} ({{ nb_cotisations_echeance }})
                     </a>
                 </div>

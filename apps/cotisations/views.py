@@ -65,6 +65,10 @@ class DashboardView(StaffRequiredMixin, TemplateView):
         # Définir les dates de début et de fin selon la période
         today = timezone.now().date()
         
+        # Ajouter la date actuelle au contexte pour les templates
+        context['now'] = today
+        context['date_echeance_fin_30j'] = (today + timezone.timedelta(days=30)).strftime('%Y-%m-%d')
+        
         if periode == 'month':
             # Mois en cours
             date_debut = today.replace(day=1)
@@ -1715,6 +1719,155 @@ def api_calculer_montant(request):
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)})
 
+# Pour api_baremes_par_type
+@login_required
+def api_baremes_par_type(request):
+    """
+    API pour récupérer les barèmes disponibles pour un type de membre.
+    """
+    type_membre_id = request.GET.get('type_membre')
+    
+    if not type_membre_id:
+        return JsonResponse({
+            'success': False, 
+            'message': _("Type de membre non spécifié")
+        })
+    
+    try:
+        today = timezone.now().date()
+        
+        # Récupérer tous les barèmes pour ce type de membre
+        baremes = BaremeCotisation.objects.filter(
+            type_membre_id=type_membre_id
+        ).order_by('-date_debut_validite')
+        
+        # Formater les données pour l'API
+        baremes_data = []
+        for bareme in baremes:
+            est_actif = (bareme.date_debut_validite <= today and 
+                         (bareme.date_fin_validite is None or bareme.date_fin_validite >= today))
+            est_futur = bareme.date_debut_validite > today
+            
+            baremes_data.append({
+                'id': bareme.id,
+                'montant': float(bareme.montant),
+                'periodicite': bareme.periodicite,
+                'periodicite_display': bareme.get_periodicite_display(),
+                'date_debut_validite': bareme.date_debut_validite.isoformat(),
+                'date_fin_validite': bareme.date_fin_validite.isoformat() if bareme.date_fin_validite else None,
+                'est_actif': est_actif,
+                'est_futur': est_futur
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'baremes': baremes_data
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+    
+@login_required
+def api_verifier_bareme(request):
+    """
+    API pour vérifier si un barème existe déjà pour un type de membre à une date donnée.
+    """
+    type_membre_id = request.GET.get('type_membre')
+    date = request.GET.get('date')
+    exclude_id = request.GET.get('exclude')
+    
+    if not type_membre_id or not date:
+        return JsonResponse({
+            'success': False,
+            'message': _("Paramètres manquants")
+        })
+    
+    try:
+        # Convertir la date en objet date
+        date_obj = datetime.datetime.strptime(date, '%Y-%m-%d').date()
+        
+        # Construire la requête
+        query = BaremeCotisation.objects.filter(
+            type_membre_id=type_membre_id,
+            date_debut_validite__lte=date_obj,
+            deleted_at__isnull=True
+        )
+        
+        # Ajouter la condition pour la date de fin (si elle existe)
+        query = query.filter(
+            Q(date_fin_validite__isnull=True) | Q(date_fin_validite__gte=date_obj)
+        )
+        
+        # Exclure le barème en cours d'édition
+        if exclude_id:
+            query = query.exclude(pk=exclude_id)
+        
+        # Vérifier si un barème existe
+        exists = query.exists()
+        
+        if exists:
+            bareme = query.first()
+            type_membre = TypeMembre.objects.get(pk=type_membre_id)
+            
+            return JsonResponse({
+                'success': True,
+                'exists': True,
+                'message': _("Un barème existe déjà pour le type '%(type)s' à la date du %(date)s (%(montant)s € - %(periodicite)s)") % {
+                    'type': type_membre.libelle,
+                    'date': date_obj.strftime('%d/%m/%Y'),
+                    'montant': bareme.montant,
+                    'periodicite': bareme.get_periodicite_display()
+                }
+            })
+        else:
+            return JsonResponse({
+                'success': True,
+                'exists': False
+            })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+@login_required
+@require_POST
+def bareme_reactive(request):
+    """
+    Vue pour réactiver un barème inactif.
+    """
+    bareme_id = request.POST.get('bareme_id')
+    date_fin_validite = request.POST.get('date_fin_validite') or None
+    
+    if not bareme_id:
+        messages.error(request, _("Barème non spécifié"))
+        return redirect('cotisations:bareme_liste')
+    
+    try:
+        bareme = BaremeCotisation.objects.get(pk=bareme_id)
+        
+        # Convertir la date de fin si elle est fournie
+        if date_fin_validite:
+            date_fin_validite = datetime.datetime.strptime(date_fin_validite, '%Y-%m-%d').date()
+        
+        # Mettre à jour la date de fin
+        bareme.date_fin_validite = date_fin_validite
+        bareme.save()
+        
+        messages.success(
+            request, 
+            _("Le barème pour %(type)s a été réactivé avec succès.") % {
+                'type': bareme.type_membre.libelle
+            }
+        )
+    except BaremeCotisation.DoesNotExist:
+        messages.error(request, _("Barème introuvable"))
+    except Exception as e:
+        messages.error(request, _("Erreur lors de la réactivation du barème: %(error)s") % {'error': str(e)})
+    
+    return redirect('cotisations:bareme_liste')
 
 @login_required
 def api_generer_recu(request, paiement_id):

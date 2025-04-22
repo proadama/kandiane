@@ -1,7 +1,7 @@
 {% extends "cotisations/base.html" %}
 {% load i18n %}
 {% load static %}
-{% load cotisations_extras %}
+{% load cotisations_extras %}  <!-- Ajoutez cette ligne -->
 
 {% block breadcrumb %}
 {% if form.instance.pk %}
@@ -13,7 +13,7 @@
 <li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}">{{ cotisation.reference }}</a></li>
 <li class="breadcrumb-item active">{% trans "Nouveau paiement" %}</li>
 {% endif %}
-{% endblock breadcrumb %}
+{% endblock %}
 
 {% block page_title %}
 {% if form.instance.pk %}
@@ -21,7 +21,7 @@
 {% else %}
 {% trans "Enregistrer un paiement" %}
 {% endif %}
-{% endblock page_title %}
+{% endblock %}
 
 {% block cotisations_content %}
 <div class="row">
@@ -44,10 +44,9 @@
                     <dd class="col-sm-7">{{ cotisation.montant|floatformat:2 }} €</dd>
                     
                     <dt class="col-sm-5">{% trans "Montant payé" %}</dt>
-                    <dd class="col-sm-7">{{ cotisation.montant_paye|default_if_none:0|floatformat:2 }} €</dd>
+                    <dd class="col-sm-7">{{ cotisation.montant|sub:cotisation.montant_restant|floatformat:2 }} €</dd>
                     
                     <dt class="col-sm-5">{% trans "Montant restant" %}</dt>
-                    <dd class="col-sm-7">{{ cotisation.montant|sub:cotisation.montant_restant|floatformat:2 }} €</dd>
                     <dd class="col-sm-7">
                         <span class="fw-bold {% if cotisation.montant_restant > 0 %}text-danger{% else %}text-success{% endif %}">
                             {{ cotisation.montant_restant|floatformat:2 }} €
@@ -104,7 +103,7 @@
                         
                         <!-- Montant -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.montant.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.montant.errors %} has-error{% endif %}">
                                 {{ form.montant.label_tag }}
                                 <div class="input-group">
                                     {{ form.montant }}
@@ -128,7 +127,7 @@
                         
                         <!-- Mode de paiement -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.mode_paiement.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.mode_paiement.errors %} has-error{% endif %}">
                                 {{ form.mode_paiement.label_tag }}
                                 {{ form.mode_paiement }}
                                 {% if form.mode_paiement.help_text %}
@@ -144,7 +143,7 @@
                         
                         <!-- Type de transaction -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.type_transaction.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.type_transaction.errors %} has-error{% endif %}">
                                 {{ form.type_transaction.label_tag }}
                                 {{ form.type_transaction }}
                                 {% if form.type_transaction.help_text %}
@@ -160,7 +159,7 @@
                         
                         <!-- Date de paiement -->
                         <div class="col-md-6">
-                            <div class="form-group{% if form.date_paiement.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.date_paiement.errors %} has-error{% endif %}">
                                 {{ form.date_paiement.label_tag }}
                                 {{ form.date_paiement }}
                                 {% if form.date_paiement.help_text %}
@@ -181,7 +180,7 @@
                         
                         <!-- Référence de paiement -->
                         <div class="col-md-12">
-                            <div class="form-group{% if form.reference_paiement.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.reference_paiement.errors %} has-error{% endif %}">
                                 {{ form.reference_paiement.label_tag }}
                                 {{ form.reference_paiement }}
                                 {% if form.reference_paiement.help_text %}
@@ -197,7 +196,7 @@
                         
                         <!-- Commentaire -->
                         <div class="col-md-12 mt-3">
-                            <div class="form-group{% if form.commentaire.errors %} is-invalid{% endif %}">
+                            <div class="form-group{% if form.commentaire.errors %} has-error{% endif %}">
                                 {{ form.commentaire.label_tag }}
                                 {{ form.commentaire }}
                                 {% if form.commentaire.help_text %}
@@ -239,10 +238,14 @@
         </div>
     </div>
 </div>
-{% endblock cotisations_content %}
+{% endblock %}
 
 {% block extra_js %}
-{{ block.super }}
+{{ block.super }}  {# Cette ligne est essentielle - elle inclut le contenu du bloc parent #}
+
+<!-- Mettre à jour les templates pour inclure ce fichier
+ ajoutez cette ligne à la fin du bloc {% block extra_js %} -->
+
 <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
 <script src="{% static 'js/cotisations/cotisations.js' %}"></script>
 
@@ -326,4 +329,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-{% endblock extra_js %}
+{% endblock %}

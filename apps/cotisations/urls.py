@@ -26,6 +26,8 @@ urlpatterns = [
     path('baremes/nouveau/', views.bareme_create, name='bareme_creer'),
     path('baremes/<int:pk>/modifier/', views.bareme_update, name='bareme_modifier'),
     path('baremes/<int:pk>/supprimer/', views.bareme_delete, name='bareme_supprimer'),
+    path('api/verifier-bareme/', views.api_verifier_bareme, name='api_verifier_bareme'),
+    path('baremes/reactive/', views.bareme_reactive, name='bareme_reactive'),
     
     # Rappels
     path('rappels/', views.rappel_list, name='rappel_liste'),
@@ -43,6 +45,7 @@ urlpatterns = [
     
     # API internes
     path('api/calculer-montant/', views.api_calculer_montant, name='api_calculer_montant'),
+    path('api/baremes-par-type/', views.api_baremes_par_type, name='api_baremes_par_type'),
     path('api/generer-recu/<int:paiement_id>/', views.api_generer_recu, name='api_generer_recu'),
     path('api/marquer-paiement-recu/<int:paiement_id>/', views.api_marquer_paiement_recu, name='api_marquer_paiement_recu'),
     path('api/stats-cotisations/', views.api_stats_cotisations, name='api_stats_cotisations'),

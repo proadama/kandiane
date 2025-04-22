@@ -20,6 +20,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import RedirectView
+from django.contrib.auth import views as auth_views
 
 app_name = 'core'
 
@@ -34,6 +35,10 @@ urlpatterns = [
     path('membres/', include('apps.membres.urls')),
     path('cotisations/', include('apps.cotisations.urls')),
     path('favicon.ico', RedirectView.as_view(url='/static/img/favicon.ico')),
+
+    # Ajouter un alias pour faciliter l'accès à la page de login
+    path('login/', auth_views.LoginView.as_view(template_name='accounts/login.html'), name='login'),
+    
 ]
 
 # Ajouter les URLs pour les media et les fichiers statiques en développement

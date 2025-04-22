@@ -1,6 +1,7 @@
 {% extends "cotisations/base.html" %}
 {% load i18n %}
 {% load static %}
+{% load cotisations_extras %}
 
 {% block breadcrumb %}
 <li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
@@ -27,96 +28,6 @@
     </button>
 </div>
 {% endblock %}
-<!--
-Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block cotisations_content %}:
--->
-<!-- Modal pour l'ajout rapide de rappel -->
-<div class="modal fade" id="rappelModal" tabindex="-1" aria-labelledby="rappelModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="rappelModalLabel">{% trans "Créer un rappel" %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="rappelAjaxForm" data-cotisation-id="{{ cotisation.pk }}">
-                    {% csrf_token %}
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="formTypeRappel" class="form-label">{% trans "Type de rappel" %}</label>
-                                <select class="form-select" id="formTypeRappel" name="type_rappel" required>
-                                    <option value="">{% trans "Sélectionnez un type" %}</option>
-                                    <option value="email" selected>{% trans "Email" %}</option>
-                                    <option value="sms">{% trans "SMS" %}</option>
-                                    <option value="courrier">{% trans "Courrier" %}</option>
-                                    <option value="appel">{% trans "Appel téléphonique" %}</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="formNiveau" class="form-label">{% trans "Niveau de rappel" %}</label>
-                                <input type="number" class="form-select" id="formNiveau" name="niveau" value="1" min="1" required>
-                                <div class="form-text">
-                                    {% trans "1: Premier rappel, 2: Relance, 3: Mise en demeure, etc." %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="formContenu" class="form-label">{% trans "Contenu du rappel" %}</label>
-                        <div class="mb-2">
-                            <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'Modèles de rappel' %}">
-                                <button type="button" class="btn btn-outline-secondary" id="templateDefault">{% trans "Modèle standard" %}</button>
-                                <button type="button" class="btn btn-outline-secondary" id="templateUrgent">{% trans "Modèle urgent" %}</button>
-                                <button type="button" class="btn btn-outline-secondary" id="templateFormal">{% trans "Modèle formel" %}</button>
-                            </div>
-                        </div>
-                        <textarea class="form-control" id="formContenu" name="contenu" rows="8" required></textarea>
-                        <div class="form-text">
-                            {% trans "Variables disponibles: {prenom}, {nom}, {reference}, {montant}, {date_echeance}" %}
-                        </div>
-                    </div>
-                    
-                    <!-- Options d'envoi -->
-                    <div class="card bg-light mb-3">
-                        <div class="card-body">
-                            <h6>{% trans "Options d'envoi" %}</h6>
-                            <div class="form-check form-switch mb-2">
-                                <input class="form-check-input" type="checkbox" id="envoyerImmediatement" checked>
-                                <label class="form-check-label" for="envoyerImmediatement">
-                                    {% trans "Envoyer immédiatement" %}
-                                </label>
-                            </div>
-                            <div id="optionsPlanification" style="display: none;">
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label for="formDatePlanification" class="form-label">{% trans "Date d'envoi" %}</label>
-                                        <input type="date" class="form-control" id="formDatePlanification" name="date_planification" min="{{ now|date:'Y-m-d' }}">
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label for="formHeurePlanification" class="form-label">{% trans "Heure d'envoi" %}</label>
-                                        <input type="time" class="form-control" id="formHeurePlanification" name="heure_planification">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
-                <button type="button" class="btn btn-warning" id="submitRappel">
-                    <i class="fas fa-bell"></i> {% trans "Créer le rappel" %}
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 {% block cotisations_content %}
 <div id="cotisationDetail" data-cotisation-id="{{ cotisation.pk }}">
@@ -130,21 +41,21 @@ Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block
                 <div class="card-body">
                     <dl class="row mb-0">
                         <dt class="col-sm-5">{% trans "Référence" %}</dt>
-                        <dd class="col-sm-7">{{ cotisation.reference }}</dd>
+                        <dd class="col-sm-7" class="cotisation-reference">{{ cotisation.reference }}</dd>
                         
                         <dt class="col-sm-5">{% trans "Membre" %}</dt>
                         <dd class="col-sm-7">
                             <a href="{% url 'membres:membre_detail' pk=cotisation.membre.pk %}">
-                                {{ cotisation.membre.prenom }} {{ cotisation.membre.nom }}
+                                <span class="membre-prenom">{{ cotisation.membre.prenom }}</span> <span class="membre-nom">{{ cotisation.membre.nom }}</span>
                             </a>
-                            <br><small class="text-muted">{{ cotisation.membre.email }}</small>
+                            <br><small class="text-muted membre-email">{{ cotisation.membre.email }}</small>
                         </dd>
                         
                         <dt class="col-sm-5">{% trans "Date d'émission" %}</dt>
                         <dd class="col-sm-7">{{ cotisation.date_emission|date:"d/m/Y" }}</dd>
                         
                         <dt class="col-sm-5">{% trans "Date d'échéance" %}</dt>
-                        <dd class="col-sm-7">
+                        <dd class="col-sm-7 cotisation-echeance">
                             <span class="{% if cotisation.est_en_retard %}text-danger{% endif %}">
                                 {{ cotisation.date_echeance|date:"d/m/Y" }}
                                 {% if cotisation.est_en_retard %}
@@ -174,7 +85,7 @@ Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block
                 <div class="card-body">
                     <dl class="row mb-0">
                         <dt class="col-sm-5">{% trans "Type de membre" %}</dt>
-                        <dd class="col-sm-7">{{ cotisation.type_membre.libelle }}</dd>
+                        <dd class="col-sm-7">{{ cotisation.type_membre.libelle|default:"-" }}</dd>
                         
                         <dt class="col-sm-5">{% trans "Barème" %}</dt>
                         <dd class="col-sm-7">
@@ -190,7 +101,7 @@ Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block
                         
                         <dt class="col-sm-5">{% trans "Montant payé" %}</dt>
                         <dd class="col-sm-7">
-                            <span id="totalPaye">{{ cotisation.montant|sub:cotisation.montant_restant|floatformat:2 }} €</span>
+                            <span id="totalPaye">{{ cotisation.montant_paye|default_if_none:0|floatformat:2 }} €</span>
                         </dd>
                         
                         <dt class="col-sm-5">{% trans "Montant restant" %}</dt>
@@ -217,18 +128,20 @@ Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block
                     <div class="mt-4">
                         <h6 class="mb-2">{% trans "Progression du paiement" %}</h6>
                         <div class="progress" style="height: 20px;">
+                            {% with pourcentage=cotisation.pourcentage_paiement|default:0 %}
                             <div id="progressPaiement" class="progress-bar 
                                 {% if cotisation.statut_paiement == 'non_payee' %}bg-danger
                                 {% elif cotisation.statut_paiement == 'partiellement_payee' %}bg-warning
                                 {% else %}bg-success{% endif %}" 
                                  role="progressbar" 
                                  data-montant-total="{{ cotisation.montant }}"
-                                 style="width: {{ cotisation.montant|sub:cotisation.montant_restant|div:cotisation.montant|mul:100|floatformat:0 }}%;" 
-                                 aria-valuenow="{{ cotisation.montant|sub:cotisation.montant_restant|div:cotisation.montant|mul:100|floatformat:0 }}" 
+                                 style="width: {{ pourcentage }}%;" 
+                                 aria-valuenow="{{ pourcentage }}" 
                                  aria-valuemin="0" 
                                  aria-valuemax="100">
-                                {{ cotisation.montant|sub:cotisation.montant_restant|div:cotisation.montant|mul:100|floatformat:0 }}%
+                                {{ pourcentage }}%
                             </div>
+                            {% endwith %}
                         </div>
                     </div>
                 </div>
@@ -265,7 +178,7 @@ Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block
                                 <tr id="paiement-{{ paiement.id }}">
                                     <td>{{ paiement.date_paiement|date:"d/m/Y H:i" }}</td>
                                     <td>{{ paiement.montant|floatformat:2 }} €</td>
-                                    <td>{{ paiement.mode_paiement }}</td>
+                                    <td>{{ paiement.mode_paiement|default:"-" }}</td>
                                     <td>
                                         <span class="badge 
                                             {% if paiement.type_transaction == 'paiement' %}bg-success
@@ -439,7 +352,7 @@ Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block
                                     </td>
                                     <td>
                                         <button type="button" class="btn btn-sm btn-link voir-details"
-                                                data-details="{{ entry.details|json_script:'details-'|slice:'12:-14' }}"
+                                                data-details="{{ entry.details|safe }}"
                                                 data-bs-toggle="modal" data-bs-target="#detailsModal">
                                             {% trans "Voir les détails" %}
                                         </button>
@@ -490,6 +403,11 @@ Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block
                             <option value="">{% trans "Sélectionnez un mode de paiement" %}</option>
                             {% for mode in modes_paiement %}
                             <option value="{{ mode.id }}">{{ mode.libelle }}</option>
+                            {% empty %}
+                            <option value="1">{% trans "Virement" %}</option>
+                            <option value="2">{% trans "Chèque" %}</option>
+                            <option value="3">{% trans "Espèces" %}</option>
+                            <option value="4">{% trans "Carte bancaire" %}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -522,6 +440,94 @@ Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
                 <button type="button" class="btn btn-success" id="submitPaiement">{% trans "Enregistrer le paiement" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour l'ajout rapide de rappel -->
+<div class="modal fade" id="rappelModal" tabindex="-1" aria-labelledby="rappelModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rappelModalLabel">{% trans "Créer un rappel" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="rappelAjaxForm" data-cotisation-id="{{ cotisation.pk }}">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="formTypeRappel" class="form-label">{% trans "Type de rappel" %}</label>
+                                <select class="form-select" id="formTypeRappel" name="type_rappel" required>
+                                    <option value="">{% trans "Sélectionnez un type" %}</option>
+                                    <option value="email" selected>{% trans "Email" %}</option>
+                                    <option value="sms">{% trans "SMS" %}</option>
+                                    <option value="courrier">{% trans "Courrier" %}</option>
+                                    <option value="appel">{% trans "Appel téléphonique" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="formNiveau" class="form-label">{% trans "Niveau de rappel" %}</label>
+                                <input type="number" class="form-control" id="formNiveau" name="niveau" value="{% if rappels %}{{ rappels.count|add:'1' }}{% else %}1{% endif %}" min="1" required>
+                                <div class="form-text">
+                                    {% trans "1: Premier rappel, 2: Relance, 3: Mise en demeure, etc." %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formContenu" class="form-label">{% trans "Contenu du rappel" %}</label>
+                        <div class="mb-2">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'Modèles de rappel' %}">
+                                <button type="button" class="btn btn-outline-secondary" id="templateDefault">{% trans "Modèle standard" %}</button>
+                                <button type="button" class="btn btn-outline-secondary" id="templateUrgent">{% trans "Modèle urgent" %}</button>
+                                <button type="button" class="btn btn-outline-secondary" id="templateFormal">{% trans "Modèle formel" %}</button>
+                            </div>
+                        </div>
+                        <textarea class="form-control" id="formContenu" name="contenu" rows="8" required></textarea>
+                        <div class="form-text">
+                            {% trans "Variables disponibles: {prenom}, {nom}, {reference}, {montant}, {date_echeance}" %}
+                        </div>
+                    </div>
+                    
+                    <!-- Options d'envoi -->
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <h6>{% trans "Options d'envoi" %}</h6>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="envoyerImmediatement" checked>
+                                <label class="form-check-label" for="envoyerImmediatement">
+                                    {% trans "Envoyer immédiatement" %}
+                                </label>
+                            </div>
+                            <div id="optionsPlanification" style="display: none;">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="formDatePlanification" class="form-label">{% trans "Date d'envoi" %}</label>
+                                        <input type="date" class="form-control" id="formDatePlanification" name="date_planification" min="{{ now|default:''|date:'Y-m-d' }}">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="formHeurePlanification" class="form-label">{% trans "Heure d'envoi" %}</label>
+                                        <input type="time" class="form-control" id="formHeurePlanification" name="heure_planification">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
+                <button type="button" class="btn btn-warning" id="submitRappel">
+                    <i class="fas fa-bell"></i> {% trans "Créer le rappel" %}
+                </button>
             </div>
         </div>
     </div>
@@ -567,7 +573,6 @@ Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block extra_css %}
@@ -588,12 +593,12 @@ Ajoutez ce code après le modal de paiement, avant la fermeture du bloc {% block
 {% endblock %}
 
 {% block extra_js %}
+{{ block.super }}
 <!-- Bibliothèques JS externes -->
 <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
 <script src="{% static 'js/cotisations/cotisations.js' %}"></script>
 <script src="{% static 'js/cotisations/paiement-ajax.js' %}"></script>
 <script src="{% static 'js/cotisations/rappel-ajax.js' %}"></script>
-<!-- <script src="{% static 'js/cotisations/rappel-ajax.js' %}"></script> -->
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -615,6 +620,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (submitPaiementBtn) {
         submitPaiementBtn.addEventListener('click', function() {
             document.getElementById('paiementAjaxForm').dispatchEvent(new Event('submit'));
+        });
+    }
+    
+    // Initialiser le bouton submitRappel
+    const submitRappelBtn = document.getElementById('submitRappel');
+    if (submitRappelBtn) {
+        submitRappelBtn.addEventListener('click', function() {
+            document.getElementById('rappelAjaxForm').dispatchEvent(new Event('submit'));
         });
     }
     
@@ -685,43 +698,87 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
-});
-
-// Initialiser le bouton submitRappel
-const submitRappelBtn = document.getElementById('submitRappel');
-if (submitRappelBtn) {
-    submitRappelBtn.addEventListener('click', function() {
-        document.getElementById('rappelAjaxForm').dispatchEvent(new Event('submit'));
-    });
-}
-
-// Ajouter les classes .membre-nom, .membre-prenom, etc. pour extraction des données
-const membreNomElement = document.querySelector('dd:has(+ dt:contains("Membre"))');
-if (membreNomElement) {
-    // Extraire le prénom et le nom
-    const nomComplet = membreNomElement.textContent.trim();
-    const parts = nomComplet.split(' ');
     
-    if (parts.length >= 2) {
-        // Ajouter des spans avec classes pour faciliter l'extraction
-        const prenom = parts[0];
-        const nom = parts.slice(1).join(' ');
-        
-        membreNomElement.innerHTML = `<span class="membre-prenom">${prenom}</span> <span class="membre-nom">${nom}</span>`;
-    }
-}
+    // Gestion des templates de rappel
+    const templateDefaultBtn = document.getElementById('templateDefault');
+    const templateUrgentBtn = document.getElementById('templateUrgent');
+    const templateFormalBtn = document.getElementById('templateFormal');
+    const formContenu = document.getElementById('formContenu');
+    
+    if (templateDefaultBtn && formContenu) {
+        templateDefaultBtn.addEventListener('click', function() {
+            // Récupérer les informations du membre et de la cotisation
+            const prenom = document.querySelector('.membre-prenom')?.textContent || '{prenom}';
+            const nom = document.querySelector('.membre-nom')?.textContent || '{nom}';
+            const reference = document.querySelector('.cotisation-reference')?.textContent?.trim() || '{reference}';
+            const montant = document.getElementById('montantRestant')?.dataset?.value || '{montant}';
+            const dateEcheance = document.querySelector('.cotisation-echeance')?.textContent?.trim().split('\n')[0] || '{date_echeance}';
+            
+            formContenu.value = `Cher/Chère ${prenom},
 
-// Ajouter des classes aux autres éléments pour extraction
-document.querySelectorAll('dt').forEach(dt => {
-    if (dt.textContent.includes('Référence')) {
-        const dd = dt.nextElementSibling;
-        if (dd) dd.classList.add('cotisation-reference');
-    } else if (dt.textContent.includes('Échéance')) {
-        const dd = dt.nextElementSibling;
-        if (dd) dd.classList.add('cotisation-echeance');
-    } else if (dt.textContent.includes('Email')) {
-        const dd = dt.nextElementSibling;
-        if (dd) dd.classList.add('membre-email');
+Nous vous rappelons que votre cotisation (réf. ${reference}) d'un montant restant dû de ${montant} € est arrivée à échéance le ${dateEcheance}.
+
+Nous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.
+
+Cordialement,
+L'équipe de l'association`;
+        });
+    }
+    
+    if (templateUrgentBtn && formContenu) {
+        templateUrgentBtn.addEventListener('click', function() {
+            // Récupérer les informations du membre et de la cotisation
+            const prenom = document.querySelector('.membre-prenom')?.textContent || '{prenom}';
+            const nom = document.querySelector('.membre-nom')?.textContent || '{nom}';
+            const reference = document.querySelector('.cotisation-reference')?.textContent?.trim() || '{reference}';
+            const montant = document.getElementById('montantRestant')?.dataset?.value || '{montant}';
+            const dateEcheance = document.querySelector('.cotisation-echeance')?.textContent?.trim().split('\n')[0] || '{date_echeance}';
+            
+            formContenu.value = `Cher/Chère ${prenom},
+
+RAPPEL URGENT : Votre cotisation (réf. ${reference}) d'un montant de ${montant} € est en retard de paiement depuis le ${dateEcheance}.
+
+Afin d'éviter toute procédure supplémentaire, nous vous invitons à régulariser cette situation sous 7 jours.
+
+Pour toute question ou difficulté, n'hésitez pas à nous contacter rapidement.
+
+Cordialement,
+L'équipe de l'association`;
+        });
+    }
+    
+    if (templateFormalBtn && formContenu) {
+        templateFormalBtn.addEventListener('click', function() {
+            // Récupérer les informations du membre et de la cotisation
+            const prenom = document.querySelector('.membre-prenom')?.textContent || '{prenom}';
+            const nom = document.querySelector('.membre-nom')?.textContent || '{nom}';
+            const reference = document.querySelector('.cotisation-reference')?.textContent?.trim() || '{reference}';
+            const montant = document.getElementById('montantRestant')?.dataset?.value || '{montant}';
+            const dateEcheance = document.querySelector('.cotisation-echeance')?.textContent?.trim().split('\n')[0] || '{date_echeance}';
+            
+            formContenu.value = `Madame, Monsieur,
+
+Nous constatons qu'à ce jour, votre cotisation référencée ${reference}, d'un montant de ${montant} € et échue le ${dateEcheance}, demeure impayée.
+
+Conformément à nos statuts, nous vous prions de bien vouloir procéder au règlement de cette somme dans un délai de 15 jours à compter de la réception du présent courrier.
+
+À défaut de paiement dans le délai imparti, nous nous verrons contraints d'appliquer les mesures prévues par le règlement intérieur.
+
+Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées.
+
+Le Trésorier
+Association XYZ`;
+        });
+    }
+    
+    // Gestion des options de planification
+    const envoyerImmediatementSwitch = document.getElementById('envoyerImmediatement');
+    const optionsPlanification = document.getElementById('optionsPlanification');
+    
+    if (envoyerImmediatementSwitch && optionsPlanification) {
+        envoyerImmediatementSwitch.addEventListener('change', function() {
+            optionsPlanification.style.display = this.checked ? 'none' : 'block';
+        });
     }
 });
 </script>

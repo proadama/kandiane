@@ -1,133 +1,120 @@
 # apps/cotisations/signals.py
-from django.db.models.signals import post_save, post_delete, pre_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
-
-from .models import Cotisation, Paiement, HistoriqueCotisation
-from .utils import DecimalJSONEncoder
+from datetime import datetime
 import json
 
-@receiver(pre_save, sender=Cotisation)
-def pre_save_cotisation(sender, instance, **kwargs):
-    """
-    Signal déclenché avant la sauvegarde d'une cotisation.
-    Permet d'enregistrer l'état avant modification.
-    """
-    # Ne s'applique qu'aux mises à jour, pas aux créations
-    if instance.pk:
+from .models import Cotisation, Paiement, HistoriqueCotisation
+
+
+def format_date(date_value):
+    """Convertit une date en format ISO, quel que soit son type."""
+    if date_value is None:
+        return None
+    if isinstance(date_value, str):
         try:
-            # Stocker l'ancienne instance pour comparaison
-            instance._old_instance = Cotisation.objects.get(pk=instance.pk)
-        except Cotisation.DoesNotExist:
-            pass
+            # Essayer de parser la chaîne en date
+            return datetime.fromisoformat(date_value).isoformat()
+        except ValueError:
+            # Si c'est une date au format YYYY-MM-DD
+            try:
+                return datetime.strptime(date_value, '%Y-%m-%d').isoformat()
+            except ValueError:
+                return date_value  # Retourner tel quel si impossible à parser
+    else:
+        # Si c'est déjà un objet date ou datetime
+        return date_value.isoformat()
+
 
 @receiver(post_save, sender=Cotisation)
 def post_save_cotisation(sender, instance, created, **kwargs):
     """
-    Signal pour journaliser les modifications de cotisations.
+    Signal exécuté après la sauvegarde d'une cotisation.
+    Crée une entrée dans l'historique des cotisations.
     """
-    # Déterminer le type d'action
-    action = 'creation' if created else 'modification'
-    
-    # Préparer les détails de l'action
+    # Préparer les détails à enregistrer dans l'historique
     details = {
-        'montant': instance.montant,
-        'montant_restant': instance.montant_restant,
+        'reference': instance.reference,
+        'montant': float(instance.montant) if instance.montant else None,
+        'montant_restant': float(instance.montant_restant) if instance.montant_restant else None,
         'statut_paiement': instance.statut_paiement,
-        'date_emission': instance.date_emission.isoformat() if instance.date_emission else None,
-        'date_echeance': instance.date_echeance.isoformat() if instance.date_echeance else None,
+        'date_emission': format_date(instance.date_emission),
+        'date_echeance': format_date(instance.date_echeance),
+        'periode_debut': format_date(instance.periode_debut),
+        'periode_fin': format_date(instance.periode_fin),
     }
     
-    # Convertir les détails en JSON avec l'encodeur personnalisé
-    details_json = json.loads(json.dumps(details, cls=DecimalJSONEncoder))
-    
-    # Créer une entrée d'historique
+    # Créer l'entrée d'historique
     HistoriqueCotisation.objects.create(
         cotisation=instance,
-        action=action,
-        details=details_json,
-        utilisateur=instance.cree_par if created else instance.modifie_par
+        action='creation' if created else 'modification',
+        details=json.dumps(details),
+        utilisateur=instance.cree_par if created else instance.modifie_par,
+        date_action=timezone.now()
     )
 
-@receiver(post_delete, sender=Cotisation)
-def post_delete_cotisation(sender, instance, **kwargs):
-    """
-    Signal pour journaliser la suppression d'une cotisation.
-    """
-    # Préparer les détails de l'action
-    details = {
-        'montant': instance.montant,
-        'statut_paiement': instance.statut_paiement,
-        'date_suppression': instance.deleted_at.isoformat() if instance.deleted_at else None,
-    }
-    
-    # Convertir les détails en JSON avec l'encodeur personnalisé
-    details_json = json.loads(json.dumps(details, cls=DecimalJSONEncoder))
-    
-    # Créer une entrée d'historique
-    HistoriqueCotisation.objects.create(
-        cotisation=instance,
-        action='suppression',
-        details=details_json,
-        utilisateur=instance.modifie_par
-    )
 
 @receiver(post_save, sender=Paiement)
 def post_save_paiement(sender, instance, created, **kwargs):
     """
-    Signal pour journaliser les modifications de paiements.
+    Signal exécuté après la sauvegarde d'un paiement.
+    Met à jour le montant restant et le statut de la cotisation associée.
     """
-    # Déterminer le type d'action
-    action = 'creation' if created else 'modification'
+    # Mettre à jour la cotisation
+    cotisation = instance.cotisation
+    cotisation.recalculer_montant_restant()
+    cotisation.save(update_fields=['montant_restant', 'statut_paiement'])
     
-    # Mettre à jour la cotisation associée
-    if created:
-        instance.cotisation.recalculer_montant_restant()
-        instance.cotisation.save(update_fields=['montant_restant', 'statut_paiement'])
-    
-    # Journaliser la modification de la cotisation
+    # Enregistrer dans l'historique
     details = {
-        'montant': instance.montant,
-        'date_paiement': instance.date_paiement.isoformat() if instance.date_paiement else None,
+        'paiement_id': instance.id,
+        'montant': float(instance.montant) if instance.montant else None,
+        'date_paiement': format_date(instance.date_paiement),
         'mode_paiement': instance.mode_paiement.libelle if instance.mode_paiement else None,
         'type_transaction': instance.type_transaction,
+        'nouveau_montant_restant': float(cotisation.montant_restant) if cotisation.montant_restant else None,
+        'nouveau_statut_paiement': cotisation.statut_paiement,
     }
     
-    # Convertir les détails en JSON avec l'encodeur personnalisé
-    details_json = json.loads(json.dumps(details, cls=DecimalJSONEncoder))
-    
-    # Créer une entrée d'historique pour la cotisation
     HistoriqueCotisation.objects.create(
-        cotisation=instance.cotisation,
-        action=f'paiement_{action}',
-        details=details_json,
-        utilisateur=instance.cree_par if created else instance.modifie_par
+        cotisation=cotisation,
+        action='paiement_ajoute' if created else 'paiement_modifie',
+        details=json.dumps(details),
+        utilisateur=instance.cree_par if created else instance.modifie_par,
+        date_action=timezone.now()
     )
+
 
 @receiver(post_delete, sender=Paiement)
 def post_delete_paiement(sender, instance, **kwargs):
     """
-    Signal pour journaliser la suppression d'un paiement.
+    Signal exécuté après la suppression d'un paiement.
+    Met à jour le montant restant et le statut de la cotisation associée.
     """
-    # Mettre à jour la cotisation associée si elle existe encore
-    if instance.cotisation:
-        instance.cotisation.recalculer_montant_restant()
-        instance.cotisation.save(update_fields=['montant_restant', 'statut_paiement'])
+    # Vérifier si la cotisation existe encore
+    try:
+        cotisation = instance.cotisation
+        cotisation.recalculer_montant_restant()
+        cotisation.save(update_fields=['montant_restant', 'statut_paiement'])
         
-        # Journaliser la suppression
+        # Enregistrer dans l'historique
         details = {
-            'montant': instance.montant,
-            'date_paiement': instance.date_paiement.isoformat() if instance.date_paiement else None,
+            'paiement_id': instance.id,
+            'montant': float(instance.montant) if instance.montant else None,
+            'date_paiement': format_date(instance.date_paiement),
+            'mode_paiement': instance.mode_paiement.libelle if instance.mode_paiement else None,
             'type_transaction': instance.type_transaction,
+            'nouveau_montant_restant': float(cotisation.montant_restant) if cotisation.montant_restant else None,
+            'nouveau_statut_paiement': cotisation.statut_paiement,
         }
         
-        # Convertir les détails en JSON avec l'encodeur personnalisé
-        details_json = json.loads(json.dumps(details, cls=DecimalJSONEncoder))
-        
-        # Créer une entrée d'historique
         HistoriqueCotisation.objects.create(
-            cotisation=instance.cotisation,
-            action='paiement_suppression',
-            details=details_json,
-            utilisateur=instance.modifie_par
+            cotisation=cotisation,
+            action='paiement_supprime',
+            details=json.dumps(details),
+            date_action=timezone.now()
         )
+    except Cotisation.DoesNotExist:
+        # La cotisation a déjà été supprimée, rien à faire
+        pass

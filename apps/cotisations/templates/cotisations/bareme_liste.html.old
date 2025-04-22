@@ -24,7 +24,7 @@
                         <label for="type_membre" class="form-label">{% trans "Type de membre" %}</label>
                         <select name="type_membre" id="type_membre" class="form-select">
                             <option value="">{% trans "Tous les types" %}</option>
-                            {% for type in types_membres|default:'' %}
+                            {% for type in types_membres %}
                                 <option value="{{ type.id }}" {% if request.GET.type_membre == type.id|stringformat:"i" %}selected{% endif %}>
                                     {{ type.libelle }}
                                 </option>
@@ -86,7 +86,6 @@
                         </thead>
                         <tbody>
                             {% for bareme in baremes %}
-                            {% with today=today|default:current_date %}
                             <tr{% if not bareme.est_actif %} class="text-muted"{% endif %}>
                                 <td>{{ bareme.type_membre.libelle }}</td>
                                 <td>{{ bareme.montant|floatformat:2 }} €</td>
@@ -133,7 +132,6 @@
                                     </div>
                                 </td>
                             </tr>
-                            {% endwith %}
                             {% endfor %}
                         </tbody>
                     </table>
@@ -145,12 +143,12 @@
                     <ul class="pagination justify-content-center mt-4">
                         {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page=1{% if request.GET %}&{{ request.GET.urlencode|slice:'5:' }}{% endif %}" aria-label="{% trans 'Première' %}">
+                            <a class="page-link" href="?page=1" aria-label="{% trans 'Première' %}">
                                 <span aria-hidden="true">&laquo;&laquo;</span>
                             </a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET %}&{{ request.GET.urlencode|slice:'5:' }}{% endif %}" aria-label="{% trans 'Précédente' %}">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="{% trans 'Précédente' %}">
                                 <span aria-hidden="true">&laquo;</span>
                             </a>
                         </li>
@@ -174,19 +172,19 @@
                             </li>
                             {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}{% if request.GET %}&{{ request.GET.urlencode|slice:'5:' }}{% endif %}">{{ num }}</a>
+                                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
                             </li>
                             {% endif %}
                         {% endfor %}
                         
                         {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET %}&{{ request.GET.urlencode|slice:'5:' }}{% endif %}" aria-label="{% trans 'Suivante' %}">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="{% trans 'Suivante' %}">
                                 <span aria-hidden="true">&raquo;</span>
                             </a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET %}&{{ request.GET.urlencode|slice:'5:' }}{% endif %}" aria-label="{% trans 'Dernière' %}">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" aria-label="{% trans 'Dernière' %}">
                                 <span aria-hidden="true">&raquo;&raquo;</span>
                             </a>
                         </li>
@@ -235,7 +233,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <h6 class="card-subtitle text-muted">{% trans "Barèmes actifs" %}</h6>
-                                        <h4 class="card-title mb-0">{{ nb_baremes_actifs|default:"0" }}</h4>
+                                        <h4 class="card-title mb-0">{{ nb_baremes_actifs }}</h4>
                                     </div>
                                     <div class="fs-2 text-success">
                                         <i class="fas fa-check-circle"></i>
@@ -250,7 +248,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <h6 class="card-subtitle text-muted">{% trans "Barèmes inactifs" %}</h6>
-                                        <h4 class="card-title mb-0">{{ nb_baremes_inactifs|default:"0" }}</h4>
+                                        <h4 class="card-title mb-0">{{ nb_baremes_inactifs }}</h4>
                                     </div>
                                     <div class="fs-2 text-secondary">
                                         <i class="fas fa-times-circle"></i>
@@ -265,7 +263,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <h6 class="card-subtitle text-muted">{% trans "Types de membre couverts" %}</h6>
-                                        <h4 class="card-title mb-0">{{ nb_types_couverts|default:"0" }} / {{ nb_types_total|default:"0" }}</h4>
+                                        <h4 class="card-title mb-0">{{ nb_types_couverts }} / {{ nb_types_total }}</h4>
                                     </div>
                                     <div class="fs-2 text-primary">
                                         <i class="fas fa-users"></i>
@@ -300,7 +298,7 @@
                     <input type="hidden" id="bareme_id" name="bareme_id">
                     <div class="mb-3">
                         <label for="date_fin_validite" class="form-label">{% trans "Nouvelle date de fin de validité" %}</label>
-                        <input type="date" class="form-control" id="date_fin_validite" name="date_fin_validite">
+                        <input type="date" class="form-control" id="date_fin_validite" name="date_fin_validite" required>
                         <div class="form-text">{% trans "Laissez vide pour une validité sans limite." %}</div>
                     </div>
                 </form>
@@ -341,13 +339,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Soumettre automatiquement le formulaire lors de la modification d'un filtre
+    // Gestion des filtres - mettre à jour l'URL avec les paramètres
     const filterForm = document.querySelector('form[method="get"]');
     if (filterForm) {
         const selects = filterForm.querySelectorAll('select');
         selects.forEach(select => {
             select.addEventListener('change', function() {
-                filterForm.submit();
+                // Soumettre automatiquement le formulaire lors de la modification d'un filtre
+                // Mais on pourrait aussi juste mettre à jour l'URL sans recharger
+                // filterForm.submit();
             });
         });
     }
