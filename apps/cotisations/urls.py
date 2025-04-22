@@ -33,6 +33,7 @@ urlpatterns = [
     path('rappels/', views.rappel_list, name='rappel_liste'),
     path('rappels/<int:pk>/', views.rappel_detail, name='rappel_detail'),
     path('rappels/nouveau/<int:cotisation_id>/', views.rappel_create, name='rappel_creer'),
+    path('rappels/<int:rappel_id>/envoyer/', views.envoyer_rappel, name='envoyer_rappel'),
     path('rappels/<int:rappel_id>/contenu/', views.rappel_contenu_ajax, name='rappel_contenu_ajax'),
     path('rappels/<int:rappel_id>/envoyer/', views.rappel_envoi_ajax, name='rappel_envoi_ajax'),
     path('rappels/<int:rappel_id>/supprimer/', views.rappel_supprimer_ajax, name='rappel_supprimer_ajax'),
