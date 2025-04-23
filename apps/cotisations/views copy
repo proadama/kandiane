@@ -65,6 +65,10 @@ class DashboardView(StaffRequiredMixin, TemplateView):
         # Définir les dates de début et de fin selon la période
         today = timezone.now().date()
         
+        # Ajouter la date actuelle au contexte pour les templates
+        context['now'] = today
+        context['date_echeance_fin_30j'] = (today + timezone.timedelta(days=30)).strftime('%Y-%m-%d')
+        
         if periode == 'month':
             # Mois en cours
             date_debut = today.replace(day=1)
@@ -126,40 +130,27 @@ class DashboardView(StaffRequiredMixin, TemplateView):
             total=Sum('montant')
         ).order_by('type_membre__libelle')
         
-        # Définir les noms des mois en français
-        mois_fr = [
-            'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-            'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
-        ]
-        
         # Cotisations par mois (pour graphique)
         cotisations_par_mois = []
         paiements_par_mois = []
-        cotisations_non_payees_par_mois = []
         
         if periode == 'year':
-            for month_idx, month_name in enumerate(mois_fr, 1):
-                # Cotisations émises ce mois
+            for month in range(1, 13):
+                month_name = datetime.date(2000, month, 1).strftime('%B')
+                
                 month_cotisations = Cotisation.objects.filter(
                     date_emission__year=annee,
-                    date_emission__month=month_idx
+                    date_emission__month=month
                 )
                 
-                # Paiements reçus ce mois
                 month_paiements = Paiement.objects.filter(
                     date_paiement__year=annee,
-                    date_paiement__month=month_idx,
+                    date_paiement__month=month,
                     type_transaction='paiement'
-                )
-                
-                # Cotisations non payées émises ce mois
-                month_non_payees = month_cotisations.filter(
-                    statut_paiement__in=['non_payee', 'partiellement_payee']
                 )
                 
                 montant_cotisations = month_cotisations.aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
                 montant_paiements = month_paiements.aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
-                montant_non_payees = month_non_payees.aggregate(total=Sum('montant_restant')).get('total') or Decimal('0.00')
                 
                 cotisations_par_mois.append({
                     'month': month_name,
@@ -170,22 +161,6 @@ class DashboardView(StaffRequiredMixin, TemplateView):
                     'month': month_name,
                     'total': float(montant_paiements)
                 })
-                
-                cotisations_non_payees_par_mois.append({
-                    'month': month_name,
-                    'total': float(montant_non_payees)
-                })
-        
-        # TOP 5 des membres avec le plus de cotisations impayées
-        top_membres_impayes = Cotisation.objects.filter(
-            statut_paiement__in=['non_payee', 'partiellement_payee']
-        ).values(
-            'membre__id', 
-            'membre__nom', 
-            'membre__prenom'
-        ).annotate(
-            total=Sum('montant_restant')
-        ).order_by('-total')[:5]
         
         # Cotisations en retard et à échéance proche
         cotisations_retard = Cotisation.objects.en_retard()
@@ -203,20 +178,15 @@ class DashboardView(StaffRequiredMixin, TemplateView):
             'taux_recouvrement': taux_recouvrement,
             'cotisations_par_statut': cotisations_par_statut,
             'cotisations_par_type': cotisations_par_type,
-            'cotisations_par_mois': json.dumps(cotisations_par_mois),
-            'paiements_par_mois': json.dumps(paiements_par_mois),
-            'cotisations_non_payees_par_mois': json.dumps(cotisations_non_payees_par_mois),
+            'cotisations_par_mois': json.dumps(cotisations_par_mois, cls=ExtendedJSONEncoder),
+            'paiements_par_mois': json.dumps(paiements_par_mois, cls=ExtendedJSONEncoder),
             'cotisations_retard': cotisations_retard,
             'cotisations_echeance': cotisations_echeance,
             'nb_cotisations_retard': cotisations_retard.count(),
             'nb_cotisations_echeance': cotisations_echeance.count(),
-            'top_membres_impayes': top_membres_impayes,
-            'now': timezone.now(),
         })
         
         return context
-
-    
 
 
 class CotisationListView(StaffRequiredMixin, ListView):
