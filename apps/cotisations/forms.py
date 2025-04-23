@@ -109,8 +109,9 @@ class CotisationForm(forms.ModelForm):
                 'periode_fin': today.replace(year=today.year + 1) - timezone.timedelta(days=1),
             })
             
-            # Masquer le champ référence si génération automatique
-            self.fields['reference'].widget = forms.HiddenInput()
+            # CORRECTION: Rendre le champ référence non-requis si génération automatique
+            # Note: Nous ne le masquons plus avec HiddenInput car cela cause des problèmes
+            self.fields['reference'].required = False
         else:
             # Pour une modification, on ne peut pas changer certains champs
             self.fields['membre'].disabled = True
@@ -122,17 +123,6 @@ class CotisationForm(forms.ModelForm):
             # Cacher les champs spécifiques à la création
             self.fields['generer_reference'].widget = forms.HiddenInput()
             self.fields['utiliser_bareme'].widget = forms.HiddenInput()
-        
-        # Filtrer les barèmes en fonction du type de membre sélectionné
-        # (Note: ceci sera complété par JavaScript côté client)
-        if 'type_membre' in self.data:
-            try:
-                type_id = int(self.data.get('type_membre'))
-                self.fields['bareme'].queryset = BaremeCotisation.objects.filter(
-                    type_membre_id=type_id
-                ).order_by('-date_debut_validite')
-            except (ValueError, TypeError):
-                pass
     
     def clean(self):
         cleaned_data = super().clean()
@@ -157,13 +147,20 @@ class CotisationForm(forms.ModelForm):
         
         # Pour un nouvel enregistrement
         if not self.instance.pk:
-            # Vérifier si la référence doit être générée ou est requise
-            generer_reference = cleaned_data.get('generer_reference')
-            reference = cleaned_data.get('reference')
+            # Obtenir la valeur de generer_reference
+            generer_reference = cleaned_data.get('generer_reference', True)
             
-            if not generer_reference and not reference:
-                self.add_error('reference', 
-                    _("Une référence est requise si la génération automatique est désactivée."))
+            # Si génération automatique activée, la référence n'est pas requise
+            # Si génération automatique désactivée, la référence est requise
+            if generer_reference:
+                # Supprimer toute erreur sur le champ référence si génération auto
+                if 'reference' in self._errors:
+                    del self._errors['reference']
+            else:
+                # Vérifier que la référence est fournie si génération auto désactivée
+                reference = cleaned_data.get('reference')
+                if not reference:
+                    self.add_error('reference', _("Une référence est requise si la génération automatique est désactivée."))
         
         return cleaned_data
     
@@ -184,17 +181,26 @@ class CotisationForm(forms.ModelForm):
             if self.user:
                 instance.cree_par = self.user
             
-            # Générer une référence si demandé
+            # Amélioration de la gestion de la référence
             if self.cleaned_data.get('generer_reference'):
-                # La référence sera générée dans la méthode save() du modèle
+                # Marquer clairement que la référence doit être générée
                 instance.reference = ''
+                # Ajouter un indicateur dans les métadonnées pour le suivi
+                if not instance.metadata:
+                    instance.metadata = {}
+                instance.metadata['reference_auto_generated'] = True
         else:
             # Pour une modification, enregistrer l'utilisateur qui modifie
             if self.user:
                 instance.modifie_par = self.user
         
         if commit:
-            instance.save()
+            try:
+                instance.save()
+            except Exception as e:
+                # Journaliser l'erreur pour faciliter le diagnostic
+                logger.error(f"Erreur lors de la sauvegarde de la cotisation: {str(e)}")
+                raise
         
         return instance
 

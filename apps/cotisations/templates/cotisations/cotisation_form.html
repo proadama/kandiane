@@ -147,11 +147,13 @@
                         </div>
                         {% endif %}
                         
-                        <!-- Référence -->
-                        <div class="col-md-12" id="referenceContainer" {% if not form.instance.pk and form.initial.generer_reference %}style="display:none;"{% endif %}>
+                        <!-- Référence - MODIFIÉ pour corriger le problème -->
+                        <div class="col-md-12" id="referenceContainer">
                             <div class="form-group{% if form.reference.errors %} is-invalid{% endif %}">
                                 {{ form.reference.label_tag }}
                                 {{ form.reference }}
+                                <!-- Champ caché pour s'assurer que la référence est envoyée même quand le champ est masqué -->
+                                <input type="hidden" id="reference_placeholder" name="reference_auto" value="auto_generate" disabled>
                                 {% if form.reference.help_text %}
                                 <small class="form-text text-muted">{{ form.reference.help_text }}</small>
                                 {% endif %}
@@ -311,6 +313,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const genererReferenceCheckbox = document.getElementById('id_generer_reference');
     const referenceContainer = document.getElementById('referenceContainer');
     const referenceInput = document.getElementById('id_reference');
+    const referencePlaceholder = document.getElementById('reference_placeholder');
     const cotisationForm = document.getElementById('cotisationForm');
     
     // Fonction pour récupérer les barèmes disponibles pour un type de membre
@@ -539,23 +542,53 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Gestion de la génération de référence
-    if (genererReferenceCheckbox && referenceContainer) {
-        genererReferenceCheckbox.addEventListener('change', function() {
-            if (this.checked) {
+    // SOLUTION AU PROBLÈME DE RÉFÉRENCE - Code restructuré et corrigé
+    if (genererReferenceCheckbox && referenceContainer && referenceInput && referencePlaceholder) {
+        // Fonction pour mettre à jour la visibilité et l'état du champ référence
+        function updateReferenceField() {
+            if (genererReferenceCheckbox.checked) {
+                // Si génération auto activée:
                 referenceContainer.style.display = 'none';
-                referenceInput.required = false;
+                referenceInput.value = ''; // Vider le champ
+                referenceInput.required = false; // Ne pas le rendre requis
+                
+                // Activer le champ caché pour signaler que la référence doit être générée
+                referencePlaceholder.disabled = false;
             } else {
+                // Si génération auto désactivée:
                 referenceContainer.style.display = 'block';
                 referenceInput.required = true;
+                
+                // Désactiver le champ caché
+                referencePlaceholder.disabled = true;
             }
+        }
+        
+        // Initialiser l'état du champ
+        updateReferenceField();
+        
+        // Ajouter l'écouteur d'événement
+        genererReferenceCheckbox.addEventListener('change', updateReferenceField);
+        
+        // Ajouter une validation spécifique au champ de référence
+        referenceInput.addEventListener('input', function() {
+            // Nettoyer les espaces et caractères spéciaux
+            this.value = this.value.trim().replace(/[^\w\-]/g, '');
         });
     }
     
-    // Validation côté client
+    // Validation côté client améliorée
     if (cotisationForm) {
         cotisationForm.addEventListener('submit', function(event) {
             let isValid = true;
+            
+            // Réinitialiser toutes les erreurs précédentes
+            document.querySelectorAll('.is-invalid').forEach(el => {
+                el.classList.remove('is-invalid');
+            });
+            document.querySelectorAll('.invalid-feedback').forEach(el => {
+                el.remove();
+            });
             
             // Vérifier si le membre est sélectionné
             const membreSelect = document.getElementById('id_membre');
@@ -564,8 +597,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 highlightField(membreSelect, '{% trans "Un membre doit être sélectionné." %}');
             }
             
+            // Vérifier si le type de membre est sélectionné
+            if (!typeMembreSelect.value) {
+                isValid = false;
+                highlightField(typeMembreSelect, '{% trans "Un type de membre doit être sélectionné." %}');
+            }
+            
             // Vérifier si le montant est valide
-            if (montantInput.value <= 0) {
+            if (!montantInput.value || parseFloat(montantInput.value) <= 0) {
                 isValid = false;
                 highlightField(montantInput, '{% trans "Le montant doit être supérieur à zéro." %}');
             }
@@ -573,31 +612,76 @@ document.addEventListener('DOMContentLoaded', function() {
             // Vérifier les dates
             const dateEmission = document.getElementById('id_date_emission');
             const dateEcheance = document.getElementById('id_date_echeance');
+            const periodeDebut = document.getElementById('id_periode_debut');
+            const periodeFin = document.getElementById('id_periode_fin');
             
-            if (new Date(dateEcheance.value) < new Date(dateEmission.value)) {
+            if (!dateEmission.value) {
                 isValid = false;
-                highlightField(dateEcheance, '{% trans "La date d\'échéance doit être postérieure à la date d\'émission." %}');
+                highlightField(dateEmission, '{% trans "La date d'émission est requise." %}');
             }
             
-            // Vérifier la référence si nécessaire
+            if (!dateEcheance.value) {
+                isValid = false;
+                highlightField(dateEcheance, '{% trans "La date d'échéance est requise." %}');
+            } else if (new Date(dateEcheance.value) < new Date(dateEmission.value)) {
+                isValid = false;
+                highlightField(dateEcheance, '{% trans "La date d'échéance doit être postérieure à la date d'émission." %}');
+            }
+            
+            if (!periodeDebut.value) {
+                isValid = false;
+                highlightField(periodeDebut, '{% trans "La date de début de période est requise." %}');
+            }
+            
+            if (periodeFin.value && new Date(periodeFin.value) < new Date(periodeDebut.value)) {
+                isValid = false;
+                highlightField(periodeFin, '{% trans "La date de fin de période doit être postérieure à la date de début." %}');
+            }
+            
+            // Vérifier la référence uniquement si la génération automatique est désactivée
             if (genererReferenceCheckbox && !genererReferenceCheckbox.checked && !referenceInput.value) {
                 isValid = false;
                 highlightField(referenceInput, '{% trans "Une référence est requise si la génération automatique est désactivée." %}');
             }
             
+            // Ajouter une sécurité pour s'assurer que le formulaire ne peut pas être soumis si invalide
             if (!isValid) {
                 event.preventDefault();
+                event.stopPropagation();
+                
+                // Afficher un message global en haut du formulaire
+                const errorAlert = document.createElement('div');
+                errorAlert.className = 'alert alert-danger mb-4';
+                errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>{% trans "Veuillez corriger les erreurs ci-dessous." %}';
+                
+                // Ajouter l'alerte au début du formulaire s'il n'y en a pas déjà une
+                if (!document.querySelector('.alert-danger')) {
+                    cotisationForm.prepend(errorAlert);
+                }
+                
+                // Scroll vers la première erreur
+                const firstInvalidField = document.querySelector('.is-invalid');
+                if (firstInvalidField) {
+                    firstInvalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
             }
         });
     }
     
-    // Fonction pour mettre en évidence un champ en erreur
+    // Fonction améliorée pour mettre en évidence un champ en erreur
     function highlightField(field, message) {
+        if (!field) return;
+        
         field.classList.add('is-invalid');
         
         // Ajouter un message d'erreur si pas déjà présent
-        const errorElem = field.parentNode.querySelector('.invalid-feedback');
-        if (!errorElem) {
+        let container = field.closest('.form-group');
+        if (!container) {
+            container = field.parentNode;
+        }
+        
+        // Créer le div d'erreur s'il n'existe pas
+        if (!container.querySelector('.invalid-feedback')) {
             const errorDiv = document.createElement('div');
             errorDiv.className = 'invalid-feedback d-block';
             errorDiv.textContent = message;
@@ -605,10 +689,28 @@ document.addEventListener('DOMContentLoaded', function() {
             if (field.parentNode.classList.contains('input-group')) {
                 field.parentNode.parentNode.appendChild(errorDiv);
             } else {
-                field.parentNode.appendChild(errorDiv);
+                container.appendChild(errorDiv);
             }
         }
+        
+        // Ajouter un attribut aria pour l'accessibilité
+        field.setAttribute('aria-invalid', 'true');
+        field.setAttribute('aria-describedby', field.id + '-error');
     }
+    
+    // Protection XSS supplémentaire
+    // Échapper toutes les entrées utilisateur pour prévenir les attaques XSS
+    document.querySelectorAll('input[type="text"], textarea').forEach(input => {
+        input.addEventListener('input', function() {
+            // Échapper les caractères HTML dangereux
+            this.value = this.value
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        });
+    });
 });
 </script>
 {% endblock %}

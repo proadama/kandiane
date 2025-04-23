@@ -250,9 +250,13 @@ class Cotisation(BaseModel):
             if self.montant_restant is None or self.montant_restant == 0:
                 self.montant_restant = self.montant
             
-            # Générer une référence si elle n'existe pas
-            if not self.reference:
+            # Génération de référence améliorée
+            if not self.reference or self.reference == 'auto':
                 self.reference = self._generer_reference()
+                
+            # Vérification de sécurité: pas de cotisation sans référence
+            if not self.reference:
+                raise ValueError("Impossible de créer une cotisation sans référence")
             
             # Extraire mois et année si non définis
             if not self.mois and self.periode_debut:
