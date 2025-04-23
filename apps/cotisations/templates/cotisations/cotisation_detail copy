@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block page_title %}
-{% trans "Détails de la cotisation" %} {{ cotisation.reference|escape }}
+{% trans "Détails de la cotisation" %} {{ cotisation.reference }}
 {% endblock %}
 
 {% block actions %}
@@ -41,14 +41,14 @@
                 <div class="card-body">
                     <dl class="row mb-0">
                         <dt class="col-sm-5">{% trans "Référence" %}</dt>
-                        <dd class="col-sm-7" class="cotisation-reference">{{ cotisation.reference|escape }}</dd>
+                        <dd class="col-sm-7" class="cotisation-reference">{{ cotisation.reference }}</dd>
                         
                         <dt class="col-sm-5">{% trans "Membre" %}</dt>
                         <dd class="col-sm-7">
                             <a href="{% url 'membres:membre_detail' pk=cotisation.membre.pk %}">
-                                <span class="membre-prenom">{{ cotisation.membre.prenom|escape }}</span> <span class="membre-nom">{{ cotisation.membre.nom|escape }}</span>
+                                <span class="membre-prenom">{{ cotisation.membre.prenom }}</span> <span class="membre-nom">{{ cotisation.membre.nom }}</span>
                             </a>
-                            <br><small class="text-muted membre-email">{{ cotisation.membre.email|escape }}</small>
+                            <br><small class="text-muted membre-email">{{ cotisation.membre.email }}</small>
                         </dd>
                         
                         <dt class="col-sm-5">{% trans "Date d'émission" %}</dt>
@@ -85,7 +85,7 @@
                 <div class="card-body">
                     <dl class="row mb-0">
                         <dt class="col-sm-5">{% trans "Type de membre" %}</dt>
-                        <dd class="col-sm-7">{{ cotisation.type_membre.libelle|default:"-"|escape }}</dd>
+                        <dd class="col-sm-7">{{ cotisation.type_membre.libelle|default:"-" }}</dd>
                         
                         <dt class="col-sm-5">{% trans "Barème" %}</dt>
                         <dd class="col-sm-7">
@@ -101,7 +101,7 @@
                         
                         <dt class="col-sm-5">{% trans "Montant payé" %}</dt>
                         <dd class="col-sm-7">
-                            <span id="totalPaye">{{ cotisation.montant|sub:cotisation.montant_restant|floatformat:2 }} €</span>
+                            <span id="totalPaye">{{ cotisation.montant_paye|default_if_none:0|floatformat:2 }} €</span>
                         </dd>
                         
                         <dt class="col-sm-5">{% trans "Montant restant" %}</dt>
@@ -178,7 +178,7 @@
                                 <tr id="paiement-{{ paiement.id }}">
                                     <td>{{ paiement.date_paiement|date:"d/m/Y H:i" }}</td>
                                     <td>{{ paiement.montant|floatformat:2 }} €</td>
-                                    <td>{{ paiement.mode_paiement|default:"-"|escape }}</td>
+                                    <td>{{ paiement.mode_paiement|default:"-" }}</td>
                                     <td>
                                         <span class="badge 
                                             {% if paiement.type_transaction == 'paiement' %}bg-success
@@ -187,7 +187,7 @@
                                             {{ paiement.get_type_transaction_display }}
                                         </span>
                                     </td>
-                                    <td>{{ paiement.reference_paiement|default:"-"|escape }}</td>
+                                    <td>{{ paiement.reference_paiement|default:"-" }}</td>
                                     <td class="text-center">
                                         <div class="btn-group">
                                             <a href="{% url 'cotisations:paiement_detail' pk=paiement.pk %}" class="btn btn-sm btn-outline-primary">
@@ -345,14 +345,14 @@
                                     </td>
                                     <td>
                                         {% if entry.utilisateur %}
-                                        {{ entry.utilisateur.username|escape }}
+                                        {{ entry.utilisateur.username }}
                                         {% else %}
                                         <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
                                     <td>
                                         <button type="button" class="btn btn-sm btn-link voir-details"
-                                                data-details="{{ entry.details|escape }}"
+                                                data-details="{{ entry.details|safe }}"
                                                 data-bs-toggle="modal" data-bs-target="#detailsModal">
                                             {% trans "Voir les détails" %}
                                         </button>
@@ -402,7 +402,7 @@
                         <select class="form-select" id="formModePaiement" name="mode_paiement" required>
                             <option value="">{% trans "Sélectionnez un mode de paiement" %}</option>
                             {% for mode in modes_paiement %}
-                            <option value="{{ mode.id }}">{{ mode.libelle|escape }}</option>
+                            <option value="{{ mode.id }}">{{ mode.libelle }}</option>
                             {% empty %}
                             <option value="1">{% trans "Virement" %}</option>
                             <option value="2">{% trans "Chèque" %}</option>
@@ -428,12 +428,12 @@
                     
                     <div class="mb-3">
                         <label for="formReference" class="form-label">{% trans "Référence de paiement" %}</label>
-                        <input type="text" class="form-control" id="formReference" name="reference_paiement" placeholder="{% trans 'Ex: VIREMENT-123456' %}" maxlength="100">
+                        <input type="text" class="form-control" id="formReference" name="reference_paiement" placeholder="{% trans 'Ex: VIREMENT-123456' %}">
                     </div>
                     
                     <div class="mb-3">
                         <label for="formCommentaire" class="form-label">{% trans "Commentaire" %}</label>
-                        <textarea class="form-control" id="formCommentaire" name="commentaire" rows="2" maxlength="500"></textarea>
+                        <textarea class="form-control" id="formCommentaire" name="commentaire" rows="2"></textarea>
                     </div>
                 </form>
             </div>
@@ -474,7 +474,7 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="formNiveau" class="form-label">{% trans "Niveau de rappel" %}</label>
-                                <input type="number" class="form-control" id="formNiveau" name="niveau" value="{% if rappels %}{{ rappels.count|add:'1' }}{% else %}1{% endif %}" min="1" max="5" required>
+                                <input type="number" class="form-control" id="formNiveau" name="niveau" value="{% if rappels %}{{ rappels.count|add:'1' }}{% else %}1{% endif %}" min="1" required>
                                 <div class="form-text">
                                     {% trans "1: Premier rappel, 2: Relance, 3: Mise en demeure, etc." %}
                                 </div>
@@ -491,9 +491,9 @@
                                 <button type="button" class="btn btn-outline-secondary" id="templateFormal">{% trans "Modèle formel" %}</button>
                             </div>
                         </div>
-                        <textarea class="form-control" id="formContenu" name="contenu" rows="8" required maxlength="2000"></textarea>
+                        <textarea class="form-control" id="formContenu" name="contenu" rows="8" required></textarea>
                         <div class="form-text">
-                            {% trans "Variables disponibles: {prenom}, {nom}, {reference}, {montant}, {date_echeance}, {date_limite}" %}
+                            {% trans "Variables disponibles: {prenom}, {nom}, {reference}, {montant}, {date_echeance}" %}
                         </div>
                     </div>
                     
@@ -511,7 +511,7 @@
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label for="formDatePlanification" class="form-label">{% trans "Date d'envoi" %}</label>
-                                        <input type="date" class="form-control" id="formDatePlanification" name="date_planification" min="{{ now|date:'Y-m-d' }}">
+                                        <input type="date" class="form-control" id="formDatePlanification" name="date_planification" min="{{ now|default:''|date:'Y-m-d' }}">
                                     </div>
                                     <div class="col-md-6">
                                         <label for="formHeurePlanification" class="form-label">{% trans "Heure d'envoi" %}</label>
@@ -589,13 +589,6 @@
     opacity: 1;
     transform: translateY(0);
 }
-
-/* Protection contre les attaques XSS dans les modals */
-#contenuRappel, #detailsHistorique {
-    overflow-x: auto;
-    max-width: 100%;
-    word-break: break-word;
-}
 </style>
 {% endblock %}
 
@@ -638,13 +631,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Afficher le contenu du rappel de manière sécurisée
+    // Afficher le contenu du rappel
     const voirContenuBtns = document.querySelectorAll('.voir-contenu');
     const contenuRappel = document.getElementById('contenuRappel');
     
     voirContenuBtns.forEach(btn => {
         btn.addEventListener('click', function() {
-            // Utilisation de textContent pour éviter les attaques XSS
             contenuRappel.textContent = this.getAttribute('data-contenu');
         });
     });
@@ -657,7 +649,6 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             const detailsStr = this.getAttribute('data-details');
             try {
-                // Analyser le JSON de manière sécurisée
                 const details = JSON.parse(detailsStr);
                 detailsTableBody.innerHTML = '';
                 
@@ -708,7 +699,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Gestion des templates de rappel avec utilisation du filtre add_days
+    // Gestion des templates de rappel
     const templateDefaultBtn = document.getElementById('templateDefault');
     const templateUrgentBtn = document.getElementById('templateUrgent');
     const templateFormalBtn = document.getElementById('templateFormal');
@@ -723,16 +714,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const montant = document.getElementById('montantRestant')?.dataset?.value || '{montant}';
             const dateEcheance = document.querySelector('.cotisation-echeance')?.textContent?.trim().split('\n')[0] || '{date_echeance}';
             
-            // Calculer la date limite (échéance + 7 jours) - simulation du filtre add_days
-            const dateLimite = new Date();
-            dateLimite.setDate(dateLimite.getDate() + 7);
-            const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
-            
             formContenu.value = `Cher/Chère ${prenom},
 
 Nous vous rappelons que votre cotisation (réf. ${reference}) d'un montant restant dû de ${montant} € est arrivée à échéance le ${dateEcheance}.
 
-Nous vous remercions de bien vouloir procéder au règlement avant le ${dateLimiteStr}.
+Nous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.
 
 Cordialement,
 L'équipe de l'association`;
@@ -748,16 +734,11 @@ L'équipe de l'association`;
             const montant = document.getElementById('montantRestant')?.dataset?.value || '{montant}';
             const dateEcheance = document.querySelector('.cotisation-echeance')?.textContent?.trim().split('\n')[0] || '{date_echeance}';
             
-            // Calculer la date limite (aujourd'hui + 5 jours) - simulation du filtre add_days
-            const dateLimite = new Date();
-            dateLimite.setDate(dateLimite.getDate() + 5);
-            const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
-            
             formContenu.value = `Cher/Chère ${prenom},
 
 RAPPEL URGENT : Votre cotisation (réf. ${reference}) d'un montant de ${montant} € est en retard de paiement depuis le ${dateEcheance}.
 
-Afin d'éviter toute procédure supplémentaire, nous vous invitons à régulariser cette situation avant le ${dateLimiteStr}.
+Afin d'éviter toute procédure supplémentaire, nous vous invitons à régulariser cette situation sous 7 jours.
 
 Pour toute question ou difficulté, n'hésitez pas à nous contacter rapidement.
 
@@ -766,15 +747,29 @@ L'équipe de l'association`;
         });
     }
     
-    // Protection contre les attaques XSS dans les inputs
-    document.querySelectorAll('input[type="text"], textarea').forEach(input => {
-        input.addEventListener('input', function() {
-            // Échappement des caractères HTML potentiellement dangereux
-            this.value = this.value
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;");
+    if (templateFormalBtn && formContenu) {
+        templateFormalBtn.addEventListener('click', function() {
+            // Récupérer les informations du membre et de la cotisation
+            const prenom = document.querySelector('.membre-prenom')?.textContent || '{prenom}';
+            const nom = document.querySelector('.membre-nom')?.textContent || '{nom}';
+            const reference = document.querySelector('.cotisation-reference')?.textContent?.trim() || '{reference}';
+            const montant = document.getElementById('montantRestant')?.dataset?.value || '{montant}';
+            const dateEcheance = document.querySelector('.cotisation-echeance')?.textContent?.trim().split('\n')[0] || '{date_echeance}';
+            
+            formContenu.value = `Madame, Monsieur,
+
+Nous constatons qu'à ce jour, votre cotisation référencée ${reference}, d'un montant de ${montant} € et échue le ${dateEcheance}, demeure impayée.
+
+Conformément à nos statuts, nous vous prions de bien vouloir procéder au règlement de cette somme dans un délai de 15 jours à compter de la réception du présent courrier.
+
+À défaut de paiement dans le délai imparti, nous nous verrons contraints d'appliquer les mesures prévues par le règlement intérieur.
+
+Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées.
+
+Le Trésorier
+Association XYZ`;
         });
-    });
+    }
     
     // Gestion des options de planification
     const envoyerImmediatementSwitch = document.getElementById('envoyerImmediatement');

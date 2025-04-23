@@ -31,6 +31,7 @@ handler500 = 'apps.core.views.error_500'
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('apps.core.urls')),
+    path('', include('apps.core.urls', namespace='core')),
     path('accounts/', include('apps.accounts.urls')),
     path('membres/', include('apps.membres.urls')),
     path('cotisations/', include('apps.cotisations.urls')),

@@ -2,6 +2,7 @@
 from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render
+from django.utils import timezone
 
 class HomeView(TemplateView):
     """
@@ -41,3 +42,13 @@ def error_500(request):
     Vue pour les erreurs 500.
     """
     return render(request, 'core/errors/500.html', status=500)
+
+
+def test_filters(request):
+    """
+    Vue pour tester les filtres personnalisés.
+    """
+    context = {
+        'current_date': timezone.now().date(),
+    }
+    return render(request, 'core/test_filters.html', context)

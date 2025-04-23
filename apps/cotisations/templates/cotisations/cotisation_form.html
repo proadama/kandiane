@@ -1,6 +1,15 @@
 {% extends "cotisations/base.html" %}
 {% load i18n %}
 {% load static %}
+{% load custom_filters %}
+
+<!-- Pour soustraire le montant restant du montant total -->
+{% with cotisation.montant|sub:cotisation.montant_restant as montant_paye %}
+    <p>Montant payé: {{ montant_paye }} €</p>
+{% endwith %}
+
+<!-- Pour ajouter 30 jours à la date d'émission -->
+<p>Date d'échéance suggérée: {{ cotisation.date_emission|add_days:30 }}</p>
 
 {% block breadcrumb %}
 {% if form.instance.pk %}

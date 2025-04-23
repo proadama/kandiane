@@ -1,7 +1,6 @@
 {% extends "cotisations/base.html" %}
 {% load i18n %}
 {% load static %}
-{% load cotisations_extras %}
 
 {% block breadcrumb %}
 {% if form.instance.pk %}
@@ -35,12 +34,12 @@
             <div class="card-body">
                 <dl class="row mb-0">
                     <dt class="col-sm-5">{% trans "Référence" %}</dt>
-                    <dd class="col-sm-7">{{ cotisation.reference|escape }}</dd>
+                    <dd class="col-sm-7">{{ cotisation.reference }}</dd>
                     
                     <dt class="col-sm-5">{% trans "Membre" %}</dt>
                     <dd class="col-sm-7">
-                        {{ cotisation.membre.prenom|escape }} {{ cotisation.membre.nom|escape }}
-                        <br><small class="text-muted">{{ cotisation.membre.email|escape }}</small>
+                        {{ cotisation.membre.prenom }} {{ cotisation.membre.nom }}
+                        <br><small class="text-muted">{{ cotisation.membre.email }}</small>
                     </dd>
                     
                     <dt class="col-sm-5">{% trans "Montant total" %}</dt>
@@ -75,14 +74,6 @@
                         </span>
                     </dd>
                     {% endif %}
-                    
-                    <!-- Dates clés pour les rappels -->
-                    <dt class="col-sm-5">{% trans "Dates de suivi" %}</dt>
-                    <dd class="col-sm-7">
-                        <small><strong>{% trans "Date limite rapide" %}:</strong> {{ today|add_days:7|date:"d/m/Y" }}</small><br>
-                        <small><strong>{% trans "Date limite standard" %}:</strong> {{ today|add_days:15|date:"d/m/Y" }}</small><br>
-                        <small><strong>{% trans "Date limite formelle" %}:</strong> {{ today|add_days:30|date:"d/m/Y" }}</small>
-                    </dd>
                 </dl>
                 
                 <!-- Liste des rappels précédents -->
@@ -198,15 +189,7 @@
                                 <small class="form-text text-muted">{{ form.contenu.help_text }}</small>
                                 {% endif %}
                                 <small class="form-text text-muted">
-                                    {% trans "Variables disponibles" %}:
-                                    <ul class="list-inline mt-1">
-                                        <li class="list-inline-item"><code>{prenom}</code> - {% trans "prénom du membre" %}</li>
-                                        <li class="list-inline-item"><code>{nom}</code> - {% trans "nom du membre" %}</li>
-                                        <li class="list-inline-item"><code>{reference}</code> - {% trans "référence de cotisation" %}</li>
-                                        <li class="list-inline-item"><code>{montant}</code> - {% trans "montant restant dû" %}</li>
-                                        <li class="list-inline-item"><code>{date_echeance}</code> - {% trans "date d'échéance" %}</li>
-                                        <li class="list-inline-item"><code>{date_limite}</code> - {% trans "date limite de paiement" %}</li>
-                                    </ul>
+                                    {% trans "Vous pouvez utiliser les variables suivantes: {prenom}, {nom}, {reference}, {montant}, {date_echeance}" %}
                                 </small>
                                 {% if form.contenu.errors %}
                                 <div class="invalid-feedback d-block">
@@ -231,22 +214,11 @@
                                         <div class="row g-3">
                                             <div class="col-md-6">
                                                 <label for="datePlanification" class="form-label">{% trans "Date d'envoi" %}</label>
-                                                <input type="date" class="form-control" id="datePlanification" min="{{ today|date:'Y-m-d' }}">
-                                                <div class="form-text">
-                                                    {% trans "Suggestions" %}:
-                                                    <a href="#" class="set-date" data-date="{{ today|add_days:1|date:'Y-m-d' }}">{% trans "Demain" %}</a>,
-                                                    <a href="#" class="set-date" data-date="{{ today|add_days:7|date:'Y-m-d' }}">{% trans "+7 jours" %}</a>
-                                                </div>
+                                                <input type="date" class="form-control" id="datePlanification" min="{{ now|date:'Y-m-d' }}">
                                             </div>
                                             <div class="col-md-6">
                                                 <label for="heurePlanification" class="form-label">{% trans "Heure d'envoi" %}</label>
-                                                <input type="time" class="form-control" id="heurePlanification" value="09:00">
-                                                <div class="form-text">
-                                                    {% trans "Suggestions" %}:
-                                                    <a href="#" class="set-time" data-time="09:00">9:00</a>,
-                                                    <a href="#" class="set-time" data-time="12:00">12:00</a>,
-                                                    <a href="#" class="set-time" data-time="18:00">18:00</a>
-                                                </div>
+                                                <input type="time" class="form-control" id="heurePlanification">
                                             </div>
                                         </div>
                                     </div>
@@ -285,7 +257,10 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/cotisations/form-validation.js' %}"></script>
+
+<!-- Mettre à jour les templates pour inclure ce fichier
+ ajoutez cette ligne à la fin du bloc {% block extra_js %} -->
+ <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -294,42 +269,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const contenuTextarea = document.getElementById('id_contenu');
     const typeRappelSelect = document.getElementById('id_type_rappel');
     const niveauInput = document.getElementById('id_niveau');
-    const datePlanification = document.getElementById('datePlanification');
-    const heurePlanification = document.getElementById('heurePlanification');
     
-    // Gérer les liens de date rapide
-    document.querySelectorAll('.set-date').forEach(link => {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            datePlanification.value = this.getAttribute('data-date');
-        });
-    });
-    
-    // Gérer les liens d'heure rapide
-    document.querySelectorAll('.set-time').forEach(link => {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            heurePlanification.value = this.getAttribute('data-time');
-        });
-    });
-    
-    // Gestion des modèles de rappel avec utilisation des filtres
+    // Gestion des modèles de rappel
     const templateDefaultBtn = document.getElementById('templateDefault');
     const templateUrgentBtn = document.getElementById('templateUrgent');
     const templateFormalBtn = document.getElementById('templateFormal');
     
     if (templateDefaultBtn) {
         templateDefaultBtn.addEventListener('click', function() {
-            // Modèle standard avec date limite à 7 jours
-            const dateLimite = new Date();
-            dateLimite.setDate(dateLimite.getDate() + 7);
-            const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
-            
-            contenuTextarea.value = `Cher/Chère {% if cotisation %}{{ cotisation.membre.prenom|escapejs }}{% else %}{prenom}{% endif %},
+            contenuTextarea.value = `Cher/Chère {% if cotisation %}{{ cotisation.membre.prenom }}{% else %}{prenom}{% endif %},
 
-Nous vous rappelons que votre cotisation (réf. {% if cotisation %}{{ cotisation.reference|escapejs }}{% else %}{reference}{% endif %}) d'un montant restant dû de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € est arrivée à échéance le {% if cotisation %}{{ cotisation.date_echeance|date:"d/m/Y" }}{% else %}{date_echeance}{% endif %}.
+Nous vous rappelons que votre cotisation (réf. {% if cotisation %}{{ cotisation.reference }}{% else %}{reference}{% endif %}) d'un montant restant dû de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € est arrivée à échéance le {% if cotisation %}{{ cotisation.date_echeance|date:"d/m/Y" }}{% else %}{date_echeance}{% endif %}.
 
-Nous vous remercions de bien vouloir procéder au règlement avant le ${dateLimiteStr}.
+Nous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.
 
 Cordialement,
 L'équipe de l'association`;
@@ -338,16 +290,11 @@ L'équipe de l'association`;
     
     if (templateUrgentBtn) {
         templateUrgentBtn.addEventListener('click', function() {
-            // Modèle urgent avec date limite à 5 jours
-            const dateLimite = new Date();
-            dateLimite.setDate(dateLimite.getDate() + 5);
-            const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
-            
-            contenuTextarea.value = `Cher/Chère {% if cotisation %}{{ cotisation.membre.prenom|escapejs }}{% else %}{prenom}{% endif %},
+            contenuTextarea.value = `Cher/Chère {% if cotisation %}{{ cotisation.membre.prenom }}{% else %}{prenom}{% endif %},
 
-RAPPEL URGENT : Votre cotisation (réf. {% if cotisation %}{{ cotisation.reference|escapejs }}{% else %}{reference}{% endif %}) d'un montant de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € est en retard de paiement depuis le {% if cotisation %}{{ cotisation.date_echeance|date:"d/m/Y" }}{% else %}{date_echeance}{% endif %}.
+RAPPEL URGENT : Votre cotisation (réf. {% if cotisation %}{{ cotisation.reference }}{% else %}{reference}{% endif %}) d'un montant de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € est en retard de paiement depuis le {% if cotisation %}{{ cotisation.date_echeance|date:"d/m/Y" }}{% else %}{date_echeance}{% endif %}.
 
-Afin d'éviter toute procédure supplémentaire, nous vous invitons à régulariser cette situation avant le ${dateLimiteStr}.
+Afin d'éviter toute procédure supplémentaire, nous vous invitons à régulariser cette situation sous 7 jours.
 
 Pour toute question ou difficulté, n'hésitez pas à nous contacter rapidement.
 
@@ -358,16 +305,11 @@ L'équipe de l'association`;
     
     if (templateFormalBtn) {
         templateFormalBtn.addEventListener('click', function() {
-            // Modèle formel avec date limite à 15 jours
-            const dateLimite = new Date();
-            dateLimite.setDate(dateLimite.getDate() + 15);
-            const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
-            
             contenuTextarea.value = `Madame, Monsieur,
 
-Nous constatons qu'à ce jour, votre cotisation référencée {% if cotisation %}{{ cotisation.reference|escapejs }}{% else %}{reference}{% endif %}, d'un montant de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € et échue le {% if cotisation %}{{ cotisation.date_echeance|date:"d/m/Y" }}{% else %}{date_echeance}{% endif %}, demeure impayée.
+Nous constatons qu'à ce jour, votre cotisation référencée {% if cotisation %}{{ cotisation.reference }}{% else %}{reference}{% endif %}, d'un montant de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € et échue le {% if cotisation %}{{ cotisation.date_echeance|date:"d/m/Y" }}{% else %}{date_echeance}{% endif %}, demeure impayée.
 
-Conformément à nos statuts, nous vous prions de bien vouloir procéder au règlement de cette somme dans un délai de 15 jours à compter de la réception du présent courrier, soit au plus tard le ${dateLimiteStr}.
+Conformément à nos statuts, nous vous prions de bien vouloir procéder au règlement de cette somme dans un délai de 15 jours à compter de la réception du présent courrier.
 
 À défaut de paiement dans le délai imparti, nous nous verrons contraints d'appliquer les mesures prévues par le règlement intérieur.
 
@@ -375,35 +317,6 @@ Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées
 
 Le Trésorier
 Association XYZ`;
-        });
-    }
-    
-    // Adapter le contenu en fonction du type de rappel
-    if (typeRappelSelect) {
-        typeRappelSelect.addEventListener('change', function() {
-            // Adapter les templates en fonction du type de rappel
-            const type = this.value;
-            if (type === 'email') {
-                // Activer tous les modèles pour email
-                templateDefaultBtn.disabled = false;
-                templateUrgentBtn.disabled = false;
-                templateFormalBtn.disabled = false;
-            } else if (type === 'sms') {
-                // Pour SMS, désactiver certains modèles trop longs
-                templateDefaultBtn.disabled = false;
-                templateUrgentBtn.disabled = false;
-                templateFormalBtn.disabled = true;
-                
-                // Proposer un modèle SMS plus court si le contenu est vide
-                if (!contenuTextarea.value.trim()) {
-                    // Utiliser le filtre add_days pour la date limite
-                    const dateLimite = new Date();
-                    dateLimite.setDate(dateLimite.getDate() + 7);
-                    const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
-                    
-                    contenuTextarea.value = `Rappel: Votre cotisation (ref. {% if cotisation %}{{ cotisation.reference|escapejs }}{% else %}{reference}{% endif %}) de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € est due. Merci de régulariser avant le ${dateLimiteStr}.`;
-                }
-            }
         });
     }
     
@@ -426,14 +339,6 @@ Association XYZ`;
         rappelForm.addEventListener('submit', function(event) {
             let isValid = true;
             
-            // Réinitialiser toutes les erreurs précédentes
-            document.querySelectorAll('.is-invalid').forEach(el => {
-                el.classList.remove('is-invalid');
-            });
-            document.querySelectorAll('.invalid-feedback').forEach(el => {
-                el.remove();
-            });
-            
             // Vérifier que le type de rappel est sélectionné
             if (!typeRappelSelect.value) {
                 isValid = false;
@@ -455,6 +360,9 @@ Association XYZ`;
             
             // Si on planifie l'envoi, vérifier les dates
             if (!envoyerImmediatementSwitch.checked) {
+                const datePlanification = document.getElementById('datePlanification');
+                const heurePlanification = document.getElementById('heurePlanification');
+                
                 if (!datePlanification.value) {
                     isValid = false;
                     highlightField(datePlanification, '{% trans "Veuillez sélectionner une date d\'envoi." %}');
@@ -466,23 +374,8 @@ Association XYZ`;
                 }
             }
             
-            // Protection XSS
-            contenuTextarea.value = contenuTextarea.value
-                .replace(/<script/gi, "&lt;script")
-                .replace(/<\/script>/gi, "&lt;/script&gt;");
-            
             if (!isValid) {
                 event.preventDefault();
-                
-                // Afficher un message d'erreur global
-                const errorAlert = document.createElement('div');
-                errorAlert.className = 'alert alert-danger mb-4';
-                errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>{% trans "Veuillez corriger les erreurs ci-dessous." %}';
-                
-                // Ajouter l'alerte au début du formulaire s'il n'y en a pas déjà une
-                if (!document.querySelector('.alert-danger')) {
-                    rappelForm.prepend(errorAlert);
-                }
             }
         });
     }
@@ -499,6 +392,30 @@ Association XYZ`;
             errorDiv.textContent = message;
             field.parentNode.appendChild(errorDiv);
         }
+    }
+    
+    // Adapter le contenu en fonction du type de rappel
+    if (typeRappelSelect) {
+        typeRappelSelect.addEventListener('change', function() {
+            // Par exemple, proposer des modèles différents selon le type
+            const type = this.value;
+            if (type === 'email') {
+                // Activer les modèles email
+                templateDefaultBtn.disabled = false;
+                templateUrgentBtn.disabled = false;
+                templateFormalBtn.disabled = false;
+            } else if (type === 'sms') {
+                // Pour SMS, désactiver certains modèles trop longs
+                templateDefaultBtn.disabled = false;
+                templateUrgentBtn.disabled = false;
+                templateFormalBtn.disabled = true;
+                
+                // Proposer un modèle SMS plus court si le contenu est vide
+                if (!contenuTextarea.value.trim()) {
+                    contenuTextarea.value = `Rappel: Votre cotisation (ref. {% if cotisation %}{{ cotisation.reference }}{% else %}{reference}{% endif %}) de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € est due. Merci de régulariser rapidement.`;
+                }
+            }
+        });
     }
 });
 </script>

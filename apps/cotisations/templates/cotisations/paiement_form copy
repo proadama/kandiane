@@ -35,18 +35,19 @@
             <div class="card-body">
                 <dl class="row mb-0">
                     <dt class="col-sm-5">{% trans "Référence" %}</dt>
-                    <dd class="col-sm-7">{{ cotisation.reference|escape }}</dd>
+                    <dd class="col-sm-7">{{ cotisation.reference }}</dd>
                     
                     <dt class="col-sm-5">{% trans "Membre" %}</dt>
-                    <dd class="col-sm-7">{{ cotisation.membre.prenom|escape }} {{ cotisation.membre.nom|escape }}</dd>
+                    <dd class="col-sm-7">{{ cotisation.membre.prenom }} {{ cotisation.membre.nom }}</dd>
                     
                     <dt class="col-sm-5">{% trans "Montant total" %}</dt>
                     <dd class="col-sm-7">{{ cotisation.montant|floatformat:2 }} €</dd>
                     
                     <dt class="col-sm-5">{% trans "Montant payé" %}</dt>
-                    <dd class="col-sm-7">{{ cotisation.montant|sub:cotisation.montant_restant|floatformat:2 }} €</dd>
+                    <dd class="col-sm-7">{{ cotisation.montant_paye|default_if_none:0|floatformat:2 }} €</dd>
                     
                     <dt class="col-sm-5">{% trans "Montant restant" %}</dt>
+                    <dd class="col-sm-7">{{ cotisation.montant|sub:cotisation.montant_restant|floatformat:2 }} €</dd>
                     <dd class="col-sm-7">
                         <span class="fw-bold {% if cotisation.montant_restant > 0 %}text-danger{% else %}text-success{% endif %}">
                             {{ cotisation.montant_restant|floatformat:2 }} €
@@ -75,14 +76,6 @@
                         </span>
                     </dd>
                     {% endif %}
-                    
-                    <!-- Échéances de paiement suggérées avec le filtre add_days -->
-                    <dt class="col-sm-5">{% trans "Échéances suggérées" %}</dt>
-                    <dd class="col-sm-7">
-                        <small class="fw-bold">{% trans "Immédiat" %}: {{ today|date:"d/m/Y" }}</small><br>
-                        <small>{% trans "30 jours" %}: {{ today|add_days:30|date:"d/m/Y" }}</small><br>
-                        <small>{% trans "60 jours" %}: {{ today|add_days:60|date:"d/m/Y" }}</small>
-                    </dd>
                 </dl>
             </div>
         </div>
@@ -173,11 +166,6 @@
                                 {% if form.date_paiement.help_text %}
                                 <small class="form-text text-muted">{{ form.date_paiement.help_text }}</small>
                                 {% endif %}
-                                <small class="form-text text-muted">
-                                    {% trans "Dates suggérées" %}:
-                                    <a href="#" class="set-date" data-date="{{ today|date:'Y-m-d' }}T{{ now|date:'H:i' }}">{% trans "Aujourd'hui" %}</a>,
-                                    <a href="#" class="set-date" data-date="{{ today|add_days:1|date:'Y-m-d' }}T{{ now|date:'H:i' }}">{% trans "Demain" %}</a>
-                                </small>
                                 {% if form.date_paiement.errors %}
                                 <div class="invalid-feedback d-block">
                                     {{ form.date_paiement.errors }}
@@ -199,14 +187,6 @@
                                 {% if form.reference_paiement.help_text %}
                                 <small class="form-text text-muted">{{ form.reference_paiement.help_text }}</small>
                                 {% endif %}
-                                <small class="form-text text-muted">
-                                    {% trans "Ex:" %} 
-                                    {% with mode_suggestions="VIREMENT-,CHEQUE-,CB-,ESPECES-"|split:"," %}
-                                        {% for prefix in mode_suggestions %}
-                                            <a href="#" class="set-reference" data-prefix="{{ prefix }}">{{ prefix }}{{ today|date:'Ymd' }}-{{ cotisation.pk }}</a>{% if not forloop.last %}, {% endif %}
-                                        {% endfor %}
-                                    {% endwith %}
-                                </small>
                                 {% if form.reference_paiement.errors %}
                                 <div class="invalid-feedback d-block">
                                     {{ form.reference_paiement.errors }}
@@ -272,24 +252,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const typeTransactionSelect = document.getElementById('id_type_transaction');
     const montantInput = document.getElementById('id_montant');
     const paiementForm = document.getElementById('paiementForm');
-    const dateInput = document.getElementById('id_date_paiement');
-    const referenceInput = document.getElementById('id_reference_paiement');
-    
-    // Gérer les liens de date rapide
-    document.querySelectorAll('.set-date').forEach(link => {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            dateInput.value = this.getAttribute('data-date');
-        });
-    });
-    
-    // Gérer les suggestions de référence
-    document.querySelectorAll('.set-reference').forEach(link => {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            referenceInput.value = this.getAttribute('data-prefix') + Math.floor(Math.random() * 1000);
-        });
-    });
     
     {% if cotisation and not form.instance.pk %}
     // Pour les nouveaux paiements, appliquer des restrictions au montant
@@ -322,24 +284,10 @@ document.addEventListener('DOMContentLoaded', function() {
         paiementForm.addEventListener('submit', function(event) {
             let isValid = true;
             
-            // Réinitialiser les erreurs précédentes
-            document.querySelectorAll('.is-invalid').forEach(el => {
-                el.classList.remove('is-invalid');
-            });
-            document.querySelectorAll('.invalid-feedback').forEach(el => {
-                el.remove();
-            });
-            
             // Vérifier que le montant est positif
             if (parseFloat(montantInput.value) <= 0) {
                 isValid = false;
                 highlightField(montantInput, '{% trans "Le montant doit être supérieur à zéro." %}');
-            }
-            
-            // Vérifier que la date est valide
-            if (!dateInput.value) {
-                isValid = false;
-                highlightField(dateInput, '{% trans "La date de paiement est requise." %}');
             }
             
             // Pour les paiements, vérifier que le montant ne dépasse pas le montant restant
@@ -352,26 +300,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             {% endif %}
             
-            // Protection contre les attaques XSS
-            if (referenceInput.value) {
-                // Échapper les caractères HTML potentiellement dangereux
-                referenceInput.value = referenceInput.value
-                    .replace(/</g, "&lt;")
-                    .replace(/>/g, "&gt;");
-            }
-            
             if (!isValid) {
                 event.preventDefault();
-                
-                // Afficher un message d'erreur global
-                const errorAlert = document.createElement('div');
-                errorAlert.className = 'alert alert-danger mb-4';
-                errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>{% trans "Veuillez corriger les erreurs ci-dessous." %}';
-                
-                // Ajouter l'alerte au début du formulaire s'il n'y en a pas déjà une
-                if (!document.querySelector('.alert-danger')) {
-                    paiementForm.prepend(errorAlert);
-                }
             }
         });
     }

@@ -1,0 +1,48 @@
+{% extends "layouts/base.html" %}
+{% load custom_filters %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Test des filtres personnalisés</h1>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            Filtre "split"
+        </div>
+        <div class="card-body">
+            <p>Original: "un,deux,trois"</p>
+            <p>Après split:",": 
+                {% with "un,deux,trois"|split:"," as result %}
+                    <ul>
+                        {% for item in result %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endwith %}
+            </p>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            Filtre "sub"
+        </div>
+        <div class="card-body">
+            <p>100 - 40 = {{ 100|sub:40 }}</p>
+            <p>75.50 - 25.25 = {{ 75.50|sub:25.25 }}</p>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            Filtre "add_days"
+        </div>
+        <div class="card-body">
+            <p>Date actuelle: {{ current_date }}</p>
+            <p>Date + 1 jour: {{ current_date|add_days:1 }}</p>
+            <p>Date + 7 jours: {{ current_date|add_days:7 }}</p>
+            <p>Date + 30 jours: {{ current_date|add_days:30 }}</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
