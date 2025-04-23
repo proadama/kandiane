@@ -940,6 +940,14 @@ class BaremeCotisationListView(StaffRequiredMixin, ListView):
     
     def get_queryset(self):
         return BaremeCotisation.objects.all().select_related('type_membre')
+        
+    def get_context_data(self, **kwargs):
+        # Ajouter cette méthode pour inclure current_date dans le contexte
+        context = super().get_context_data(**kwargs)
+        context['current_date'] = timezone.now().date()
+        # Vous pouvez également ajouter "today" comme synonyme si nécessaire
+        context['today'] = timezone.now().date()
+        return context
 
 
 class BaremeCotisationCreateView(StaffRequiredMixin, CreateView):
