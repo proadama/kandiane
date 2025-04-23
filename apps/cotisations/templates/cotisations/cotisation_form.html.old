@@ -134,24 +134,18 @@
                             <h5 class="border-bottom pb-2">{% trans "Référence" %}</h5>
                         </div>
                         
-                        <!-- REMPLACER la section référence par ceci -->
-                        <div class="col-md-12" id="referenceContainer">
-                            <div class="form-group">
-                                <label for="ref_info">{% trans "Référence" %}</label>
-                                <div class="form-control-plaintext">
-                                    {% if form.instance.pk %}
-                                        {{ form.instance.reference }}
-                                    {% else %}
-                                        <em>{% trans "La référence sera générée automatiquement à la création" %}</em>
-                                        <!-- Champ caché pour forcer la référence auto -->
-                                        <input type="hidden" name="reference" value="auto_generate">
-                                    {% endif %}
-                                </div>
-                                <small class="form-text text-muted">
-                                    {% trans "Format: COT-YYYYMM-XXXXX (année, mois, identifiant unique)" %}
-                                </small>
+                        {% if not form.instance.pk %}
+                        <!-- Générer référence (seulement pour la création) -->
+                        <div class="col-md-12">
+                            <div class="form-check mb-3">
+                                {{ form.generer_reference }}
+                                {{ form.generer_reference.label_tag }}
+                                {% if form.generer_reference.help_text %}
+                                <small class="form-text text-muted d-block">{{ form.generer_reference.help_text }}</small>
+                                {% endif %}
                             </div>
                         </div>
+                        {% endif %}
                         
                         <!-- Référence - MODIFIÉ pour corriger le problème -->
                         <div class="col-md-12" id="referenceContainer">
@@ -548,6 +542,41 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // SOLUTION AU PROBLÈME DE RÉFÉRENCE - Code restructuré et corrigé
+    if (genererReferenceCheckbox && referenceContainer && referenceInput && referencePlaceholder) {
+        // Fonction pour mettre à jour la visibilité et l'état du champ référence
+        function updateReferenceField() {
+            if (genererReferenceCheckbox.checked) {
+                // Si génération auto activée:
+                referenceContainer.style.display = 'none';
+                referenceInput.value = ''; // Vider le champ
+                referenceInput.required = false; // Ne pas le rendre requis
+                
+                // Activer le champ caché pour signaler que la référence doit être générée
+                referencePlaceholder.disabled = false;
+            } else {
+                // Si génération auto désactivée:
+                referenceContainer.style.display = 'block';
+                referenceInput.required = true;
+                
+                // Désactiver le champ caché
+                referencePlaceholder.disabled = true;
+            }
+        }
+        
+        // Initialiser l'état du champ
+        updateReferenceField();
+        
+        // Ajouter l'écouteur d'événement
+        genererReferenceCheckbox.addEventListener('change', updateReferenceField);
+        
+        // Ajouter une validation spécifique au champ de référence
+        referenceInput.addEventListener('input', function() {
+            // Nettoyer les espaces et caractères spéciaux
+            this.value = this.value.trim().replace(/[^\w\-]/g, '');
+        });
+    }
+    
     // Validation côté client améliorée
     if (cotisationForm) {
         cotisationForm.addEventListener('submit', function(event) {
@@ -607,6 +636,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (periodeFin.value && new Date(periodeFin.value) < new Date(periodeDebut.value)) {
                 isValid = false;
                 highlightField(periodeFin, '{% trans "La date de fin de période doit être postérieure à la date de début." %}');
+            }
+            
+            // Vérifier la référence uniquement si la génération automatique est désactivée
+            if (genererReferenceCheckbox && !genererReferenceCheckbox.checked && !referenceInput.value) {
+                isValid = false;
+                highlightField(referenceInput, '{% trans "Une référence est requise si la génération automatique est désactivée." %}');
             }
             
             // Ajouter une sécurité pour s'assurer que le formulaire ne peut pas être soumis si invalide

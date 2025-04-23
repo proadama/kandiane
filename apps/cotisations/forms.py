@@ -109,20 +109,24 @@ class CotisationForm(forms.ModelForm):
                 'periode_fin': today.replace(year=today.year + 1) - timezone.timedelta(days=1),
             })
             
-            # CORRECTION: Rendre le champ référence non-requis si génération automatique
-            # Note: Nous ne le masquons plus avec HiddenInput car cela cause des problèmes
-            self.fields['reference'].required = False
+            # MODIFICATION: Supprimer complètement le champ référence
+            # et le champ generer_reference du formulaire
+            if 'reference' in self.fields:
+                del self.fields['reference']
+            if 'generer_reference' in self.fields:
+                del self.fields['generer_reference']
         else:
             # Pour une modification, on ne peut pas changer certains champs
             self.fields['membre'].disabled = True
             self.fields['type_membre'].disabled = True
             self.fields['bareme'].disabled = True
             self.fields['montant'].disabled = True
-            self.fields['reference'].disabled = True
+            if 'reference' in self.fields:
+                self.fields['reference'].disabled = True
             
             # Cacher les champs spécifiques à la création
-            self.fields['generer_reference'].widget = forms.HiddenInput()
-            self.fields['utiliser_bareme'].widget = forms.HiddenInput()
+            if 'utiliser_bareme' in self.fields:
+                self.fields['utiliser_bareme'].widget = forms.HiddenInput()
     
     def clean(self):
         cleaned_data = super().clean()
@@ -181,26 +185,21 @@ class CotisationForm(forms.ModelForm):
             if self.user:
                 instance.cree_par = self.user
             
-            # Amélioration de la gestion de la référence
-            if self.cleaned_data.get('generer_reference'):
-                # Marquer clairement que la référence doit être générée
-                instance.reference = ''
-                # Ajouter un indicateur dans les métadonnées pour le suivi
-                if not instance.metadata:
-                    instance.metadata = {}
-                instance.metadata['reference_auto_generated'] = True
+            # MODIFICATION: Toujours forcer la génération automatique de référence
+            # Marquer explicitement que la référence doit être générée
+            instance.reference = ''
+            
+            # Ajouter un indicateur dans les métadonnées pour le suivi
+            if not instance.metadata:
+                instance.metadata = {}
+            instance.metadata['reference_auto_generated'] = True
         else:
             # Pour une modification, enregistrer l'utilisateur qui modifie
             if self.user:
                 instance.modifie_par = self.user
         
         if commit:
-            try:
-                instance.save()
-            except Exception as e:
-                # Journaliser l'erreur pour faciliter le diagnostic
-                logger.error(f"Erreur lors de la sauvegarde de la cotisation: {str(e)}")
-                raise
+            instance.save()
         
         return instance
 
