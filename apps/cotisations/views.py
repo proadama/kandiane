@@ -1719,21 +1719,47 @@ def export_rappels(request):
 def api_calculer_montant(request):
     """
     API pour calculer le montant d'une cotisation en fonction du barème sélectionné.
+    Peut calculer un montant au prorata si les dates sont fournies.
     """
     bareme_id = request.GET.get('bareme_id')
-    type_membre_id = request.GET.get('type_membre_id')  # Ajoutez cette ligne pour récupérer le paramètre
+    type_membre_id = request.GET.get('type_membre_id')
+    
+    # Nouveaux paramètres pour le calcul au prorata
+    date_debut = request.GET.get('date_debut')
+    date_fin = request.GET.get('date_fin')
+    
+    # Convertir les dates si fournies
+    periode_debut = None
+    periode_fin = None
+    
+    if date_debut:
+        try:
+            periode_debut = datetime.datetime.strptime(date_debut, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({
+                'success': False, 
+                'message': str(_("Format de date de début invalide. Format attendu: YYYY-MM-DD"))
+            })
+            
+    if date_fin:
+        try:
+            periode_fin = datetime.datetime.strptime(date_fin, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({
+                'success': False, 
+                'message': str(_("Format de date de fin invalide. Format attendu: YYYY-MM-DD"))
+            })
     
     if not bareme_id and not type_membre_id:
-        return JsonResponse({'success': False, 'message': str(_("Paramètre manquant. Veuillez spécifier bareme_id ou type_membre_id"))})
+        return JsonResponse({
+            'success': False, 
+            'message': str(_("Paramètre manquant. Veuillez spécifier bareme_id ou type_membre_id"))
+        })
     
     try:
+        # Récupérer le barème
         if bareme_id:
             bareme = BaremeCotisation.objects.get(pk=bareme_id)
-            return JsonResponse({
-                'success': True,
-                'montant': float(bareme.montant),
-                'periodicite': bareme.get_periodicite_display()
-            })
         elif type_membre_id:
             # Trouver le barème actif pour ce type de membre
             bareme = BaremeCotisation.objects.filter(
@@ -1741,17 +1767,42 @@ def api_calculer_montant(request):
                 date_debut_validite__lte=timezone.now().date()
             ).order_by('-date_debut_validite').first()
             
-            if bareme:
-                return JsonResponse({
-                    'success': True,
-                    'montant': float(bareme.montant),
-                    'periodicite': bareme.get_periodicite_display()
-                })
-            else:
+            if not bareme:
                 return JsonResponse({
                     'success': False, 
                     'message': str(_("Aucun barème trouvé pour ce type de membre"))
                 })
+        
+        # Calculer le montant (au prorata si les dates sont fournies)
+        if periode_debut and periode_fin:
+            montant = bareme.calculer_montant_prorata(periode_debut, periode_fin)
+            montant_original = bareme.montant
+            
+            # Pourcentage appliqué
+            if montant_original > 0:
+                pourcentage = (montant / montant_original * 100).quantize(Decimal('0.01'))
+            else:
+                pourcentage = Decimal('100.00')
+            
+            return JsonResponse({
+                'success': True,
+                'montant': float(montant),
+                'montant_original': float(montant_original),
+                'pourcentage': float(pourcentage),
+                'periodicite': bareme.get_periodicite_display(),
+                'calcul_prorata': True,
+                'periode_debut': periode_debut.isoformat(),
+                'periode_fin': periode_fin.isoformat()
+            })
+        else:
+            # Comportement standard sans prorata
+            return JsonResponse({
+                'success': True,
+                'montant': float(bareme.montant),
+                'periodicite': bareme.get_periodicite_display(),
+                'calcul_prorata': False
+            })
+    
     except BaremeCotisation.DoesNotExist:
         return JsonResponse({'success': False, 'message': str(_("Barème non trouvé"))})
     except Exception as e:

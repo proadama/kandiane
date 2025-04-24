@@ -71,6 +71,64 @@ class BaremeCotisation(BaseModel):
         return (self.date_debut_validite <= today and 
                 (self.date_fin_validite is None or self.date_fin_validite >= today))
     
+    def calculer_montant_prorata(self, date_debut, date_fin=None):
+        """
+        Calcule le montant de la cotisation au prorata de la période spécifiée.
+        
+        Args:
+            date_debut (date): Date de début de la période
+            date_fin (date, optional): Date de fin de la période. Si non spécifiée,
+                                    considère une durée de 1 jour.
+        
+        Returns:
+            Decimal: Montant proratisé de la cotisation
+        """
+        from decimal import Decimal
+        import datetime
+        
+        # Vérification des entrées
+        if not date_debut:
+            return self.montant
+        
+        if not date_fin:
+            date_fin = date_debut
+        
+        # S'assurer que la date de fin n'est pas antérieure à la date de début
+        if date_fin < date_debut:
+            date_fin = date_debut
+        
+        # Pour une périodicité unique, pas de prorata
+        if self.periodicite == 'unique':
+            return self.montant
+        
+        # Calcul de la période de base selon la périodicité
+        if self.periodicite == 'mensuelle':
+            # Une période = 30 jours
+            periode_base = 30
+        elif self.periodicite == 'trimestrielle':
+            # Une période = 90 jours
+            periode_base = 90
+        elif self.periodicite == 'semestrielle':
+            # Une période = 180 jours
+            periode_base = 180
+        else:  # annuelle
+            # Une période = 365 jours
+            periode_base = 365
+        
+        # Calcul de la durée effective en jours
+        duree_effective = (date_fin - date_debut).days + 1  # +1 pour inclure le jour de début
+        
+        # Calcul du ratio (minimum 1 jour)
+        ratio = max(1, duree_effective) / periode_base
+        
+        # Si la durée est supérieure à la période, on plafonne à 1 
+        # (sauf pour périodicité annuelle où on peut dépasser)
+        if self.periodicite != 'annuelle' and ratio > 1:
+            ratio = 1
+        
+        # Calcul du montant proratisé (arrondi à 2 décimales)
+        montant_proratise = self.montant * Decimal(ratio)
+        return montant_proratise.quantize(Decimal('0.01'))
 
     def clean(self):
         from django.core.exceptions import ValidationError
