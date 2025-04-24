@@ -558,6 +558,54 @@ class Paiement(BaseModel):
     def get_absolute_url(self):
         return reverse('cotisations:paiement_detail', kwargs={'pk': self.pk})
     
+    # Dans apps/cotisations/models.py, classe Paiement
+
+    def _generer_reference(self):
+        """
+        Génère une référence unique pour le paiement basée sur le type de transaction.
+        Format: [PAI|RMB|REJ]-YYYYMMDD-XXXXX
+        """
+        import random
+        import string
+        
+        # Préfixe selon le type de transaction
+        prefixes = {
+            'paiement': 'PAI',
+            'remboursement': 'RMB',
+            'rejet': 'REJ'
+        }
+        prefix = prefixes.get(self.type_transaction, 'PAI')
+        
+        # Date au format YYYYMMDD
+        date_part = timezone.now().strftime('%Y%m%d')
+        
+        # Identifiant de la cotisation
+        cotisation_part = f"{self.cotisation.id:04d}" if self.cotisation else "0000"
+        
+        # Partie aléatoire
+        chars = string.ascii_uppercase + string.digits
+        random_part = ''.join(random.choice(chars) for _ in range(4))
+        
+        # Assembler la référence
+        reference = f"{prefix}-{date_part}-{cotisation_part}-{random_part}"
+        
+        # Vérifier l'unicité
+        while Paiement.objects.filter(reference_paiement=reference).exists():
+            random_part = ''.join(random.choice(chars) for _ in range(4))
+            reference = f"{prefix}-{date_part}-{cotisation_part}-{random_part}"
+        
+        return reference
+
+    def save(self, *args, **kwargs):
+        """
+        Surcharge de save pour générer automatiquement une référence si nécessaire.
+        """
+        # Générer une référence si nouvelle instance et pas de référence définie
+        if not self.pk and not self.reference_paiement:
+            self.reference_paiement = self._generer_reference()
+        
+        super().save(*args, **kwargs)
+
     def save(self, *args, **kwargs):
         """
         Surcharge de save pour mettre à jour le montant restant de la cotisation.

@@ -479,7 +479,7 @@ class PaiementCreateView(StaffRequiredMixin, CreateView):
         response = super().form_valid(form)
         messages.success(
             self.request, 
-            _("Le paiement a été enregistré avec succès.")
+            _("Le paiement a été enregistré avec succès. Référence: {}").format(self.object.reference_paiement)
         )
         return response
     

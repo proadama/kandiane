@@ -221,6 +221,7 @@ class PaiementForm(forms.ModelForm):
             'commentaire': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
         }
     
+ 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         self.cotisation = kwargs.pop('cotisation', None)
@@ -230,6 +231,11 @@ class PaiementForm(forms.ModelForm):
         for field_name, field in self.fields.items():
             if field.widget.__class__.__name__ not in ['CheckboxInput', 'RadioSelect']:
                 field.widget.attrs.update({'class': 'form-control'})
+        
+        # Masquer le champ référence de paiement (sera généré automatiquement)
+        self.fields['reference_paiement'].widget = forms.HiddenInput()
+        self.fields['reference_paiement'].required = False
+        self.fields['reference_paiement'].help_text = _("Sera générée automatiquement")
         
         # Définir les valeurs par défaut
         if not self.instance.pk:
@@ -245,6 +251,9 @@ class PaiementForm(forms.ModelForm):
             # Pour une modification, on ne peut pas changer certains champs
             if self.instance.cotisation.est_complete:
                 self.fields['montant'].disabled = True
+            
+            # Désactiver la modification de la référence
+            self.fields['reference_paiement'].disabled = True
     
     def clean_montant(self):
         montant = self.cleaned_data.get('montant')

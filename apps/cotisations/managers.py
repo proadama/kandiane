@@ -152,6 +152,18 @@ class PaiementManager(BaseManager):
             total=Sum('montant')
         ).get('total') or Decimal('0.00')
     
+    def paiements(self):
+        """Retourne uniquement les transactions de type 'paiement'"""
+        return self.filter(type_transaction='paiement')
+
+    def remboursements(self):
+        """Retourne uniquement les transactions de type 'remboursement'"""
+        return self.filter(type_transaction='remboursement')
+
+    def rejets(self):
+        """Retourne uniquement les transactions de type 'rejet'"""
+        return self.filter(type_transaction='rejet')
+
     def recherche(self, terme):
         """Recherche globale sur les paiements"""
         if not terme:

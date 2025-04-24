@@ -191,27 +191,21 @@
                             <h5 class="border-bottom pb-2">{% trans "Informations complémentaires" %}</h5>
                         </div>
                         
-                        <!-- Référence de paiement -->
+                        <!-- Référence de paiement (générée automatiquement) -->
                         <div class="col-md-12">
-                            <div class="form-group{% if form.reference_paiement.errors %} is-invalid{% endif %}">
-                                {{ form.reference_paiement.label_tag }}
+                            <div class="form-group">
+                                <label for="id_reference_info">{% trans "Référence de paiement" %}</label>
+                                {% if form.instance.pk %}
+                                    <div class="form-control-plaintext">{{ form.instance.reference_paiement }}</div>
+                                {% else %}
+                                    <div class="form-control-plaintext">
+                                        <em>{% trans "Sera générée automatiquement selon le type de transaction" %}</em>
+                                    </div>
+                                {% endif %}
                                 {{ form.reference_paiement }}
-                                {% if form.reference_paiement.help_text %}
-                                <small class="form-text text-muted">{{ form.reference_paiement.help_text }}</small>
-                                {% endif %}
                                 <small class="form-text text-muted">
-                                    {% trans "Ex:" %} 
-                                    {% with mode_suggestions="VIREMENT-,CHEQUE-,CB-,ESPECES-"|split:"," %}
-                                        {% for prefix in mode_suggestions %}
-                                            <a href="#" class="set-reference" data-prefix="{{ prefix }}">{{ prefix }}{{ today|date:'Ymd' }}-{{ cotisation.pk }}</a>{% if not forloop.last %}, {% endif %}
-                                        {% endfor %}
-                                    {% endwith %}
+                                    {% trans "Format: [PAI|RMB|REJ]-YYYYMMDD-XXXX (selon le type de transaction)" %}
                                 </small>
-                                {% if form.reference_paiement.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.reference_paiement.errors }}
-                                </div>
-                                {% endif %}
                             </div>
                         </div>
                         
