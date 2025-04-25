@@ -191,20 +191,21 @@
                             <h5 class="border-bottom pb-2">{% trans "Informations complémentaires" %}</h5>
                         </div>
                         
-                        <!-- Référence de paiement (générée automatiquement) -->
+                        <!-- Supprimer le champ de saisie de référence et le remplacer par cette explication -->
                         <div class="col-md-12">
                             <div class="form-group">
-                                <label for="id_reference_info">{% trans "Référence de paiement" %}</label>
-                                {% if form.instance.pk %}
+                                <label>{% trans "Référence de paiement" %}</label>
+                                {% if form.instance.pk and form.instance.reference_paiement %}
                                     <div class="form-control-plaintext">{{ form.instance.reference_paiement }}</div>
                                 {% else %}
-                                    <div class="form-control-plaintext">
-                                        <em>{% trans "Sera générée automatiquement selon le type de transaction" %}</em>
+                                    <div class="form-control-plaintext text-muted">
+                                        <em>{% trans "La référence sera générée automatiquement selon le type de transaction" %}</em>
+                                        <i class="fas fa-info-circle ms-1" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                        title="{% trans 'Format: PAI-YYYYMMDD-XXXX pour les paiements, RMB-YYYYMMDD-XXXX pour les remboursements, REJ-YYYYMMDD-XXXX pour les rejets' %}"></i>
                                     </div>
                                 {% endif %}
-                                {{ form.reference_paiement }}
                                 <small class="form-text text-muted">
-                                    {% trans "Format: [PAI|RMB|REJ]-YYYYMMDD-XXXX (selon le type de transaction)" %}
+                                    {% trans "Préfixe selon le type de transaction : PAI (Paiement), RMB (Remboursement), REJ (Rejet)" %}
                                 </small>
                             </div>
                         </div>

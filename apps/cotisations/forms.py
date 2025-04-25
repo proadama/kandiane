@@ -232,10 +232,9 @@ class PaiementForm(forms.ModelForm):
             if field.widget.__class__.__name__ not in ['CheckboxInput', 'RadioSelect']:
                 field.widget.attrs.update({'class': 'form-control'})
         
-        # Masquer le champ référence de paiement (sera généré automatiquement)
-        self.fields['reference_paiement'].widget = forms.HiddenInput()
-        self.fields['reference_paiement'].required = False
-        self.fields['reference_paiement'].help_text = _("Sera générée automatiquement")
+        # Supprimer complètement le champ référence_paiement du formulaire
+        if 'reference_paiement' in self.fields:
+            del self.fields['reference_paiement']
         
         # Définir les valeurs par défaut
         if not self.instance.pk:
@@ -252,8 +251,9 @@ class PaiementForm(forms.ModelForm):
             if self.instance.cotisation.est_complete:
                 self.fields['montant'].disabled = True
             
-            # Désactiver la modification de la référence
-            self.fields['reference_paiement'].disabled = True
+            # Si une référence existe déjà, afficher un message
+            if self.instance.reference_paiement:
+                self.fields['type_transaction'].disabled = True  # Empêcher la modification du type de transaction
     
     def clean_montant(self):
         montant = self.cleaned_data.get('montant')

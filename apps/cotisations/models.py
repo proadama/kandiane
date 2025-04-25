@@ -598,23 +598,17 @@ class Paiement(BaseModel):
 
     def save(self, *args, **kwargs):
         """
-        Surcharge de save pour générer automatiquement une référence si nécessaire.
-        """
-        # Générer une référence si nouvelle instance et pas de référence définie
-        if not self.pk and not self.reference_paiement:
-            self.reference_paiement = self._generer_reference()
-        
-        super().save(*args, **kwargs)
-
-    def save(self, *args, **kwargs):
-        """
-        Surcharge de save pour mettre à jour le montant restant de la cotisation.
+        Surcharge de save pour mettre à jour le montant restant de la cotisation et générer une référence.
         """
         # Valider les données
         self.clean()
         
-        # Sauvegarder le paiement
+        # Générer une référence si nouvelle instance
         is_new = self.pk is None
+        if is_new:
+            self.reference_paiement = self._generer_reference()
+        
+        # Sauvegarder le paiement
         super().save(*args, **kwargs)
         
         # Mettre à jour le montant restant de la cotisation
