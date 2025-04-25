@@ -427,8 +427,11 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="formReference" class="form-label">{% trans "Référence de paiement" %}</label>
-                        <input type="text" class="form-control" id="formReference" name="reference_paiement" placeholder="{% trans 'Ex: VIREMENT-123456' %}" maxlength="100">
+                        <label class="form-label">Référence de paiement</label>
+                        <div class="form-control-plaintext bg-light p-2 rounded" id="referenceGenerationInfo">
+                            <i class="fas fa-info-circle text-info me-1"></i>
+                            La référence du paiement sera créée automatiquement après l'enregistrement.
+                        </div>
                     </div>
                     
                     <div class="mb-3">
