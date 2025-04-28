@@ -191,7 +191,7 @@
                             <h5 class="border-bottom pb-2">{% trans "Informations complémentaires" %}</h5>
                         </div>
                         
-                        <!-- Supprimer le champ de saisie de référence et le remplacer par cette explication -->
+                        <!-- Référence de paiement -->
                         <div class="col-md-12">
                             <div class="form-group">
                                 <label>{% trans "Référence de paiement" %}</label>
@@ -263,12 +263,30 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+        
+    // Intercepter toutes les validations externes pour éviter les duplications
+    const originalAddEventListener = HTMLFormElement.prototype.addEventListener;
+    HTMLFormElement.prototype.addEventListener = function(type, listener, options) {
+        if (this.id === 'paiementForm' && type === 'submit') {
+            // Envelopper le gestionnaire d'événement original pour empêcher les validations doubles
+            const wrappedListener = function(event) {
+                if (event.defaultPrevented) {
+                    // Si l'événement a déjà été traité par notre gestionnaire principal,
+                    // ne pas exécuter les autres validations
+                    return;
+                }
+                return listener.call(this, event);
+            };
+            return originalAddEventListener.call(this, type, wrappedListener, options);
+        }
+        return originalAddEventListener.call(this, type, listener, options);
+    };
+    
     // Variables globales
     const typeTransactionSelect = document.getElementById('id_type_transaction');
     const montantInput = document.getElementById('id_montant');
     const paiementForm = document.getElementById('paiementForm');
     const dateInput = document.getElementById('id_date_paiement');
-    const referenceInput = document.getElementById('id_reference_paiement');
     
     // Gérer les liens de date rapide
     document.querySelectorAll('.set-date').forEach(link => {
@@ -278,28 +296,35 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Gérer les suggestions de référence
-    document.querySelectorAll('.set-reference').forEach(link => {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            referenceInput.value = this.getAttribute('data-prefix') + Math.floor(Math.random() * 1000);
-        });
-    });
-    
     {% if cotisation and not form.instance.pk %}
     // Pour les nouveaux paiements, appliquer des restrictions au montant
-    const montantRestant = {{ cotisation.montant_restant }};
+    // Convertir la valeur avec virgule en valeur avec point pour JavaScript
+    const montantRestantStr = "{{ cotisation.montant_restant|floatformat:2 }}".replace(',', '.');
+    const montantRestant = parseFloat(montantRestantStr);
     
     // Gérer le changement de type de transaction
     if (typeTransactionSelect) {
         typeTransactionSelect.addEventListener('change', function() {
+            // Nettoyer les erreurs lors du changement de type de transaction
+            clearFieldErrors(montantInput);
+            
             if (this.value === 'paiement') {
                 // Pour un paiement, le montant ne peut pas dépasser le restant dû
                 montantInput.setAttribute('max', montantRestant);
                 
                 // Suggérer le montant restant comme valeur par défaut
-                if (!montantInput.value || parseFloat(montantInput.value) > montantRestant) {
-                    montantInput.value = montantRestant;
+                let currentValue = 0;
+                if (montantInput.value) {
+                    // Normaliser le format: remplacer la virgule par un point pour JS
+                    currentValue = parseFloat(montantInput.value.replace(',', '.'));
+                }
+                
+                if (!montantInput.value || isNaN(currentValue) || currentValue > montantRestant) {
+                    // Formater le montant selon la locale
+                    montantInput.value = montantRestant.toLocaleString('fr-FR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    }).replace('.', ',');
                 }
             } else {
                 // Pour un remboursement ou rejet, pas de limite supérieure
@@ -312,21 +337,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     {% endif %}
     
+    // Ajouter un gestionnaire pour nettoyer les erreurs à chaque saisie
+    if (montantInput) {
+        montantInput.addEventListener('input', function() {
+            clearFieldErrors(this);
+        });
+    }
+    
+    if (dateInput) {
+        dateInput.addEventListener('input', function() {
+            clearFieldErrors(this);
+        });
+    }
+    
     // Validation du formulaire côté client
     if (paiementForm) {
+        // Validateur principal - nous voulons qu'il s'exécute en premier
         paiementForm.addEventListener('submit', function(event) {
+            // Réinitialiser toutes les erreurs au début
+            errorRegistry.clearErrors();
+            clearAllErrorMessages();
+            
             let isValid = true;
             
-            // Réinitialiser les erreurs précédentes
-            document.querySelectorAll('.is-invalid').forEach(el => {
-                el.classList.remove('is-invalid');
-            });
-            document.querySelectorAll('.invalid-feedback').forEach(el => {
-                el.remove();
-            });
-            
             // Vérifier que le montant est positif
-            if (parseFloat(montantInput.value) <= 0) {
+            let montantValue = 0;
+            if (montantInput.value) {
+                // Normaliser le format: remplacer la virgule par un point pour JS
+                montantValue = parseFloat(montantInput.value.replace(',', '.'));
+            }
+            
+            if (isNaN(montantValue) || montantValue <= 0) {
                 isValid = false;
                 highlightField(montantInput, '{% trans "Le montant doit être supérieur à zéro." %}');
             }
@@ -339,55 +380,112 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Pour les paiements, vérifier que le montant ne dépasse pas le montant restant
             {% if cotisation and not form.instance.pk %}
-            if (typeTransactionSelect.value === 'paiement' && parseFloat(montantInput.value) > montantRestant) {
+            if (typeTransactionSelect.value === 'paiement' && montantValue > montantRestant) {
                 isValid = false;
                 highlightField(montantInput, 
-                    `{% trans "Le montant ne peut pas dépasser le montant restant à payer" %} (${montantRestant.toFixed(2)} €).`
+                    `{% trans "Le montant ne peut pas dépasser le montant restant à payer" %} (${montantRestant.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace('.', ',')} €).`
                 );
             }
             {% endif %}
             
-            // Protection contre les attaques XSS
-            if (referenceInput.value) {
-                // Échapper les caractères HTML potentiellement dangereux
-                referenceInput.value = referenceInput.value
-                    .replace(/</g, "&lt;")
-                    .replace(/>/g, "&gt;");
-            }
-            
             if (!isValid) {
                 event.preventDefault();
                 
-                // Afficher un message d'erreur global
-                const errorAlert = document.createElement('div');
-                errorAlert.className = 'alert alert-danger mb-4';
-                errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>{% trans "Veuillez corriger les erreurs ci-dessous." %}';
+                // Marquer l'événement comme déjà traité pour éviter des validations multiples
+                event.stopImmediatePropagation();
                 
-                // Ajouter l'alerte au début du formulaire s'il n'y en a pas déjà une
-                if (!document.querySelector('.alert-danger')) {
-                    paiementForm.prepend(errorAlert);
-                }
+                // Afficher un message d'erreur global
+                const errorElement = document.createElement('div');
+                errorElement.className = 'alert alert-danger';
+                errorElement.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>{% trans "Veuillez corriger les erreurs ci-dessous." %}';
+                
+                // Supprimer les alertes précédentes
+                paiementForm.querySelectorAll('.alert-danger').forEach(alert => {
+                    alert.remove();
+                });
+                
+                // Ajouter l'alerte au début du formulaire
+                paiementForm.insertBefore(errorElement, paiementForm.firstChild);
             }
+        }, true); // Utiliser la phase de capture pour s'exécuter avant les autres gestionnaires
+    }
+    
+    // Fonction pour supprimer tous les messages d'erreur de la page
+    function clearAllErrorMessages() {
+        // Supprimer tous les messages d'erreur
+        document.querySelectorAll('.invalid-feedback').forEach(el => {
+            el.remove();
+        });
+        
+        // Retirer la classe d'invalidité de tous les champs
+        document.querySelectorAll('.is-invalid').forEach(el => {
+            el.classList.remove('is-invalid');
         });
     }
     
-    // Fonction pour mettre en évidence un champ en erreur
+    // Fonction pour nettoyer les erreurs d'un champ spécifique
+    function clearFieldErrors(field) {
+        if (!field) return;
+        
+        // Retirer la classe d'invalidité
+        field.classList.remove('is-invalid');
+        
+        // Supprimer les messages d'erreur du registre
+        errorRegistry.clearErrors(field.id);
+        
+        // Chercher et supprimer tous les messages d'erreur associés au champ
+        const fieldContainer = field.closest('.form-group') || field.parentNode;
+        
+        // Supprimer les messages directs
+        fieldContainer.querySelectorAll('.invalid-feedback').forEach(feedback => {
+            feedback.remove();
+        });
+        
+        // Si c'est dans un input-group, nettoyer aussi le parent
+        if (field.parentNode.classList.contains('input-group')) {
+            const parentContainer = field.parentNode.parentNode;
+            parentContainer.querySelectorAll('.invalid-feedback').forEach(feedback => {
+                feedback.remove();
+            });
+        }
+    }
+    
+    // Version améliorée pour mettre en évidence un champ en erreur
     function highlightField(field, message) {
+        if (!field) return;
+        
+        // Vérifier si ce message est déjà affiché pour éviter les duplications
+        if (!errorRegistry.registerError(field.id, message)) {
+            return; // Le message existe déjà, ne pas l'ajouter
+        }
+        
         field.classList.add('is-invalid');
         
-        // Ajouter un message d'erreur si pas déjà présent
-        const errorElem = field.parentNode.querySelector('.invalid-feedback');
-        if (!errorElem) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'invalid-feedback d-block';
-            errorDiv.textContent = message;
-            
-            if (field.parentNode.classList.contains('input-group')) {
-                field.parentNode.parentNode.appendChild(errorDiv);
-            } else {
-                field.parentNode.appendChild(errorDiv);
-            }
+        // Trouver le bon conteneur pour le message d'erreur
+        let container;
+        if (field.parentNode.classList.contains('input-group')) {
+            container = field.parentNode.parentNode;
+        } else {
+            container = field.closest('.form-group') || field.parentNode;
         }
+        
+        // Créer le message d'erreur
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'invalid-feedback d-block';
+        errorDiv.textContent = message;
+        errorDiv.setAttribute('data-field-id', field.id); // Marquer le message pour identification
+        
+        // Ajouter le message d'erreur au conteneur
+        container.appendChild(errorDiv);
+    }
+    
+    // Remplacer la fonction highlightField d'autres scripts si elle existe
+    if (window.highlightField) {
+        const originalHighlightField = window.highlightField;
+        window.highlightField = function(field, message) {
+            // Utiliser notre implémentation qui évite les duplications
+            highlightField(field, message);
+        };
     }
 });
 </script>
