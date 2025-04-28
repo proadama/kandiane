@@ -92,6 +92,9 @@ class CotisationForm(forms.ModelForm):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         
+        # Filtrer les statuts pour n'afficher que ceux applicables aux cotisations
+        self.fields['statut'].queryset = Statut.pour_cotisations()
+
         # Ajouter des classes CSS pour le styling
         for field_name, field in self.fields.items():
             if field.widget.__class__.__name__ not in ['CheckboxInput', 'RadioSelect']:

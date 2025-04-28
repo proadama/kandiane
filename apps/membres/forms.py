@@ -71,6 +71,9 @@ class MembreForm(forms.ModelForm):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         
+        # Filtrer les statuts pour n'afficher que ceux applicables aux membres
+        self.fields['statut'].queryset = Statut.pour_membres()
+
         # Ajouter des classes CSS pour le styling
         for field_name, field in self.fields.items():
             if field.widget.__class__.__name__ not in ['CheckboxInput', 'CheckboxSelectMultiple', 'RadioSelect']:
@@ -292,14 +295,23 @@ class MembreTypeMembreForm(forms.ModelForm):
         return cleaned_data
 
 
+# Modifier le fichier apps/membres/forms.py - Classe MembreImportForm
+
 class MembreImportForm(forms.Form):
     """
-    Formulaire pour l'importation de membres depuis un fichier CSV ou Excel
+    Formulaire amélioré pour l'importation de membres depuis un fichier CSV ou Excel
     """
     DELIMITERS = [
         (',', _('Virgule (,)')),
         (';', _('Point-virgule (;)')),
         ('\t', _('Tabulation')),
+    ]
+    
+    ENCODINGS = [
+        ('utf-8', 'UTF-8'),
+        ('iso-8859-1', 'ISO-8859-1 (Latin-1)'),
+        ('iso-8859-15', 'ISO-8859-15'),
+        ('cp1252', 'Windows-1252'),
     ]
     
     fichier = forms.FileField(
@@ -308,8 +320,14 @@ class MembreImportForm(forms.Form):
     )
     delimiter = forms.ChoiceField(
         choices=DELIMITERS,
-        initial=',',
+        initial=';',
         label=_("Séparateur (pour CSV)"),
+        required=False
+    )
+    encoding = forms.ChoiceField(
+        choices=ENCODINGS,
+        initial='utf-8',
+        label=_("Encodage (pour CSV)"),
         required=False
     )
     header = forms.BooleanField(
@@ -330,13 +348,97 @@ class MembreImportForm(forms.Form):
         label=_("Statut à attribuer"),
         help_text=_("Statut par défaut pour les membres importés")
     )
+    creer_comptes = forms.BooleanField(
+        initial=False,
+        required=False,
+        label=_("Créer des comptes utilisateurs"),
+        help_text=_("Créer automatiquement des comptes utilisateurs pour les membres importés")
+    )
+    envoyer_emails = forms.BooleanField(
+        initial=False,
+        required=False,
+        label=_("Envoyer emails de bienvenue"),
+        help_text=_("Envoyer un email de bienvenue avec les identifiants aux nouveaux membres")
+    )
+    update_existing = forms.BooleanField(
+        initial=True,
+        required=False,
+        label=_("Mettre à jour les membres existants"),
+        help_text=_("Mettre à jour les informations des membres existants (selon l'email)")
+    )
+    
+    # Mapping des colonnes
+    colonne_nom = forms.CharField(
+        required=True,
+        label=_("Colonne pour le nom"),
+        initial="nom"
+    )
+    colonne_prenom = forms.CharField(
+        required=True,
+        label=_("Colonne pour le prénom"),
+        initial="prenom"
+    )
+    colonne_email = forms.CharField(
+        required=True,
+        label=_("Colonne pour l'email"),
+        initial="email"
+    )
+    colonne_telephone = forms.CharField(
+        required=False,
+        label=_("Colonne pour le téléphone"),
+        initial="telephone"
+    )
+    colonne_adresse = forms.CharField(
+        required=False,
+        label=_("Colonne pour l'adresse"),
+        initial="adresse"
+    )
+    colonne_code_postal = forms.CharField(
+        required=False,
+        label=_("Colonne pour le code postal"),
+        initial="code_postal"
+    )
+    colonne_ville = forms.CharField(
+        required=False,
+        label=_("Colonne pour la ville"),
+        initial="ville"
+    )
+    colonne_pays = forms.CharField(
+        required=False,
+        label=_("Colonne pour le pays"),
+        initial="pays"
+    )
+    colonne_date_naissance = forms.CharField(
+        required=False,
+        label=_("Colonne pour la date de naissance"),
+        initial="date_naissance"
+    )
+    colonne_date_adhesion = forms.CharField(
+        required=False,
+        label=_("Colonne pour la date d'adhésion"),
+        initial="date_adhesion"
+    )
+    format_date = forms.ChoiceField(
+        choices=[
+            ('auto', _('Auto-détection')),
+            ('YYYY-MM-DD', 'YYYY-MM-DD'),
+            ('DD/MM/YYYY', 'DD/MM/YYYY'),
+            ('MM/DD/YYYY', 'MM/DD/YYYY'),
+        ],
+        initial='auto',
+        label=_("Format des dates"),
+        required=False
+    )
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
         # Ajouter des classes CSS pour le styling
         for field_name, field in self.fields.items():
-            field.widget.attrs.update({'class': 'form-control'})
+            if field.widget.__class__.__name__ not in ['CheckboxInput']:
+                field.widget.attrs.update({'class': 'form-control'})
+            else:
+                field.widget.attrs.update({'class': 'form-check-input'})
     
     def clean_fichier(self):
         """Valider le fichier importé"""
@@ -346,6 +448,12 @@ class MembreImportForm(forms.Form):
             if extension not in ['csv', 'xlsx', 'xls']:
                 raise ValidationError(
                     _("Format de fichier non supporté. Utilisez CSV ou Excel (.xlsx, .xls).")
+                )
+            
+            # Vérifier la taille du fichier (max 10MB)
+            if fichier.size > 10 * 1024 * 1024:  # 10MB
+                raise ValidationError(
+                    _("Le fichier est trop volumineux. La taille maximale est de 10MB.")
                 )
         return fichier
 

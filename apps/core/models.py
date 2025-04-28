@@ -2,6 +2,9 @@
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django.db.models import Q
+from .managers import BaseManager
+
 
 class BaseModel(models.Model):
     """
@@ -11,6 +14,8 @@ class BaseModel(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Date de modification"))
     deleted_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Date de suppression"))
     
+    objects = BaseManager()
+
     class Meta:
         abstract = True
     
@@ -68,16 +73,47 @@ class BaseModel(models.Model):
         """Méthode à surcharger pour journaliser la restauration."""
         pass
 
+# apps/core/models.py
 class Statut(BaseModel):
     """
     Modèle pour stocker les différents statuts utilisés dans l'application.
     """
-    nom = models.CharField(max_length=50, unique=True, verbose_name="Nom")
-    description = models.TextField(null=True, blank=True, verbose_name="Description")
+    TYPE_CHOICES = [
+        ('global', _('Global')),
+        ('membre', _('Membre')),
+        ('cotisation', _('Cotisation')),
+        ('paiement', _('Paiement')),
+        ('evenement', _('Événement')),
+    ]
+    
+    nom = models.CharField(max_length=50, unique=True, verbose_name=_("Nom"))
+    description = models.TextField(null=True, blank=True, verbose_name=_("Description"))
+    type_entite = models.CharField(
+        max_length=20, 
+        choices=TYPE_CHOICES,
+        default='global',
+        verbose_name=_("Type d'entité")
+    )
     
     class Meta:
-        verbose_name = "Statut"
-        verbose_name_plural = "Statuts"
+        verbose_name = _("Statut")
+        verbose_name_plural = _("Statuts")
+        ordering = ['type_entite', 'nom']
         
     def __str__(self):
         return self.nom
+    
+    @classmethod
+    def pour_membres(cls):
+        """Retourne les statuts applicables aux membres."""
+        return cls.objects.filter(Q(type_entite='membre') | Q(type_entite='global'))
+    
+    @classmethod
+    def pour_cotisations(cls):
+        """Retourne les statuts applicables aux cotisations."""
+        return cls.objects.filter(Q(type_entite='cotisation') | Q(type_entite='global'))
+    
+    @classmethod
+    def pour_paiements(cls):
+        """Retourne les statuts applicables aux paiements."""
+        return cls.objects.filter(Q(type_entite='paiement') | Q(type_entite='global'))
