@@ -1419,6 +1419,12 @@ class PaiementDetailView(StaffRequiredMixin, DetailView):
         else:
             # Utiliser une liste vide si la classe n'existe pas
             context['historique'] = []
+
+        # NOUVEAU CODE: Calculer le montant payé sans utiliser le filtre sub
+        if hasattr(paiement.cotisation, 'montant') and hasattr(paiement.cotisation, 'montant_restant'):
+            context['montant_paye'] = paiement.cotisation.montant - paiement.cotisation.montant_restant
+        else:
+            context['montant_paye'] = 0
         
         return context
 

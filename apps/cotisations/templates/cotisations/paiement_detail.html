@@ -1,6 +1,7 @@
 {% extends "cotisations/base.html" %}
 {% load i18n %}
 {% load static %}
+{% load cotisation_filters %}
 
 {% block breadcrumb %}
 <li class="breadcrumb-item"><a href="{% url 'cotisations:dashboard' %}">{% trans "Tableau de bord" %}</a></li>
@@ -20,10 +21,10 @@
             <div class="card-header bg-light d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">{% trans "Informations du paiement" %}</h5>
                 <div class="btn-group">
-                    <a href="{% url 'cotisations:paiement_update' pk=paiement.pk %}" class="btn btn-sm btn-outline-secondary">
+                    <a href="{% url 'cotisations:paiement_modifier' pk=paiement.pk %}" class="btn btn-sm btn-outline-secondary">
                         <i class="fas fa-edit"></i> {% trans "Modifier" %}
                     </a>
-                    <a href="{% url 'cotisations:paiement_delete' pk=paiement.pk %}" class="btn btn-sm btn-outline-danger">
+                    <a href="{% url 'cotisations:paiement_supprimer' pk=paiement.pk %}" class="btn btn-sm btn-outline-danger">
                         <i class="fas fa-trash"></i> {% trans "Supprimer" %}
                     </a>
                     {% if paiement.type_transaction == 'paiement' and not paiement.recu_envoye %}
@@ -169,7 +170,7 @@
                     <dd class="col-sm-7">{{ paiement.cotisation.montant|floatformat:2 }} €</dd>
                     
                     <dt class="col-sm-5">{% trans "Montant payé" %}</dt>
-                    <dd class="col-sm-7">{{ paiement.cotisation.montant|sub:paiement.cotisation.montant_restant|floatformat:2 }} €</dd>
+                    <dd class="col-sm-7">{{ montant_paye|floatformat:2 }} €</dd>
                     
                     <dt class="col-sm-5">{% trans "Montant restant" %}</dt>
                     <dd class="col-sm-7">

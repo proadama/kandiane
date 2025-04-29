@@ -2,6 +2,7 @@
 from django import template
 from .custom_filters import split_filter, subtract, add_days
 
+
 register = template.Library()
 
 # Réexporter les filtres
