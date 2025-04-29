@@ -1,0 +1,63 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:bareme_liste' %}">{% trans "Liste des barèmes" %}</a></li>
+<li class="breadcrumb-item active">{% trans "Supprimer le barème" %}</li>
+{% endblock %}
+
+{% block page_title %}
+{% trans "Confirmation de suppression" %}
+{% endblock %}
+
+{% block cotisations_content %}
+<div class="card">
+    <div class="card-body">
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            {% trans "Êtes-vous sûr de vouloir supprimer ce barème de cotisation ?" %}
+        </div>
+        
+        <div class="mb-4">
+            <h5>{% trans "Informations sur le barème" %}</h5>
+            <dl class="row">
+                <dt class="col-sm-3">{% trans "Type de membre" %}</dt>
+                <dd class="col-sm-9">{{ object.type_membre }}</dd>
+                
+                <dt class="col-sm-3">{% trans "Montant" %}</dt>
+                <dd class="col-sm-9">{{ object.montant }} €</dd>
+                
+                <dt class="col-sm-3">{% trans "Périodicité" %}</dt>
+                <dd class="col-sm-9">{{ object.get_periodicite_display }}</dd>
+                
+                <dt class="col-sm-3">{% trans "Validité" %}</dt>
+                <dd class="col-sm-9">
+                    {% trans "Du" %} {{ object.date_debut_validite|date:"d/m/Y" }}
+                    {% if object.date_fin_validite %}
+                        {% trans "au" %} {{ object.date_fin_validite|date:"d/m/Y" }}
+                    {% else %}
+                        {% trans "(sans date de fin)" %}
+                    {% endif %}
+                </dd>
+            </dl>
+        </div>
+        
+        <div class="alert alert-warning">
+            <i class="fas fa-info-circle me-2"></i>
+            {% trans "Attention : La suppression de ce barème n'affectera pas les cotisations déjà créées." %}
+        </div>
+        
+        <form method="post">
+            {% csrf_token %}
+            <div class="d-flex justify-content-between">
+                <a href="{% url 'cotisations:bareme_liste' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-times"></i> {% trans "Annuler" %}
+                </a>
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-trash"></i> {% trans "Confirmer la suppression" %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
