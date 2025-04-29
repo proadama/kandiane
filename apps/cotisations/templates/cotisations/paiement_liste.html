@@ -1,0 +1,282 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:dashboard' %}">{% trans "Tableau de bord" %}</a></li>
+<li class="breadcrumb-item active">{% trans "Liste des paiements" %}</li>
+{% endblock %}
+
+{% block page_title %}
+{% trans "Liste des paiements" %}
+{% endblock %}
+
+{% block cotisations_content %}
+<div class="card">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">{% trans "Gestion des paiements" %}</h5>
+        <div>
+            <a href="{% url 'cotisations:export' %}?type=paiements&format=csv" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-file-export"></i> {% trans "Exporter CSV" %}
+            </a>
+            <a href="{% url 'cotisations:export' %}?type=paiements&format=excel" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-file-excel"></i> {% trans "Exporter Excel" %}
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <!-- Formulaire de recherche -->
+        <div class="mb-4">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="id_cotisation" class="form-label">{% trans "Cotisation" %}</label>
+                    <select name="cotisation" id="id_cotisation" class="form-control">
+                        <option value="">{% trans "Toutes les cotisations" %}</option>
+                        {% for cotisation in cotisations_list %}
+                        <option value="{{ cotisation.id }}" {% if request.GET.cotisation == cotisation.id|stringformat:"i" %}selected{% endif %}>
+                            {{ cotisation.reference }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="id_mode_paiement" class="form-label">{% trans "Mode de paiement" %}</label>
+                    <select name="mode_paiement" id="id_mode_paiement" class="form-control">
+                        <option value="">{% trans "Tous les modes" %}</option>
+                        {% for mode in modes_paiement %}
+                        <option value="{{ mode.id }}" {% if request.GET.mode_paiement == mode.id|stringformat:"i" %}selected{% endif %}>
+                            {{ mode.libelle }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="id_type_transaction" class="form-label">{% trans "Type de transaction" %}</label>
+                    <select name="type_transaction" id="id_type_transaction" class="form-control">
+                        <option value="">{% trans "Tous les types" %}</option>
+                        <option value="paiement" {% if request.GET.type_transaction == 'paiement' %}selected{% endif %}>
+                            {% trans "Paiement" %}
+                        </option>
+                        <option value="remboursement" {% if request.GET.type_transaction == 'remboursement' %}selected{% endif %}>
+                            {% trans "Remboursement" %}
+                        </option>
+                        <option value="rejet" {% if request.GET.type_transaction == 'rejet' %}selected{% endif %}>
+                            {% trans "Rejet" %}
+                        </option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="id_recherche" class="form-label">{% trans "Recherche" %}</label>
+                    <input type="text" name="recherche" id="id_recherche" class="form-control" 
+                           placeholder="{% trans 'Référence, montant...' %}" value="{{ request.GET.recherche }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="id_date_debut" class="form-label">{% trans "Date de début" %}</label>
+                    <input type="date" name="date_debut" id="id_date_debut" class="form-control" value="{{ request.GET.date_debut }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="id_date_fin" class="form-label">{% trans "Date de fin" %}</label>
+                    <input type="date" name="date_fin" id="id_date_fin" class="form-control" value="{{ request.GET.date_fin }}">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> {% trans "Rechercher" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Statistiques rapides -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body p-3">
+                        <h6 class="card-title">{% trans "Total paiements" %}</h6>
+                        <h3 class="mb-0">{{ total_paiements }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body p-3">
+                        <h6 class="card-title">{% trans "Montant total" %}</h6>
+                        <h3 class="mb-0">{{ montant_total|floatformat:2 }} €</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body p-3">
+                        <h6 class="card-title">{% trans "Remboursements" %}</h6>
+                        <h3 class="mb-0">{{ montant_remboursements|floatformat:2 }} €</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body p-3">
+                        <h6 class="card-title">{% trans "Solde net" %}</h6>
+                        <h3 class="mb-0">{{ solde_net|floatformat:2 }} €</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tableau des paiements -->
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>{% trans "Référence" %}</th>
+                        <th>{% trans "Membre" %}</th>
+                        <th>{% trans "Cotisation" %}</th>
+                        <th>{% trans "Montant" %}</th>
+                        <th>{% trans "Date" %}</th>
+                        <th>{% trans "Mode" %}</th>
+                        <th>{% trans "Type" %}</th>
+                        <th>{% trans "Actions" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if paiements %}
+                        {% for paiement in paiements %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'cotisations:paiement_detail' pk=paiement.pk %}">
+                                    {{ paiement.reference_paiement|default:"-" }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if paiement.cotisation.membre %}
+                                <a href="{% url 'membres:membre_detail' pk=paiement.cotisation.membre.pk %}">
+                                    {{ paiement.cotisation.membre.prenom }} {{ paiement.cotisation.membre.nom }}
+                                </a>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'cotisations:cotisation_detail' pk=paiement.cotisation.pk %}">
+                                    {{ paiement.cotisation.reference }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="fw-bold {% if paiement.type_transaction == 'remboursement' or paiement.type_transaction == 'rejet' %}text-danger{% else %}text-success{% endif %}">
+                                    {% if paiement.type_transaction == 'remboursement' or paiement.type_transaction == 'rejet' %}-{% endif %}
+                                    {{ paiement.montant|floatformat:2 }} €
+                                </span>
+                            </td>
+                            <td>{{ paiement.date_paiement|date:"d/m/Y H:i" }}</td>
+                            <td>{{ paiement.mode_paiement.libelle|default:"-" }}</td>
+                            <td>
+                                {% if paiement.type_transaction == 'paiement' %}
+                                <span class="badge bg-success">{% trans "Paiement" %}</span>
+                                {% elif paiement.type_transaction == 'remboursement' %}
+                                <span class="badge bg-warning">{% trans "Remboursement" %}</span>
+                                {% elif paiement.type_transaction == 'rejet' %}
+                                <span class="badge bg-danger">{% trans "Rejet" %}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'cotisations:paiement_detail' pk=paiement.pk %}" class="btn btn-outline-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'cotisations:paiement_modifier' pk=paiement.pk %}" class="btn btn-outline-secondary">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a href="{% url 'cotisations:paiement_supprimer' pk=paiement.pk %}" class="btn btn-outline-danger">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                    {% if paiement.type_transaction == 'paiement' and not paiement.recu_envoye %}
+                                    <a href="{% url 'cotisations:api_generer_recu' paiement_id=paiement.pk %}" class="btn btn-outline-success">
+                                        <i class="fas fa-file-invoice"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <div class="alert alert-info mb-0">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    {% trans "Aucun paiement trouvé." %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <nav aria-label="{% trans 'Pagination' %}">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="{% trans 'Première page' %}">
+                        <span aria-hidden="true">&laquo;&laquo;</span>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="{% trans 'Précédent' %}">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link" aria-hidden="true">&laquo;&laquo;</span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link" aria-hidden="true">&laquo;</span>
+                </li>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="{% trans 'Suivant' %}">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="{% trans 'Dernière page' %}">
+                        <span aria-hidden="true">&raquo;&raquo;</span>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link" aria-hidden="true">&raquo;</span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link" aria-hidden="true">&raquo;&raquo;</span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Script pour initialiser les éléments interactifs si nécessaire
+});
+</script>
+{% endblock %}

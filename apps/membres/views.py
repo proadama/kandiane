@@ -1304,8 +1304,6 @@ class MembreSuppressionDefinitiveView(RestoreViewMixin, View):
         )
         return redirect(self.success_url)
 
-# Dans apps/membres/views.py, ajoutez cette classe:
-
 class MembreUpdateView(StaffRequiredMixin, UpdateView):
     """
     Vue pour modifier un membre existant
@@ -1328,8 +1326,6 @@ class MembreUpdateView(StaffRequiredMixin, UpdateView):
         )
         return super().form_valid(form)
     
-# Ajouter dans apps/membres/views.py
-
 class GuideIntegrationView(StaffRequiredMixin, TemplateView):
     """
     Vue pour afficher le guide d'intégration pour les nouveaux membres

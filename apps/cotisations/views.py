@@ -1258,82 +1258,139 @@ class PaiementListView(StaffRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = Paiement.objects.all()
+        queryset = Paiement.objects.all().select_related(
+            'cotisation', 'cotisation__membre', 'mode_paiement', 'statut'
+        )
         
-        # Filtres de base
-        type_transaction = self.request.GET.get('type_transaction')
-        date_debut = self.request.GET.get('date_debut')
-        date_fin = self.request.GET.get('date_fin')
+        # Filtres par cotisation
+        cotisation_id = self.request.GET.get('cotisation')
+        if cotisation_id:
+            queryset = queryset.filter(cotisation_id=cotisation_id)
+        
+        # Filtre par mode de paiement
         mode_paiement_id = self.request.GET.get('mode_paiement')
-        membre_id = self.request.GET.get('membre_id')
-        terme = self.request.GET.get('terme')
-        
-        # Appliquer les filtres
-        if type_transaction:
-            queryset = queryset.filter(type_transaction=type_transaction)
-            
-        if date_debut:
-            try:
-                date_debut = datetime.datetime.strptime(date_debut, '%Y-%m-%d').date()
-                queryset = queryset.filter(date_paiement__gte=date_debut)
-            except ValueError:
-                pass
-                
-        if date_fin:
-            try:
-                date_fin = datetime.datetime.strptime(date_fin, '%Y-%m-%d').date()
-                queryset = queryset.filter(date_paiement__lte=date_fin)
-            except ValueError:
-                pass
-                
         if mode_paiement_id:
             queryset = queryset.filter(mode_paiement_id=mode_paiement_id)
-            
-        if membre_id:
-            queryset = queryset.filter(cotisation__membre_id=membre_id)
-            
-        if terme:
+        
+        # Filtre par type de transaction
+        type_transaction = self.request.GET.get('type_transaction')
+        if type_transaction:
+            queryset = queryset.filter(type_transaction=type_transaction)
+        
+        # Recherche textuelle
+        recherche = self.request.GET.get('recherche')
+        if recherche:
             queryset = queryset.filter(
-                Q(reference_paiement__icontains=terme) |
-                Q(commentaire__icontains=terme) |
-                Q(cotisation__reference__icontains=terme) |
-                Q(cotisation__membre__nom__icontains=terme) |
-                Q(cotisation__membre__prenom__icontains=terme)
+                Q(reference_paiement__icontains=recherche) |
+                Q(commentaire__icontains=recherche) |
+                Q(cotisation__reference__icontains=recherche) |
+                Q(cotisation__membre__nom__icontains=recherche) |
+                Q(cotisation__membre__prenom__icontains=recherche)
             )
         
-        return queryset.select_related('cotisation', 'cotisation__membre', 'mode_paiement')
+        # Filtre par date
+        date_debut = self.request.GET.get('date_debut')
+        if date_debut:
+            queryset = queryset.filter(date_paiement__gte=date_debut)
+        
+        date_fin = self.request.GET.get('date_fin')
+        if date_fin:
+            # Ajouter un jour pour inclure toute la journée de fin
+            from datetime import datetime, timedelta
+            try:
+                date_fin_dt = datetime.strptime(date_fin, '%Y-%m-%d')
+                date_fin_next = (date_fin_dt + timedelta(days=1)).strftime('%Y-%m-%d')
+                queryset = queryset.filter(date_paiement__lt=date_fin_next)
+            except ValueError:
+                pass  # Si la date est mal formatée, ignorer ce filtre
+        
+        return queryset
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Ajouter des statistiques rapides
-        total_paiements = Paiement.objects.count()
-        montant_total = Paiement.objects.filter(type_transaction='paiement').aggregate(
-            total=Sum('montant')).get('total') or Decimal('0.00')
+        # Liste des cotisations pour le filtre
+        context['cotisations_list'] = Cotisation.objects.all().order_by('-date_emission')[:100]
         
-        # Modes de paiement pour le filtre
-        modes_paiement = ModePaiement.objects.filter(actif=True)
+        # Liste des modes de paiement pour le filtre
+        context['modes_paiement'] = ModePaiement.objects.filter(actif=True)
         
-        context.update({
-            'total_paiements': total_paiements,
-            'montant_total': montant_total,
-            'modes_paiement': modes_paiement,
-            'filtres': {
-                'type_transaction': self.request.GET.get('type_transaction', ''),
-                'date_debut': self.request.GET.get('date_debut', ''),
-                'date_fin': self.request.GET.get('date_fin', ''),
-                'mode_paiement': self.request.GET.get('mode_paiement', ''),
-                'membre_id': self.request.GET.get('membre_id', ''),
-                'terme': self.request.GET.get('terme', '')
-            }
-        })
+        # Calculer les statistiques
+        paiements = Paiement.objects.all()
+        
+        # Total des paiements
+        context['total_paiements'] = paiements.count()
+        
+        # Montant total des paiements
+        montant_paiements = paiements.filter(
+            type_transaction='paiement'
+        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        
+        context['montant_total'] = montant_paiements
+        
+        # Montant des remboursements
+        montant_remboursements = paiements.filter(
+            type_transaction__in=['remboursement', 'rejet']
+        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        
+        context['montant_remboursements'] = montant_remboursements
+        
+        # Solde net
+        context['solde_net'] = montant_paiements - montant_remboursements
         
         return context
 
+# Dans le fichier views.py, ajoutez ce code avant la définition de PaiementDetailView
+# pour gérer le cas où la classe HistoriqueTransaction n'existerait pas
+
+# Import conditionnel pour historique des transactions
+try:
+    from .models import HistoriqueTransaction
+except ImportError:
+    # Fallback - utiliser la table historique_transactions directement si le modèle n'existe pas
+    class HistoriqueTransaction:
+        objects = None
+        
+        @staticmethod
+        def get_empty_queryset():
+            from django.db.models.query import EmptyQuerySet
+            return EmptyQuerySet(model=None)
+
+# Puis modifier la méthode get_context_data de PaiementDetailView:
+
+def get_context_data(self, **kwargs):
+    context = super().get_context_data(**kwargs)
+    paiement = self.object
+    
+    # Récupérer l'historique des actions liées à ce paiement
+    if hasattr(HistoriqueTransaction, 'objects') and HistoriqueTransaction.objects:
+        context['historique'] = HistoriqueTransaction.objects.filter(
+            type='paiement',
+            reference_id=paiement.id
+        ).order_by('-date_creation')
+    else:
+        # Vérifier s'il existe une table directe historique_transactions
+        try:
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT * FROM historique_transactions 
+                    WHERE type = 'paiement' AND reference_id = %s
+                    ORDER BY date_creation DESC
+                """, [paiement.id])
+                columns = [col[0] for col in cursor.description]
+                context['historique'] = [
+                    dict(zip(columns, row)) for row in cursor.fetchall()
+                ]
+        except Exception:
+            # Si rien ne fonctionne, initialiser avec une liste vide
+            context['historique'] = []
+    
+    return context
 
 class PaiementDetailView(StaffRequiredMixin, DetailView):
     """
-    Vue détaillée d'un paiement.
+    Vue détaillée d'un paiement avec son historique.
     """
     model = Paiement
     template_name = 'cotisations/paiement_detail.html'
@@ -1343,22 +1400,17 @@ class PaiementDetailView(StaffRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         paiement = self.object
         
-        # Ajouter des informations complémentaires
-        context['cotisation'] = paiement.cotisation
-        context['membre'] = paiement.cotisation.membre
-        
-        # Historique lié au paiement
-        context['historique'] = HistoriqueCotisation.objects.filter(
-            cotisation=paiement.cotisation
-        ).order_by('-date_action')
-        
-        # Autres paiements de la même cotisation
-        context['autres_paiements'] = paiement.cotisation.paiements.exclude(
-            pk=paiement.pk
-        ).order_by('-date_paiement')
+        # Récupérer l'historique des actions liées à ce paiement
+        if hasattr(HistoriqueTransaction, 'objects') and HistoriqueTransaction.objects:
+            context['historique'] = HistoriqueTransaction.objects.filter(
+                type='paiement',
+                reference_id=paiement.id
+            ).order_by('-date_creation')
+        else:
+            # Utiliser une liste vide si la classe n'existe pas
+            context['historique'] = []
         
         return context
-
 
 class BaremeDetailView(StaffRequiredMixin, DetailView):
     """

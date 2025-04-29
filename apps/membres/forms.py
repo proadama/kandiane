@@ -295,8 +295,6 @@ class MembreTypeMembreForm(forms.ModelForm):
         return cleaned_data
 
 
-# Modifier le fichier apps/membres/forms.py - Classe MembreImportForm
-
 class MembreImportForm(forms.Form):
     """
     Formulaire amélioré pour l'importation de membres depuis un fichier CSV ou Excel
