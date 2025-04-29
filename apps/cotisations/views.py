@@ -649,6 +649,15 @@ class PaiementDeleteView(StaffRequiredMixin, DeleteView):
         )
         return redirect('cotisations:cotisation_detail', pk=cotisation.pk)
 
+    def get_success_url(self):
+        # Récupérer l'ID de la cotisation avant que le paiement ne soit supprimé
+        cotisation_id = self.object.cotisation.id
+        messages.success(
+            self.request, 
+            _("Le paiement a été supprimé avec succès.")
+        )
+        # Rediriger vers la page de détail de la cotisation associée
+        return reverse('cotisations:cotisation_detail', kwargs={'pk': cotisation_id})
 
 class RappelCreateView(StaffRequiredMixin, CreateView):
     """
