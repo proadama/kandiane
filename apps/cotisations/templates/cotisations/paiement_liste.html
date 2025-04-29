@@ -88,7 +88,7 @@
 
         <!-- Statistiques rapides -->
         <div class="row mb-4">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <div class="card bg-light">
                     <div class="card-body p-3">
                         <h6 class="card-title">{% trans "Total paiements" %}</h6>
@@ -96,23 +96,39 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <div class="card bg-success text-white">
                     <div class="card-body p-3">
-                        <h6 class="card-title">{% trans "Montant total" %}</h6>
+                        <h6 class="card-title">{% trans "Montant payé" %}</h6>
                         <h3 class="mb-0">{{ montant_total|floatformat:2 }} €</h3>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card bg-info text-white">
+            <div class="col-md-2">
+                <div class="card bg-warning text-dark">
                     <div class="card-body p-3">
                         <h6 class="card-title">{% trans "Remboursements" %}</h6>
                         <h3 class="mb-0">{{ montant_remboursements|floatformat:2 }} €</h3>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
+                <div class="card bg-danger text-white">
+                    <div class="card-body p-3">
+                        <h6 class="card-title">{% trans "Rejets" %}</h6>
+                        <h3 class="mb-0">{{ montant_rejets|floatformat:2 }} €</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card bg-info text-white">
+                    <div class="card-body p-3">
+                        <h6 class="card-title">{% trans "Non encaissés" %}</h6>
+                        <h3 class="mb-0">{{ total_deductions|floatformat:2 }} €</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
                 <div class="card bg-primary text-white">
                     <div class="card-body p-3">
                         <h6 class="card-title">{% trans "Solde net" %}</h6>

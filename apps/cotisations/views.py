@@ -1321,7 +1321,7 @@ class PaiementListView(StaffRequiredMixin, ListView):
         # Total des paiements
         context['total_paiements'] = paiements.count()
         
-        # Montant total des paiements
+        # Montant total des paiements (entrées d'argent)
         montant_paiements = paiements.filter(
             type_transaction='paiement'
         ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
@@ -1330,13 +1330,23 @@ class PaiementListView(StaffRequiredMixin, ListView):
         
         # Montant des remboursements
         montant_remboursements = paiements.filter(
-            type_transaction__in=['remboursement', 'rejet']
+            type_transaction='remboursement'
         ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
         
         context['montant_remboursements'] = montant_remboursements
         
+        # Montant des rejets
+        montant_rejets = paiements.filter(
+            type_transaction='rejet'
+        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        
+        context['montant_rejets'] = montant_rejets
+        
+        # Total des déductions (remboursements + rejets)
+        context['total_deductions'] = montant_remboursements + montant_rejets
+        
         # Solde net
-        context['solde_net'] = montant_paiements - montant_remboursements
+        context['solde_net'] = montant_paiements - (montant_remboursements + montant_rejets)
         
         return context
 
