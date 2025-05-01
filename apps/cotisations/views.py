@@ -2536,7 +2536,65 @@ def rappel_supprimer_ajax(request, rappel_id):
             'message': _("Erreur lors de la suppression du rappel: {0}").format(str(e))
         }, encoder=ExtendedJSONEncoder)
 
+# Filtrage dynamique des barèmes par type de membre
+@login_required
+def api_baremes_par_type(request):
+    """
+    API pour récupérer les barèmes disponibles pour un type de membre spécifique.
+    Utilisé pour la mise à jour dynamique des barèmes dans le formulaire de cotisation.
+    """
+    type_membre_id = request.GET.get('type_membre_id')
+    
+    if not type_membre_id:
+        return JsonResponse({'success': False, 'message': _("Type de membre non spécifié")})
+    
+    try:
+        # Récupérer les barèmes actifs pour ce type de membre
+        baremes = BaremeCotisation.objects.filter(
+            type_membre_id=type_membre_id,
+            deleted_at__isnull=True
+        ).order_by('-date_debut_validite')
+        
+        today = timezone.now().date()
+        
+        # Formater les données pour le client
+        baremes_data = []
+        for bareme in baremes:
+            est_actif = bareme.est_actif()
+            est_futur = bareme.date_debut_validite > today if bareme.date_debut_validite else False
+            
+            baremes_data.append({
+                'id': bareme.id,
+                'montant': float(bareme.montant),
+                'periodicite': bareme.get_periodicite_display(),
+                'periodicite_code': bareme.periodicite,
+                'est_actif': est_actif,
+                'est_futur': est_futur,
+                'date_debut': bareme.date_debut_validite.isoformat() if bareme.date_debut_validite else None,
+                'date_fin': bareme.date_fin_validite.isoformat() if bareme.date_fin_validite else None,
+                'duree_jours': get_duree_jours_par_periodicite(bareme.periodicite)
+            })
+        
+        return JsonResponse({
+            'success': True, 
+            'baremes': baremes_data
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)})
 
+def get_duree_jours_par_periodicite(periodicite):
+    """Helper function to get the standard duration in days for a periodicity"""
+    if periodicite == 'mensuelle':
+        return 30
+    elif periodicite == 'trimestrielle':
+        return 91
+    elif periodicite == 'semestrielle':
+        return 182
+    elif periodicite == 'annuelle':
+        return 365
+    else:
+        return 365  # Default to annual
+    
 # Vue de base pour maintenir la compatibilité avec urls.py
 dashboard = DashboardView.as_view()
 cotisation_list = CotisationListView.as_view()

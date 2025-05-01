@@ -88,13 +88,11 @@ class CotisationForm(forms.ModelForm):
             'commentaire': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
         }
     
+    # Modifier la méthode __init__ dans CotisationForm
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         
-        # Filtrer les statuts pour n'afficher que ceux applicables aux cotisations
-        self.fields['statut'].queryset = Statut.pour_cotisations()
-
         # Ajouter des classes CSS pour le styling
         for field_name, field in self.fields.items():
             if field.widget.__class__.__name__ not in ['CheckboxInput', 'RadioSelect']:
@@ -112,24 +110,32 @@ class CotisationForm(forms.ModelForm):
                 'periode_fin': today.replace(year=today.year + 1) - timezone.timedelta(days=1),
             })
             
-            # MODIFICATION: Supprimer complètement le champ référence
-            # et le champ generer_reference du formulaire
-            if 'reference' in self.fields:
-                del self.fields['reference']
-            if 'generer_reference' in self.fields:
-                del self.fields['generer_reference']
+            # Masquer le champ référence si génération automatique
+            self.fields['reference'].widget = forms.HiddenInput()
+            
+            # Ajouter des attributs data- pour le JavaScript
+            self.fields['bareme'].widget.attrs.update({
+                'data-depends-on': 'type_membre',
+            })
+            
+            # Rendre le champ montant en lecture seule par défaut
+            self.fields['montant'].widget.attrs.update({
+                'readonly': True,
+            })
         else:
             # Pour une modification, on ne peut pas changer certains champs
             self.fields['membre'].disabled = True
             self.fields['type_membre'].disabled = True
             self.fields['bareme'].disabled = True
             self.fields['montant'].disabled = True
-            if 'reference' in self.fields:
-                self.fields['reference'].disabled = True
+            self.fields['reference'].disabled = True
             
             # Cacher les champs spécifiques à la création
-            if 'utiliser_bareme' in self.fields:
-                self.fields['utiliser_bareme'].widget = forms.HiddenInput()
+            self.fields['generer_reference'].widget = forms.HiddenInput()
+            self.fields['utiliser_bareme'].widget = forms.HiddenInput()
+        
+        # Ne pas filtrer les barèmes ici, ce sera fait par le JavaScript
+        # La partie existante qui filtre les barèmes peut être conservée comme fallback
     
     def clean(self):
         cleaned_data = super().clean()

@@ -1,0 +1,238 @@
+Structure du projet Django depuis : C:\Users\frada\OneDrive\INFORMATIQUE\Web\SourceCode\project-web
+
+├── .env
+├── .gitignore
+├── Idée d'amélioration.txt
+├── Suppressionlogique_corbeille.md
+├── apps
+│   ├── __init__.py
+│   ├── accounts
+│   │   ├── Accounts_Readme.md
+│   │   ├── __init__.py
+│   │   ├── admin.py
+│   │   ├── apps.py
+│   │   ├── forms.py
+│   │   ├── management
+│   │   │   └── commands
+│   │   ├── managers.py
+│   │   ├── middleware.py
+│   │   ├── models.py
+│   │   ├── signals.py
+│   │   ├── templates
+│   │   │   └── accounts
+│   │   │       ├── change_password.html
+│   │   │       ├── edit_profile.html
+│   │   │       ├── email
+│   │   │       │   ├── password_reset_email.html
+│   │   │       │   └── password_reset_subject.txt
+│   │   │       ├── email_verification_required.html
+│   │   │       ├── login.html
+│   │   │       ├── password_reset.html
+│   │   │       ├── password_reset_complete.html
+│   │   │       ├── password_reset_confirm.html
+│   │   │       ├── password_reset_done.html
+│   │   │       ├── password_reset_email.html
+│   │   │       ├── profile.html
+│   │   │       ├── protected_page.html
+│   │   │       ├── register.html
+│   │   │       ├── role_list.html
+│   │   │       └── terms.html
+│   │   ├── tests
+│   │   │   ├── __init__.py
+│   │   │   ├── test_forms.py
+│   │   │   ├── test_integration.py
+│   │   │   ├── test_middleware.py
+│   │   │   ├── test_models.py
+│   │   │   └── test_views.py
+│   │   ├── tests.py
+│   │   ├── urls.py
+│   │   ├── urls.py.old
+│   │   ├── validators.py
+│   │   └── views.py
+│   ├── core
+│   │   ├── Core_Readme.md
+│   │   ├── __init__.py
+│   │   ├── admin.py
+│   │   ├── apps.py
+│   │   ├── context_processors.py
+│   │   ├── management
+│   │   │   └── commands
+│   │   │       └── create_default_statuts.py
+│   │   ├── managers.py
+│   │   ├── middleware.py
+│   │   ├── mixins.py
+│   │   ├── models.py
+│   │   ├── services.py
+│   │   ├── signals.py
+│   │   ├── tasks.py
+│   │   ├── templatetags
+│   │   ├── tests.py
+│   │   ├── urls.py
+│   │   ├── utils.py
+│   │   └── views.py
+│   ├── cotisations
+│   │   ├── Baremes.md
+│   │   ├── README.md
+│   │   ├── __init__.py
+│   │   ├── admin.py
+│   │   ├── apps.py
+│   │   ├── export_utils.py
+│   │   ├── forms.py
+│   │   ├── managers.py
+│   │   ├── middleware.py
+│   │   ├── models.py
+│   │   ├── readme_cotisations.md
+│   │   ├── services.py
+│   │   ├── signals.py
+│   │   ├── templates
+│   │   │   └── cotisations
+│   │   │       ├── bareme_confirm_delete.html
+│   │   │       ├── bareme_detail.html
+│   │   │       ├── bareme_form.html
+│   │   │       ├── bareme_liste.html
+│   │   │       ├── base.html
+│   │   │       ├── cotisation_confirm_delete.html
+│   │   │       ├── cotisation_detail copy
+│   │   │       ├── cotisation_detail.html
+│   │   │       ├── cotisation_form.html
+│   │   │       ├── cotisation_form.html.old
+│   │   │       ├── cotisation_liste.html
+│   │   │       ├── dashboard.html
+│   │   │       ├── dashboard_ancien.html
+│   │   │       ├── paiement_confirm_delete.html
+│   │   │       ├── paiement_detail.html
+│   │   │       ├── paiement_form copy
+│   │   │       ├── paiement_form.html
+│   │   │       ├── paiement_liste.html
+│   │   │       ├── rappel_form copy
+│   │   │       ├── rappel_form.html
+│   │   │       └── rappel_liste.html
+│   │   ├── templatetags
+│   │   │   ├── __init__.py
+│   │   │   ├── cotisation_filters.py
+│   │   │   ├── cotisations_extras.py
+│   │   │   ├── cotisations_tags.py
+│   │   │   └── custom_filters.py
+│   │   ├── tests
+│   │   │   ├── __init__.py
+│   │   │   ├── test_api.py
+│   │   │   ├── test_export.py
+│   │   │   ├── test_forms.py
+│   │   │   ├── test_integration.py
+│   │   │   ├── test_models.py
+│   │   │   └── test_views.py
+│   │   ├── tests.py
+│   │   ├── urls.py
+│   │   ├── utils.py
+│   │   ├── views copy
+│   │   └── views.py
+│   └── membres
+│       ├── Membres_Readme.md
+│       ├── __init__.py
+│       ├── admin.py
+│       ├── apps.py
+│       ├── forms.py
+│       ├── managers.py
+│       ├── models.py
+│       ├── signals.py
+│       ├── templates
+│       │   └── membres
+│       │       ├── confirmer_suppression.html
+│       │       ├── corbeille.html
+│       │       ├── dashboard.html
+│       │       ├── detail.html
+│       │       ├── form.html
+│       │       ├── form.html.old
+│       │       ├── guide_integration.html
+│       │       ├── historique.html
+│       │       ├── import.html
+│       │       ├── liste.html
+│       │       ├── membre_type_membre_form.html
+│       │       ├── type_membre_confirmer_suppression.html
+│       │       ├── type_membre_form.html
+│       │       └── type_membre_liste.html
+│       ├── tests
+│       │   └── test_trash.py
+│       ├── tests.py
+│       ├── urls.py
+│       └── views.py
+├── config
+│   ├── __init__.py
+│   ├── asgi.py
+│   ├── celery.py
+│   ├── settings
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── development.py
+│   │   └── production.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+├── db.sqlite3
+├── db.sqlite3.old
+├── generate_project_structure.py
+├── manage.py
+├── media
+│   ├── avatars
+│   │   └── maggie.PNG
+│   └── membres
+│       └── photos
+│           ├── avatar.jpg
+│           ├── maggie.PNG
+│           ├── maggie_cu6TdHv.PNG
+│           ├── maggie_ll1bS9w.PNG
+│           └── maggie_tSXuiM7.PNG
+├── requirements.txt
+├── roadmap-updated.md
+├── static
+│   ├── css
+│   │   └── style.css
+│   ├── img
+│   └── js
+│       ├── cotisations
+│       │   ├── cotisation_forms.js
+│       │   ├── cotisations.js
+│       │   ├── form-validation.js
+│       │   ├── modal-validation-fix.js
+│       │   ├── paiement-ajax.js
+│       │   ├── paiement_modal.js
+│       │   └── rappel-ajax.js
+│       ├── main.js
+│       ├── session-check.js
+│       ├── validation-antidup.js
+│       └── validation-fix.js
+├── staticfiles
+│   ├── css
+│   │   └── style.css
+│   └── js
+│       ├── cotisations
+│       │   ├── cotisation_forms.js
+│       │   ├── cotisations.js
+│       │   ├── form-validation.js
+│       │   ├── modal-validation-fix.js
+│       │   ├── paiement-ajax.js
+│       │   ├── paiement_modal.js
+│       │   └── rappel-ajax.js
+│       ├── main.js
+│       ├── session-check.js
+│       ├── validation-antidup.js
+│       └── validation-fix.js
+└── templates
+    ├── core
+    │   ├── dashboard.html
+    │   ├── errors
+    │   │   ├── 404.html
+    │   │   └── 500.html
+    │   ├── home.html
+    │   ├── maintenance.html
+    │   └── test_filters.html
+    ├── emails
+    │   ├── email_verification.html
+    │   └── welcome_email.html
+    ├── includes
+    │   ├── footer.html
+    │   ├── header.html
+    │   ├── messages.html
+    │   └── notifications.html
+    └── layouts
+        └── base.html

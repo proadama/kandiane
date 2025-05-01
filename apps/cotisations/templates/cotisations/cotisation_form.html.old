@@ -1,6 +1,7 @@
 {% extends "cotisations/base.html" %}
 {% load i18n %}
 {% load static %}
+{% load custom_filters %}
 
 {% block breadcrumb %}
 {% if form.instance.pk %}
@@ -121,6 +122,9 @@
                                 {% if form.montant.help_text %}
                                 <small class="form-text text-muted">{{ form.montant.help_text }}</small>
                                 {% endif %}
+                                <div id="calcul-prorata-info" class="text-info small mt-2" style="display: none;">
+                                    <i class="fas fa-info-circle"></i> <span id="calcul-prorata-texte"></span>
+                                </div>
                                 {% if form.montant.errors %}
                                 <div class="invalid-feedback d-block">
                                     {{ form.montant.errors }}
@@ -129,34 +133,42 @@
                             </div>
                         </div>
                         
+                        <!-- Calcul au prorata -->
+                        {% if not form.instance.pk %}
+                        <div class="col-md-12">
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="calculer_prorata" name="calculer_prorata" checked>
+                                <label class="form-check-label" for="calculer_prorata">
+                                    {% trans "Calculer le montant au prorata de la période" %}
+                                </label>
+                                <small class="form-text text-muted d-block">
+                                    {% trans "Le montant sera ajusté proportionnellement à la durée de la période." %}
+                                </small>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
                         <!-- Troisième section - Référence -->
                         <div class="col-12 mt-4">
                             <h5 class="border-bottom pb-2">{% trans "Référence" %}</h5>
                         </div>
                         
-                        {% if not form.instance.pk %}
-                        <!-- Générer référence (seulement pour la création) -->
-                        <div class="col-md-12">
-                            <div class="form-check mb-3">
-                                {{ form.generer_reference }}
-                                {{ form.generer_reference.label_tag }}
-                                {% if form.generer_reference.help_text %}
-                                <small class="form-text text-muted d-block">{{ form.generer_reference.help_text }}</small>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endif %}
-                        
-                        <!-- Référence - MODIFIÉ pour corriger le problème -->
+                        <!-- Référence -->
                         <div class="col-md-12" id="referenceContainer">
                             <div class="form-group{% if form.reference.errors %} is-invalid{% endif %}">
                                 {{ form.reference.label_tag }}
-                                {{ form.reference }}
-                                <!-- Champ caché pour s'assurer que la référence est envoyée même quand le champ est masqué -->
-                                <input type="hidden" id="reference_placeholder" name="reference_auto" value="auto_generate" disabled>
-                                {% if form.reference.help_text %}
-                                <small class="form-text text-muted">{{ form.reference.help_text }}</small>
+                                {% if form.instance.pk %}
+                                    <div class="form-control-plaintext">{{ form.instance.reference }}</div>
+                                    {{ form.reference.as_hidden }}
+                                {% else %}
+                                    <div class="form-control-plaintext">
+                                        <em>{% trans "La référence sera générée automatiquement à la création" %}</em>
+                                    </div>
+                                    <input type="hidden" name="reference" value="auto_generate">
                                 {% endif %}
+                                <small class="form-text text-muted">
+                                    {% trans "Format: COT-YYYYMM-XXXXX (année, mois, identifiant unique)" %}
+                                </small>
                                 {% if form.reference.errors %}
                                 <div class="invalid-feedback d-block">
                                     {{ form.reference.errors }}
@@ -306,15 +318,24 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Éléments du DOM
     const utiliserBaremeCheckbox = document.getElementById('id_utiliser_bareme');
+    const calculerProrataCheckbox = document.getElementById('calculer_prorata');
     const baremeSelect = document.getElementById('id_bareme');
     const typeMembreSelect = document.getElementById('id_type_membre');
     const montantInput = document.getElementById('id_montant');
     const baremeContainer = document.getElementById('baremeContainer');
-    const genererReferenceCheckbox = document.getElementById('id_generer_reference');
     const referenceContainer = document.getElementById('referenceContainer');
-    const referenceInput = document.getElementById('id_reference');
-    const referencePlaceholder = document.getElementById('reference_placeholder');
     const cotisationForm = document.getElementById('cotisationForm');
+    const periodeDebutInput = document.getElementById('id_periode_debut');
+    const periodeFinInput = document.getElementById('id_periode_fin');
+    const calculProrataInfo = document.getElementById('calcul-prorata-info');
+    const calculProrataTexte = document.getElementById('calcul-prorata-texte');
+    
+    // Variables pour stocker les informations du barème
+    let baremeInfo = {
+        montant: 0,
+        periodicite: '',
+        dureeStandard: 0, // en jours
+    };
     
     // Fonction pour récupérer les barèmes disponibles pour un type de membre
     function chargerBaremes(typeMembreId) {
@@ -330,10 +351,17 @@ document.addEventListener('DOMContentLoaded', function() {
         baremeSelect.disabled = true;
         
         // Requête AJAX pour récupérer les barèmes pour ce type de membre
-        fetch(`{% url 'cotisations:api_baremes_par_type' %}?type_membre=${typeMembreId}`)
+        fetch(`{% url 'cotisations:api_baremes_par_type' %}?type_membre=${encodeURIComponent(typeMembreId)}`, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+            },
+            credentials: 'same-origin'
+        })
             .then(response => {
                 if (!response.ok) {
-                    throw new Error('Erreur réseau');
+                    throw new Error(`Erreur réseau: ${response.status}`);
                 }
                 return response.json();
             })
@@ -356,8 +384,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                             
                             option.textContent = label;
+                            
+                            // Stocker les données du barème dans l'option
                             option.dataset.montant = bareme.montant;
                             option.dataset.periodicite = bareme.periodicite;
+                            option.dataset.dureeJours = bareme.duree_jours || getDureeJoursParPeriodicite(bareme.periodicite);
                             
                             baremeSelect.appendChild(option);
                         });
@@ -395,6 +426,17 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
+    // Fonction pour calculer le nombre de jours selon la périodicité
+    function getDureeJoursParPeriodicite(periodicite) {
+        switch (periodicite) {
+            case 'mensuelle': return 30;
+            case 'trimestrielle': return 91;
+            case 'semestrielle': return 182;
+            case 'annuelle': return 365;
+            default: return 365;
+        }
+    }
+    
     // Fonction pour calculer le montant depuis le barème sélectionné
     function calculerMontantBareme() {
         if (!baremeSelect.value) {
@@ -405,31 +447,61 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectedOption = baremeSelect.options[baremeSelect.selectedIndex];
         if (selectedOption && selectedOption.dataset.montant) {
             if (utiliserBaremeCheckbox && utiliserBaremeCheckbox.checked) {
-                montantInput.value = selectedOption.dataset.montant;
-                montantInput.readOnly = true;
+                // Stocker les infos du barème
+                baremeInfo.montant = parseFloat(selectedOption.dataset.montant);
+                baremeInfo.periodicite = selectedOption.dataset.periodicite;
+                baremeInfo.dureeStandard = parseInt(selectedOption.dataset.dureeJours, 10);
+                
+                // Appliquer le montant standard ou calculer au prorata
+                if (calculerProrataCheckbox && calculerProrataCheckbox.checked) {
+                    calculerMontantProrata();
+                } else {
+                    montantInput.value = baremeInfo.montant.toFixed(2);
+                    montantInput.readOnly = true;
+                }
                 
                 // Mettre à jour les dates selon la périodicité si nécessaire
-                ajusterDates(selectedOption.dataset.periodicite);
+                ajusterDates(baremeInfo.periodicite);
             }
             return;
         }
         
-        // Sinon, faire une requête API
-        fetch(`{% url 'cotisations:api_calculer_montant' %}?bareme_id=${baremeSelect.value}`)
+        // Sinon, faire une requête API avec protection CSRF
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        fetch(`{% url 'cotisations:api_calculer_montant' %}?bareme_id=${encodeURIComponent(baremeSelect.value)}`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+            },
+            credentials: 'same-origin'
+        })
             .then(response => {
                 if (!response.ok) {
-                    throw new Error('Erreur réseau');
+                    throw new Error(`Erreur réseau: ${response.status}`);
                 }
                 return response.json();
             })
             .then(data => {
                 if (data.success) {
                     if (utiliserBaremeCheckbox && utiliserBaremeCheckbox.checked) {
-                        montantInput.value = data.montant;
-                        montantInput.readOnly = true;
+                        // Stocker les infos du barème
+                        baremeInfo.montant = parseFloat(data.montant);
+                        baremeInfo.periodicite = data.periodicite_code;
+                        baremeInfo.dureeStandard = getDureeJoursParPeriodicite(data.periodicite_code);
+                        
+                        // Appliquer le montant standard ou calculer au prorata
+                        if (calculerProrataCheckbox && calculerProrataCheckbox.checked) {
+                            calculerMontantProrata();
+                        } else {
+                            montantInput.value = baremeInfo.montant.toFixed(2);
+                            montantInput.readOnly = true;
+                        }
                         
                         // Mettre à jour les dates selon la périodicité
-                        ajusterDates(data.periodicite_code);
+                        ajusterDates(baremeInfo.periodicite);
                     }
                 } else {
                     afficherErreur(data.message || '{% trans "Erreur lors du calcul du montant" %}');
@@ -441,24 +513,93 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
+    // Fonction pour calculer le montant au prorata
+    function calculerMontantProrata() {
+        if (!periodeDebutInput.value || !periodeFinInput.value || !baremeInfo.montant) {
+            return;
+        }
+        
+        // Si le calcul au prorata n'est pas activé, utiliser le montant standard
+        if (!calculerProrataCheckbox || !calculerProrataCheckbox.checked) {
+            montantInput.value = baremeInfo.montant.toFixed(2);
+            calculProrataInfo.style.display = 'none';
+            return;
+        }
+        
+        try {
+            // Calculer la durée effective (en jours)
+            const dateDebut = new Date(periodeDebutInput.value);
+            const dateFin = new Date(periodeFinInput.value);
+            
+            // Vérifier que les dates sont valides
+            if (isNaN(dateDebut.getTime()) || isNaN(dateFin.getTime())) {
+                throw new Error('Dates invalides');
+            }
+            
+            // Calculer la différence en jours
+            const differenceTemps = dateFin.getTime() - dateDebut.getTime();
+            const dureeEffective = Math.floor(differenceTemps / (1000 * 60 * 60 * 24)) + 1; // +1 pour inclure le jour de fin
+            
+            // Si la durée est négative ou nulle, montrer une erreur
+            if (dureeEffective <= 0) {
+                throw new Error('La période est invalide (date de fin antérieure à date de début)');
+            }
+            
+            // Calculer le ratio et le montant au prorata
+            const ratio = dureeEffective / baremeInfo.dureeStandard;
+            const montantProrata = baremeInfo.montant * ratio;
+            
+            // Appliquer le montant calculé (arrondi à 2 décimales)
+            montantInput.value = montantProrata.toFixed(2);
+            
+            // Afficher l'explication du calcul
+            const periodicites = {
+                'mensuelle': '{% trans "mois" %}',
+                'trimestrielle': '{% trans "trimestre" %}',
+                'semestrielle': '{% trans "semestre" %}',
+                'annuelle': '{% trans "année" %}',
+                'unique': '{% trans "période" %}'
+            };
+            
+            const periodiciteTexte = periodicites[baremeInfo.periodicite] || '{% trans "période" %}';
+            
+            calculProrataTexte.innerHTML = `
+                {% trans "Calcul au prorata : " %}
+                ${baremeInfo.montant.toFixed(2)}€ × (${dureeEffective} {% trans "jours" %} / ${baremeInfo.dureeStandard} {% trans "jours" %}) = ${montantProrata.toFixed(2)}€
+                <br>
+                {% trans "Durée standard d'un" %} ${periodiciteTexte} : ${baremeInfo.dureeStandard} {% trans "jours" %}
+                <br>
+                {% trans "Durée effective" %} : ${dureeEffective} {% trans "jours" %}
+            `;
+            calculProrataInfo.style.display = 'block';
+            
+        } catch (error) {
+            console.error('Erreur lors du calcul au prorata:', error);
+            afficherErreur('{% trans "Erreur lors du calcul du montant au prorata. Vérifiez les dates." %}');
+            // En cas d'erreur, utiliser le montant standard
+            montantInput.value = baremeInfo.montant.toFixed(2);
+            calculProrataInfo.style.display = 'none';
+        }
+    }
+    
     // Fonction pour ajuster les dates selon la périodicité
     function ajusterDates(periodicite) {
-        // Récupérer les champs de date
-        const periodeDebutInput = document.getElementById('id_periode_debut');
-        const periodeFinInput = document.getElementById('id_periode_fin');
-        
-        if (!periodeDebutInput || !periodeFinInput) {
+        if (!periodeDebutInput) {
             return;
         }
         
         // Si la date de début n'est pas définie, utiliser aujourd'hui
         if (!periodeDebutInput.value) {
             const today = new Date();
-            periodeDebutInput.value = today.toISOString().split('T')[0];
+            periodeDebutInput.value = formatDate(today);
         }
         
         // Calculer la date de fin selon la périodicité
         const dateDebut = new Date(periodeDebutInput.value);
+        if (isNaN(dateDebut.getTime())) {
+            return; // Date invalide
+        }
+        
         let dateFin = new Date(dateDebut);
         
         switch (periodicite) {
@@ -475,17 +616,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 dateFin.setDate(dateDebut.getDate() - 1);
                 break;
             case 'annuelle':
-            default:
                 dateFin.setFullYear(dateDebut.getFullYear() + 1);
                 dateFin.setDate(dateDebut.getDate() - 1);
                 break;
         }
         
         // Formater la date au format YYYY-MM-DD pour l'input
-        const year = dateFin.getFullYear();
-        const month = String(dateFin.getMonth() + 1).padStart(2, '0');
-        const day = String(dateFin.getDate()).padStart(2, '0');
-        periodeFinInput.value = `${year}-${month}-${day}`;
+        periodeFinInput.value = formatDate(dateFin);
+        
+        // Recalculer le montant au prorata si nécessaire
+        if (calculerProrataCheckbox && calculerProrataCheckbox.checked) {
+            calculerMontantProrata();
+        }
+    }
+    
+    // Fonction pour formater une date en YYYY-MM-DD
+    function formatDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     }
     
     // Fonction pour afficher un message d'erreur
@@ -493,6 +643,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Créer ou mettre à jour un élément d'alerte
         let alerteElem = document.getElementById('alerte-bareme');
         if (alerteElem) {
+            // Échapper le HTML pour éviter les attaques XSS
             alerteElem.textContent = message;
             alerteElem.style.display = 'block';
             
@@ -533,6 +684,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } else {
                 montantInput.readOnly = false;
+                calculProrataInfo.style.display = 'none';
             }
         });
         
@@ -542,38 +694,35 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // SOLUTION AU PROBLÈME DE RÉFÉRENCE - Code restructuré et corrigé
-    if (genererReferenceCheckbox && referenceContainer && referenceInput && referencePlaceholder) {
-        // Fonction pour mettre à jour la visibilité et l'état du champ référence
-        function updateReferenceField() {
-            if (genererReferenceCheckbox.checked) {
-                // Si génération auto activée:
-                referenceContainer.style.display = 'none';
-                referenceInput.value = ''; // Vider le champ
-                referenceInput.required = false; // Ne pas le rendre requis
-                
-                // Activer le champ caché pour signaler que la référence doit être générée
-                referencePlaceholder.disabled = false;
+    // Gestion du calcul au prorata
+    if (calculerProrataCheckbox) {
+        calculerProrataCheckbox.addEventListener('change', function() {
+            if (this.checked && baremeSelect.value) {
+                calculerMontantProrata();
             } else {
-                // Si génération auto désactivée:
-                referenceContainer.style.display = 'block';
-                referenceInput.required = true;
-                
-                // Désactiver le champ caché
-                referencePlaceholder.disabled = true;
+                // Utiliser le montant standard du barème
+                if (baremeInfo.montant > 0) {
+                    montantInput.value = baremeInfo.montant.toFixed(2);
+                }
+                calculProrataInfo.style.display = 'none';
             }
-        }
-        
-        // Initialiser l'état du champ
-        updateReferenceField();
-        
-        // Ajouter l'écouteur d'événement
-        genererReferenceCheckbox.addEventListener('change', updateReferenceField);
-        
-        // Ajouter une validation spécifique au champ de référence
-        referenceInput.addEventListener('input', function() {
-            // Nettoyer les espaces et caractères spéciaux
-            this.value = this.value.trim().replace(/[^\w\-]/g, '');
+        });
+    }
+    
+    // Écouter les changements sur les dates de période pour recalculer le prorata
+    if (periodeDebutInput) {
+        periodeDebutInput.addEventListener('change', function() {
+            if (calculerProrataCheckbox && calculerProrataCheckbox.checked) {
+                calculerMontantProrata();
+            }
+        });
+    }
+    
+    if (periodeFinInput) {
+        periodeFinInput.addEventListener('change', function() {
+            if (calculerProrataCheckbox && calculerProrataCheckbox.checked) {
+                calculerMontantProrata();
+            }
         });
     }
     
@@ -612,8 +761,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Vérifier les dates
             const dateEmission = document.getElementById('id_date_emission');
             const dateEcheance = document.getElementById('id_date_echeance');
-            const periodeDebut = document.getElementById('id_periode_debut');
-            const periodeFin = document.getElementById('id_periode_fin');
             
             if (!dateEmission.value) {
                 isValid = false;
@@ -623,25 +770,19 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!dateEcheance.value) {
                 isValid = false;
                 highlightField(dateEcheance, '{% trans "La date d'échéance est requise." %}');
-            } else if (new Date(dateEcheance.value) < new Date(dateEmission.value)) {
+            } else if (dateEmission.value && new Date(dateEcheance.value) < new Date(dateEmission.value)) {
                 isValid = false;
                 highlightField(dateEcheance, '{% trans "La date d'échéance doit être postérieure à la date d'émission." %}');
             }
             
-            if (!periodeDebut.value) {
+            if (!periodeDebutInput.value) {
                 isValid = false;
-                highlightField(periodeDebut, '{% trans "La date de début de période est requise." %}');
+                highlightField(periodeDebutInput, '{% trans "La date de début de période est requise." %}');
             }
             
-            if (periodeFin.value && new Date(periodeFin.value) < new Date(periodeDebut.value)) {
+            if (periodeFinInput.value && periodeDebutInput.value && new Date(periodeFinInput.value) < new Date(periodeDebutInput.value)) {
                 isValid = false;
-                highlightField(periodeFin, '{% trans "La date de fin de période doit être postérieure à la date de début." %}');
-            }
-            
-            // Vérifier la référence uniquement si la génération automatique est désactivée
-            if (genererReferenceCheckbox && !genererReferenceCheckbox.checked && !referenceInput.value) {
-                isValid = false;
-                highlightField(referenceInput, '{% trans "Une référence est requise si la génération automatique est désactivée." %}');
+                highlightField(periodeFinInput, '{% trans "La date de fin de période doit être postérieure à la date de début." %}');
             }
             
             // Ajouter une sécurité pour s'assurer que le formulaire ne peut pas être soumis si invalide
@@ -668,6 +809,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+
     // Fonction améliorée pour mettre en évidence un champ en erreur
     function highlightField(field, message) {
         if (!field) return;
@@ -702,13 +844,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Échapper toutes les entrées utilisateur pour prévenir les attaques XSS
     document.querySelectorAll('input[type="text"], textarea').forEach(input => {
         input.addEventListener('input', function() {
-            // Échapper les caractères HTML dangereux
-            this.value = this.value
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
+            // Simplement laisser le serveur s'occuper de l'échappement HTML
+            // L'échappement côté client peut interférer avec l'expérience utilisateur
         });
     });
 });
