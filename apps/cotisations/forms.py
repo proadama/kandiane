@@ -120,7 +120,7 @@ class CotisationForm(forms.ModelForm):
             
             # Rendre le champ montant en lecture seule par défaut
             self.fields['montant'].widget.attrs.update({
-                'readonly': True,
+                # Le readonly sera géré par JavaScript en fonction de la case à cocher 'readonly': True,
             })
         else:
             # Pour une modification, on ne peut pas changer certains champs
