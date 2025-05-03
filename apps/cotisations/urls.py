@@ -52,6 +52,7 @@ urlpatterns = [
     path('api/stats-cotisations/', views.api_stats_cotisations, name='api_stats_cotisations'),
     path('api/cotisations-en-retard/', views.api_cotisations_en_retard, name='api_cotisations_en_retard'),
     path('api/envoyer-rappels-automatiques/', views.api_envoyer_rappels_automatiques, name='api_envoyer_rappels_automatiques'),
+    path('api/types-membre-par-membre/', views.api_types_membre_par_membre, name='api_types_membre_par_membre'),
 
     # Cotisations
     path('<int:cotisation_id>/paiement/ajax/', views.paiement_create_ajax, name='paiement_create_ajax'),

@@ -313,544 +313,856 @@
 
 {% block extra_js %}
 {{ block.super }}
+
+<!-- Commentez temporairement ces scripts pour le débogage -->
+<!--
 <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
 <script src="{% static 'js/cotisations/cotisations.js' %}"></script>
 <script src="{% static 'js/cotisations/cotisation_forms.js' %}"></script>
+-->
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Éléments du DOM
-    const utiliserBaremeCheckbox = document.getElementById('id_utiliser_bareme');
-    const calculerProrataCheckbox = document.getElementById('calculer_prorata');
-    const baremeSelect = document.getElementById('id_bareme');
-    const typeMembreSelect = document.getElementById('id_type_membre');
-    const montantInput = document.getElementById('id_montant');
-    const baremeContainer = document.getElementById('baremeContainer');
-    const referenceContainer = document.getElementById('referenceContainer');
-    const cotisationForm = document.getElementById('cotisationForm');
-    const periodeDebutInput = document.getElementById('id_periode_debut');
-    const periodeFinInput = document.getElementById('id_periode_fin');
-    const calculProrataInfo = document.getElementById('calcul-prorata-info');
-    const calculProrataTexte = document.getElementById('calcul-prorata-texte');
-    
-    // Variables pour stocker les informations du barème
-    let baremeInfo = {
-        montant: 0,
-        periodicite: '',
-        dureeStandard: 0, // en jours
+/**
+ * Script JavaScript amélioré pour le formulaire de cotisation
+ * 
+ * Ce script:
+ * - Isole complètement son propre code pour éviter les conflits
+ * - Utilise une approche défensive pour la sélection et manipulation des éléments DOM
+ * - Implémente un système de journalisation avancé pour faciliter le débogage
+ * - Gère correctement les événements de cascade entre les sélecteurs
+ * - Garantit que seuls les types de membre liés au membre sélectionné sont affichés
+ */
+ (function() {
+    // Configuration globale
+    // Remplacer cette section dans votre fichier JavaScript
+    const CONFIG = {
+        debugMode: true,         // Activer les logs de débogage détaillés
+        logColors: {             // Couleurs pour le débogage dans la console
+            info: 'color: #007bff',
+            success: 'color: #28a745',
+            warning: 'color: #ffc107',
+            error: 'color: #dc3545',
+            event: 'color: #17a2b8',
+            api: 'color: #6610f2'
+        },
+        apiUrls: {
+            // Corriger les URLs pour qu'elles correspondent exactement à celles configurées dans urls.py
+            // Utilisation des underscores au lieu des tirets
+            typesMembre: '/cotisations/api/types-membre-par-membre/',
+            baremes: '/cotisations/api/baremes-par-type/',
+            calculMontant: '/cotisations/api/calculer_montant/'
+        },
+        selectors: {
+            form: '#cotisationForm',
+            membre: '#id_membre',
+            typeMembre: '#id_type_membre',
+            bareme: '#id_bareme',
+            montant: '#id_montant',
+            utiliserBareme: '#id_utiliser_bareme',
+            calculerProrata: '#calculer_prorata',
+            alerteBareme: '#alerte-bareme',
+            periodeDebut: '#id_periode_debut',
+            periodeFin: '#id_periode_fin',
+        }
     };
-    
-    // Fonction pour récupérer les barèmes disponibles pour un type de membre
-    function chargerBaremes(typeMembreId) {
-        if (!typeMembreId) {
-            // Vider le select des barèmes si pas de type sélectionné
-            baremeSelect.innerHTML = '<option value="">---------</option>';
-            baremeSelect.disabled = true;
-            return;
-        }
+
+    // Ajouter cette fonction au début du script, après la déclaration de CONFIG
+// Elle va tester toutes les URLs avant même d'initialiser le formulaire
+
+    function diagnoseApiUrls() {
+        console.log('%c=== DIAGNOSTIC DES URLS API ===', 'color: #ff5722; font-weight: bold; font-size: 14px;');
         
-        // Afficher un indicateur de chargement
-        baremeSelect.innerHTML = '<option value="">{% trans "Chargement..." %}</option>';
-        baremeSelect.disabled = true;
+        // Liste des variantes d'URL à tester
+        const urlVariants = {
+            'types_membre': [
+                '/cotisations/api/types_membre_par_membre/',
+                '/cotisations/api/types-membre-par-membre/',
+                '/api/cotisations/types_membre_par_membre/',
+                '/api/cotisations/types-membre-par-membre/',
+                '/cotisations/api_types_membre_par_membre/',
+            ],
+            'baremes': [
+                '/cotisations/api/baremes_par_type/',
+                '/cotisations/api/baremes-par-type/',
+                '/api/cotisations/baremes_par_type/',
+                '/api/cotisations/baremes-par-type/',
+                '/cotisations/api_baremes_par_type/',
+            ]
+        };
         
-        // Requête AJAX pour récupérer les barèmes pour ce type de membre
-        fetch(`{% url 'cotisations:api_baremes_par_type' %}?type_membre=${encodeURIComponent(typeMembreId)}`, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json',
-            },
-            credentials: 'same-origin'
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Erreur réseau: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    // Reconstruire le select des barèmes
-                    baremeSelect.innerHTML = '<option value="">---------</option>';
-                    
-                    if (data.baremes && data.baremes.length > 0) {
-                        data.baremes.forEach(bareme => {
-                            const option = document.createElement('option');
-                            option.value = bareme.id;
-                            
-                            // Formater l'option avec des informations utiles
-                            let label = `${bareme.montant} € (${bareme.periodicite_display})`;
-                            if (bareme.est_actif) {
-                                label += ' - {% trans "Actif" %}';
-                            } else if (bareme.est_futur) {
-                                label += ' - {% trans "Futur" %}';
-                            }
-                            
-                            option.textContent = label;
-                            
-                            // Stocker les données du barème dans l'option
-                            option.dataset.montant = bareme.montant;
-                            option.dataset.periodicite = bareme.periodicite;
-                            option.dataset.dureeJours = bareme.duree_jours || getDureeJoursParPeriodicite(bareme.periodicite);
-                            
-                            baremeSelect.appendChild(option);
-                        });
-                        
-                        // Sélectionner automatiquement le barème actif par défaut
-                        const baremeActif = Array.from(baremeSelect.options).find(option => 
-                            option.text.includes('{% trans "Actif" %}')
-                        );
-                        
-                        if (baremeActif) {
-                            baremeActif.selected = true;
-                            baremeSelect.dispatchEvent(new Event('change'));
-                        }
-                        
-                        baremeSelect.disabled = false;
-                    } else {
-                        // Aucun barème trouvé
-                        const option = document.createElement('option');
-                        option.value = "";
-                        option.textContent = "{% trans 'Aucun barème disponible' %}";
-                        baremeSelect.appendChild(option);
-                    }
-                } else {
-                    // Erreur dans la réponse
-                    afficherErreur(data.message || '{% trans "Erreur lors du chargement des barèmes" %}');
-                }
-            })
-            .catch(error => {
-                console.error('Erreur:', error);
-                afficherErreur('{% trans "Erreur lors de la communication avec le serveur" %}');
-                baremeSelect.innerHTML = '<option value="">---------</option>';
-            })
-            .finally(() => {
-                baremeSelect.disabled = false;
-            });
-    }
-    
-    // Fonction pour calculer le nombre de jours selon la périodicité
-    function getDureeJoursParPeriodicite(periodicite) {
-        switch (periodicite) {
-            case 'mensuelle': return 30;
-            case 'trimestrielle': return 91;
-            case 'semestrielle': return 182;
-            case 'annuelle': return 365;
-            default: return 365;
-        }
-    }
-    
-    // Fonction pour calculer le montant depuis le barème sélectionné
-    function calculerMontantBareme() {
-        if (!baremeSelect.value) {
-            return;
-        }
+        // Extraire un CSRF token pour les requêtes
+        const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value;
         
-        // Si l'option sélectionnée contient déjà le montant via dataset
-        const selectedOption = baremeSelect.options[baremeSelect.selectedIndex];
-        if (selectedOption && selectedOption.dataset.montant) {
-            if (utiliserBaremeCheckbox && utiliserBaremeCheckbox.checked) {
-                // Stocker les infos du barème
-                baremeInfo.montant = parseFloat(selectedOption.dataset.montant);
-                baremeInfo.periodicite = selectedOption.dataset.periodicite;
-                baremeInfo.dureeStandard = parseInt(selectedOption.dataset.dureeJours, 10);
-                
-                // Appliquer le montant standard ou calculer au prorata
-                if (calculerProrataCheckbox && calculerProrataCheckbox.checked) {
-                    calculerMontantProrata();
-                } else {
-                    montantInput.value = baremeInfo.montant.toFixed(2);
-                    montantInput.readOnly = true;
-                }
-                
-                // Mettre à jour les dates selon la périodicité si nécessaire
-                ajusterDates(baremeInfo.periodicite);
-            }
-            return;
-        }
-        
-        // Sinon, faire une requête API avec protection CSRF
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-        
-        fetch(`{% url 'cotisations:api_calculer_montant' %}?bareme_id=${encodeURIComponent(baremeSelect.value)}`, {
-            method: 'GET',
-            headers: {
-                'X-CSRFToken': csrfToken,
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json',
-            },
-            credentials: 'same-origin'
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Erreur réseau: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    if (utiliserBaremeCheckbox && utiliserBaremeCheckbox.checked) {
-                        // Stocker les infos du barème
-                        baremeInfo.montant = parseFloat(data.montant);
-                        baremeInfo.periodicite = data.periodicite_code;
-                        baremeInfo.dureeStandard = getDureeJoursParPeriodicite(data.periodicite_code);
-                        
-                        // Appliquer le montant standard ou calculer au prorata
-                        if (calculerProrataCheckbox && calculerProrataCheckbox.checked) {
-                            calculerMontantProrata();
-                        } else {
-                            montantInput.value = baremeInfo.montant.toFixed(2);
-                            montantInput.readOnly = true;
-                        }
-                        
-                        // Mettre à jour les dates selon la périodicité
-                        ajusterDates(baremeInfo.periodicite);
-                    }
-                } else {
-                    afficherErreur(data.message || '{% trans "Erreur lors du calcul du montant" %}');
-                }
-            })
-            .catch(error => {
-                console.error('Erreur:', error);
-                afficherErreur('{% trans "Erreur lors de la communication avec le serveur" %}');
-            });
-    }
-    
-    // Fonction pour calculer le montant au prorata
-    function calculerMontantProrata() {
-        if (!periodeDebutInput.value || !periodeFinInput.value || !baremeInfo.montant) {
-            return;
-        }
-        
-        // Si le calcul au prorata n'est pas activé, utiliser le montant standard
-        if (!calculerProrataCheckbox || !calculerProrataCheckbox.checked) {
-            montantInput.value = baremeInfo.montant.toFixed(2);
-            calculProrataInfo.style.display = 'none';
-            return;
-        }
-        
-        try {
-            // Calculer la durée effective (en jours)
-            const dateDebut = new Date(periodeDebutInput.value);
-            const dateFin = new Date(periodeFinInput.value);
+        // Créer un petit wrapper pour fetch avec timeout
+        function testUrl(url, options = {}) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
             
-            // Vérifier que les dates sont valides
-            if (isNaN(dateDebut.getTime()) || isNaN(dateFin.getTime())) {
-                throw new Error('Dates invalides');
-            }
-            
-            // Calculer la différence en jours
-            const differenceTemps = dateFin.getTime() - dateDebut.getTime();
-            const dureeEffective = Math.floor(differenceTemps / (1000 * 60 * 60 * 24)) + 1; // +1 pour inclure le jour de fin
-            
-            // Si la durée est négative ou nulle, montrer une erreur
-            if (dureeEffective <= 0) {
-                throw new Error('La période est invalide (date de fin antérieure à date de début)');
-            }
-            
-            // Calculer le ratio et le montant au prorata
-            const ratio = dureeEffective / baremeInfo.dureeStandard;
-            const montantProrata = baremeInfo.montant * ratio;
-            
-            // Appliquer le montant calculé (arrondi à 2 décimales)
-            montantInput.value = montantProrata.toFixed(2);
-            
-            // Afficher l'explication du calcul
-            const periodicites = {
-                'mensuelle': '{% trans "mois" %}',
-                'trimestrielle': '{% trans "trimestre" %}',
-                'semestrielle': '{% trans "semestre" %}',
-                'annuelle': '{% trans "année" %}',
-                'unique': '{% trans "période" %}'
+            const defaultOptions = { 
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'same-origin',
+                signal: controller.signal
             };
             
-            const periodiciteTexte = periodicites[baremeInfo.periodicite] || '{% trans "période" %}';
+            const fetchOptions = {...defaultOptions, ...options};
             
-            calculProrataTexte.innerHTML = `
-                {% trans "Calcul au prorata : " %}
-                ${baremeInfo.montant.toFixed(2)}€ × (${dureeEffective} {% trans "jours" %} / ${baremeInfo.dureeStandard} {% trans "jours" %}) = ${montantProrata.toFixed(2)}€
-                <br>
-                {% trans "Durée standard d'un" %} ${periodiciteTexte} : ${baremeInfo.dureeStandard} {% trans "jours" %}
-                <br>
-                {% trans "Durée effective" %} : ${dureeEffective} {% trans "jours" %}
-            `;
-            calculProrataInfo.style.display = 'block';
+            return fetch(url, fetchOptions)
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    return {
+                        url,
+                        status: response.status,
+                        ok: response.ok,
+                        headers: Array.from(response.headers.entries())
+                    };
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
+                    return {
+                        url,
+                        error: error.name === 'AbortError' ? 'Timeout' : error.message,
+                        ok: false
+                    };
+                });
+        }
+        
+        // Fonction pour afficher les résultats du test
+        function showResults(results) {
+            console.log('%c=== RÉSULTATS DU DIAGNOSTIC ===', 'color: #2196f3; font-weight: bold;');
             
-        } catch (error) {
-            console.error('Erreur lors du calcul au prorata:', error);
-            afficherErreur('{% trans "Erreur lors du calcul du montant au prorata. Vérifiez les dates." %}');
-            // En cas d'erreur, utiliser le montant standard
-            montantInput.value = baremeInfo.montant.toFixed(2);
-            calculProrataInfo.style.display = 'none';
-        }
-    }
-    
-    // Fonction pour ajuster les dates selon la périodicité
-    function ajusterDates(periodicite) {
-        if (!periodeDebutInput) {
-            return;
-        }
-        
-        // Si la date de début n'est pas définie, utiliser aujourd'hui
-        if (!periodeDebutInput.value) {
-            const today = new Date();
-            periodeDebutInput.value = formatDate(today);
-        }
-        
-        // Calculer la date de fin selon la périodicité
-        const dateDebut = new Date(periodeDebutInput.value);
-        if (isNaN(dateDebut.getTime())) {
-            return; // Date invalide
-        }
-        
-        let dateFin = new Date(dateDebut);
-        
-        switch (periodicite) {
-            case 'mensuelle':
-                dateFin.setMonth(dateDebut.getMonth() + 1);
-                dateFin.setDate(dateDebut.getDate() - 1);
-                break;
-            case 'trimestrielle':
-                dateFin.setMonth(dateDebut.getMonth() + 3);
-                dateFin.setDate(dateDebut.getDate() - 1);
-                break;
-            case 'semestrielle':
-                dateFin.setMonth(dateDebut.getMonth() + 6);
-                dateFin.setDate(dateDebut.getDate() - 1);
-                break;
-            case 'annuelle':
-                dateFin.setFullYear(dateDebut.getFullYear() + 1);
-                dateFin.setDate(dateDebut.getDate() - 1);
-                break;
-        }
-        
-        // Formater la date au format YYYY-MM-DD pour l'input
-        periodeFinInput.value = formatDate(dateFin);
-        
-        // Recalculer le montant au prorata si nécessaire
-        if (calculerProrataCheckbox && calculerProrataCheckbox.checked) {
-            calculerMontantProrata();
-        }
-    }
-    
-    // Fonction pour formater une date en YYYY-MM-DD
-    function formatDate(date) {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-    
-    // Fonction pour afficher un message d'erreur
-    function afficherErreur(message) {
-        // Créer ou mettre à jour un élément d'alerte
-        let alerteElem = document.getElementById('alerte-bareme');
-        if (alerteElem) {
-            // Échapper le HTML pour éviter les attaques XSS
-            alerteElem.textContent = message;
-            alerteElem.style.display = 'block';
+            // Organiser par type d'endpoint
+            const byEndpoint = {};
             
-            // Faire disparaître l'alerte après 5 secondes
-            setTimeout(() => {
-                alerteElem.style.display = 'none';
-            }, 5000);
-        }
-    }
-    
-    // Gestion des événements pour le type de membre et le barème
-    if (typeMembreSelect) {
-        typeMembreSelect.addEventListener('change', function() {
-            chargerBaremes(this.value);
-        });
-        
-        // Initialiser les barèmes au chargement si un type est sélectionné
-        if (typeMembreSelect.value) {
-            chargerBaremes(typeMembreSelect.value);
-        }
-    }
-    
-    if (baremeSelect) {
-        baremeSelect.addEventListener('change', function() {
-            calculerMontantBareme();
-        });
-    }
-    
-    // Gestion de l'utilisation du barème
-    if (utiliserBaremeCheckbox) {
-        utiliserBaremeCheckbox.addEventListener('change', function() {
-            if (this.checked) {
-                montantInput.readOnly = true;
+            results.forEach(result => {
+                const urlParts = result.url.split('/').filter(Boolean);
+                const endpoint = urlParts[urlParts.length - 1];
                 
-                // Recalculer le montant si un barème est déjà sélectionné
-                if (baremeSelect.value) {
-                    calculerMontantBareme();
-                }
-            } else {
-                montantInput.readOnly = false;
-                calculProrataInfo.style.display = 'none';
-            }
-        });
-        
-        // Initialiser l'état du champ montant au chargement
-        if (utiliserBaremeCheckbox.checked) {
-            montantInput.readOnly = true;
-        }
-    }
-    
-    // Gestion du calcul au prorata
-    if (calculerProrataCheckbox) {
-        calculerProrataCheckbox.addEventListener('change', function() {
-            if (this.checked && baremeSelect.value) {
-                calculerMontantProrata();
-            } else {
-                // Utiliser le montant standard du barème
-                if (baremeInfo.montant > 0) {
-                    montantInput.value = baremeInfo.montant.toFixed(2);
-                }
-                calculProrataInfo.style.display = 'none';
-            }
-        });
-    }
-    
-    // Écouter les changements sur les dates de période pour recalculer le prorata
-    if (periodeDebutInput) {
-        periodeDebutInput.addEventListener('change', function() {
-            if (calculerProrataCheckbox && calculerProrataCheckbox.checked) {
-                calculerMontantProrata();
-            }
-        });
-    }
-    
-    if (periodeFinInput) {
-        periodeFinInput.addEventListener('change', function() {
-            if (calculerProrataCheckbox && calculerProrataCheckbox.checked) {
-                calculerMontantProrata();
-            }
-        });
-    }
-    
-    // Validation côté client améliorée
-    if (cotisationForm) {
-        cotisationForm.addEventListener('submit', function(event) {
-            let isValid = true;
-            
-            // Réinitialiser toutes les erreurs précédentes
-            document.querySelectorAll('.is-invalid').forEach(el => {
-                el.classList.remove('is-invalid');
-            });
-            document.querySelectorAll('.invalid-feedback').forEach(el => {
-                el.remove();
+                if (!byEndpoint[endpoint]) byEndpoint[endpoint] = [];
+                byEndpoint[endpoint].push(result);
             });
             
-            // Vérifier si le membre est sélectionné
-            const membreSelect = document.getElementById('id_membre');
-            if (!membreSelect.value) {
-                isValid = false;
-                highlightField(membreSelect, '{% trans "Un membre doit être sélectionné." %}');
-            }
-            
-            // Vérifier si le type de membre est sélectionné
-            if (!typeMembreSelect.value) {
-                isValid = false;
-                highlightField(typeMembreSelect, '{% trans "Un type de membre doit être sélectionné." %}');
-            }
-            
-            // Vérifier si le montant est valide
-            if (!montantInput.value || parseFloat(montantInput.value) <= 0) {
-                isValid = false;
-                highlightField(montantInput, '{% trans "Le montant doit être supérieur à zéro." %}');
-            }
-            
-            // Vérifier les dates
-            const dateEmission = document.getElementById('id_date_emission');
-            const dateEcheance = document.getElementById('id_date_echeance');
-            
-            if (!dateEmission.value) {
-                isValid = false;
-                highlightField(dateEmission, '{% trans "La date d\'émission est requise." %}');
-            }
-            
-            if (!dateEcheance.value) {
-                isValid = false;
-                highlightField(dateEcheance, '{% trans "La date d\'échéance est requise." %}');
-            } else if (dateEmission.value && new Date(dateEcheance.value) < new Date(dateEmission.value)) {
-                isValid = false;
-                highlightField(dateEcheance, '{% trans "La date d\'échéance doit être postérieure à la date d\'émission." %}');
-            }
-            
-            if (!periodeDebutInput.value) {
-                isValid = false;
-                highlightField(periodeDebutInput, '{% trans "La date de début de période est requise." %}');
-            }
-            
-            if (periodeFinInput.value && periodeDebutInput.value && new Date(periodeFinInput.value) < new Date(periodeDebutInput.value)) {
-                isValid = false;
-                highlightField(periodeFinInput, '{% trans "La date de fin de période doit être postérieure à la date de début." %}');
-            }
-            
-            // Ajouter une sécurité pour s'assurer que le formulaire ne peut pas être soumis si invalide
-            if (!isValid) {
-                event.preventDefault();
-                event.stopPropagation();
+            // Afficher les résultats par endpoint
+            Object.entries(byEndpoint).forEach(([endpoint, results]) => {
+                console.group(`Endpoint: ${endpoint}`);
                 
-                // Afficher un message global en haut du formulaire
-                const errorAlert = document.createElement('div');
-                errorAlert.className = 'alert alert-danger mb-4';
-                errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>{% trans "Veuillez corriger les erreurs ci-dessous." %}';
+                // Trier par statut (fonctionnel en premier)
+                results.sort((a, b) => {
+                    if (a.ok && !b.ok) return -1;
+                    if (!a.ok && b.ok) return 1;
+                    return 0;
+                });
                 
-                // Ajouter l'alerte au début du formulaire s'il n'y en a pas déjà une
-                if (!document.querySelector('.alert-danger')) {
-                    cotisationForm.prepend(errorAlert);
+                results.forEach(result => {
+                    if (result.ok) {
+                        console.log(
+                            `%c✓ ${result.url} - Status: ${result.status}`,
+                            'color: #4caf50; font-weight: bold;'
+                        );
+                    } else if (result.error) {
+                        console.log(
+                            `%c✗ ${result.url} - Erreur: ${result.error}`,
+                            'color: #f44336;'
+                        );
+                    } else {
+                        console.log(
+                            `%c✗ ${result.url} - Status: ${result.status}`,
+                            'color: #ff9800;'
+                        );
+                    }
+                });
+                
+                // Suggestion d'URL à utiliser
+                const workingUrl = results.find(r => r.ok);
+                if (workingUrl) {
+                    console.log(
+                        `%c→ URL recommandée: ${workingUrl.url}`,
+                        'color: #2196f3; font-weight: bold;'
+                    );
+                } else {
+                    console.log(
+                        '%c→ Aucune URL fonctionnelle trouvée pour cet endpoint',
+                        'color: #f44336; font-weight: bold;'
+                    );
                 }
                 
-                // Scroll vers la première erreur
-                const firstInvalidField = document.querySelector('.is-invalid');
-                if (firstInvalidField) {
-                    firstInvalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
+                console.groupEnd();
+            });
+            
+            // Recommandations finales
+            console.log('%c=== RECOMMANDATIONS ===', 'color: #673ab7; font-weight: bold;');
+            
+            const anyWorking = results.some(r => r.ok);
+            if (anyWorking) {
+                console.log(
+                    '%c→ Certaines URLs fonctionnent. Veuillez mettre à jour votre CONFIG.apiUrls avec les URLs recommandées ci-dessus.',
+                    'color: #4caf50;'
+                );
+            } else {
+                console.log(
+                    '%c→ Aucune URL testée ne fonctionne. Veuillez vérifier les points suivants:',
+                    'color: #f44336;'
+                );
+                console.log('  1. Les URLs sont correctement configurées dans urls.py');
+                console.log('  2. Le serveur Django est en cours d\'exécution');
+                console.log('  3. Vous avez les permissions nécessaires (session active)');
+                console.log('  4. Il n\'y a pas d\'erreurs côté serveur (vérifiez les logs Django)');
             }
-        });
-    }
-    
+        }
 
-    // Fonction améliorée pour mettre en évidence un champ en erreur
-    function highlightField(field, message) {
-        if (!field) return;
+        // Exécuter les tests
+        console.log('Diagnostic en cours, veuillez patienter...');
         
-        field.classList.add('is-invalid');
-        
-        // Ajouter un message d'erreur si pas déjà présent
-        let container = field.closest('.form-group');
-        if (!container) {
-            container = field.parentNode;
-        }
-        
-        // Créer le div d'erreur s'il n'existe pas
-        if (!container.querySelector('.invalid-feedback')) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'invalid-feedback d-block';
-            errorDiv.textContent = message;
-            
-            if (field.parentNode.classList.contains('input-group')) {
-                field.parentNode.parentNode.appendChild(errorDiv);
-            } else {
-                container.appendChild(errorDiv);
-            }
-        }
-        
-        // Ajouter un attribut aria pour l'accessibilité
-        field.setAttribute('aria-invalid', 'true');
-        field.setAttribute('aria-describedby', field.id + '-error');
-    }
-    
-    // Protection XSS supplémentaire
-    // Échapper toutes les entrées utilisateur pour prévenir les attaques XSS
-    document.querySelectorAll('input[type="text"], textarea').forEach(input => {
-        input.addEventListener('input', function() {
-            // Simplement laisser le serveur s'occuper de l'échappement HTML
-            // L'échappement côté client peut interférer avec l'expérience utilisateur
+        // Créer une liste plate de toutes les URLs à tester
+        const allUrls = [];
+        Object.values(urlVariants).forEach(variants => {
+            variants.forEach(url => allUrls.push(url));
         });
+        
+        // Tester toutes les URLs et collecter les résultats
+        Promise.all(allUrls.map(url => testUrl(url)))
+            .then(results => {
+                showResults(results);
+                
+                // Mise à jour automatique de CONFIG si possible
+                const workingUrls = {};
+                
+                Object.entries(urlVariants).forEach(([key, variants]) => {
+                    const working = results.find(r => 
+                        variants.includes(r.url) && r.ok
+                    );
+                    
+                    if (working) {
+                        workingUrls[key] = working.url;
+                    }
+                });
+                
+                if (Object.keys(workingUrls).length > 0) {
+                    console.log('%c=== MISE À JOUR AUTOMATIQUE ===', 'color: #009688; font-weight: bold;');
+                    console.log('URLs fonctionnelles détectées:');
+                    
+                    // Mettre à jour CONFIG si possible
+                    if (workingUrls.types_membre) {
+                        console.log(`typesMembre: "${workingUrls.types_membre}"`);
+                        CONFIG.apiUrls.typesMembre = workingUrls.types_membre;
+                    }
+                    
+                    if (workingUrls.baremes) {
+                        console.log(`baremes: "${workingUrls.baremes}"`);
+                        CONFIG.apiUrls.baremes = workingUrls.baremes;
+                    }
+                    
+                    console.log('%cCONFIG a été mis à jour automatiquement avec les URLs fonctionnelles!', 'color: #009688; font-weight: bold;');
+                }
+            });
+    }
+
+    // Pour appeler l'outil de diagnostic avant l'initialisation
+    document.addEventListener('DOMContentLoaded', function() {
+        // Exécuter le diagnostic des URLs
+        diagnoseApiUrls();
+        
+        // Continue avec l'initialisation normale
+        console.log('%c=== Formulaire de Cotisation - Initialisation ===', 'color: #28a745; font-weight: bold;');
+        FormManager.init();
     });
-});
+
+    // Système de journalisation amélioré
+    const Logger = {
+        log(type, message, data = null) {
+            if (!CONFIG.debugMode) return;
+
+            const style = CONFIG.logColors[type] || '';
+            const timestamp = new Date().toISOString().slice(11, 19);
+            
+            if (data) {
+                console.groupCollapsed(`%c[${timestamp}] ${message}`, style);
+                console.log('Données:', data);
+                console.groupEnd();
+            } else {
+                console.log(`%c[${timestamp}] ${message}`, style);
+            }
+        },
+        info(message, data) { this.log('info', message, data); },
+        success(message, data) { this.log('success', message, data); },
+        warning(message, data) { this.log('warning', message, data); },
+        error(message, data) { this.log('error', message, data); },
+        event(message, data) { this.log('event', message, data); },
+        api(message, data) { this.log('api', message, data); }
+    };
+
+    // Gestionnaire principal du formulaire
+    const FormManager = {
+        elements: {},
+
+        // Initialisation
+        init() {
+            Logger.info('Initialisation du gestionnaire de formulaire');
+            
+            this.resetDomCache();
+            this.setupEventListeners();
+            this.initializeForm();
+            
+            Logger.success('Formulaire initialisé avec succès');
+        },
+
+        // Réinitialise le cache DOM et garantit des références propres
+        resetDomCache() {
+            Logger.info('Réinitialisation du cache DOM');
+            
+            // Remplacer tous les éléments importants pour supprimer les gestionnaires existants
+            this.replaceElements();
+            
+            // Cache des éléments DOM après remplacement
+            this.elements = {};
+            
+            // Sélection sécurisée des éléments
+            for (const [key, selector] of Object.entries(CONFIG.selectors)) {
+                this.elements[key] = document.querySelector(selector);
+                if (!this.elements[key]) {
+                    Logger.warning(`Élément non trouvé: ${key} (${selector})`);
+                }
+            }
+            
+            Logger.info('Éléments DOM chargés', this.elements);
+        },
+        
+        // Remplace les éléments principaux par des clones pour supprimer les gestionnaires d'événements
+        replaceElements() {
+            Logger.info('Remplacement des éléments DOM pour nettoyage');
+            
+            const elementsToClean = [
+                CONFIG.selectors.membre, 
+                CONFIG.selectors.typeMembre, 
+                CONFIG.selectors.bareme
+            ];
+            
+            elementsToClean.forEach(selector => {
+                const element = document.querySelector(selector);
+                if (element) {
+                    const clone = element.cloneNode(true);
+                    element.parentNode.replaceChild(clone, element);
+                    Logger.info(`Élément remplacé: ${selector}`);
+                }
+            });
+        },
+
+        // Configuration des écouteurs d'événements
+        setupEventListeners() {
+            Logger.info('Configuration des écouteurs d\'événements');
+            
+            // 1. Changement de membre
+            if (this.elements.membre) {
+                this.elements.membre.addEventListener('change', this.handleMembreChange.bind(this));
+                Logger.info('Écouteur ajouté: changement de membre');
+            }
+            
+            // 2. Changement de type de membre
+            if (this.elements.typeMembre) {
+                this.elements.typeMembre.addEventListener('change', this.handleTypeMembreChange.bind(this));
+                Logger.info('Écouteur ajouté: changement de type de membre');
+            }
+            
+            // 3. Changement de barème
+            if (this.elements.bareme) {
+                this.elements.bareme.addEventListener('change', this.handleBaremeChange.bind(this));
+                Logger.info('Écouteur ajouté: changement de barème');
+            }
+            
+            // 4. Option "utiliser barème"
+            if (this.elements.utiliserBareme) {
+                this.elements.utiliserBareme.addEventListener('change', this.handleUtiliserBaremeChange.bind(this));
+                Logger.info('Écouteur ajouté: utiliser barème');
+            }
+        },
+
+        // Initialisation du formulaire au chargement
+        initializeForm() {
+            Logger.info('Initialisation de l\'état du formulaire');
+            
+            // Initialiser l'état lecture seule du montant
+            if (this.elements.utiliserBareme) {
+                this.toggleMontantReadOnly(this.elements.utiliserBareme.checked);
+            }
+            
+            // Si un membre est déjà sélectionné, charger ses types
+            if (this.elements.membre && this.elements.membre.value) {
+                Logger.info(`Membre déjà sélectionné: ${this.elements.membre.value}`);
+                this.loadTypesMembre(this.elements.membre.value);
+            } else {
+                // Désactiver le sélecteur de type si aucun membre sélectionné
+                this.resetTypeMembreOptions();
+                this.resetBaremeOptions();
+            }
+            
+            // Vérifier s'il y a des erreurs de formulaire et les traiter
+            this.checkForFormErrors();
+        },
+        
+        // Vérifie la présence d'erreurs de validation Django et les traite
+        checkForFormErrors() {
+            const formErrors = document.querySelectorAll('.invalid-feedback');
+            if (formErrors.length > 0) {
+                Logger.warning(`${formErrors.length} erreurs de formulaire détectées`);
+                // Ici on pourrait ajouter du code pour traiter ces erreurs
+            }
+        },
+
+        // Gestionnaires d'événements
+        
+        // Gestion du changement de membre
+        handleMembreChange(event) {
+            const membreId = event.target.value;
+            Logger.event(`Membre changé: ${membreId}`);
+            
+            // Réinitialiser les éléments en cascade
+            this.resetTypeMembreOptions();
+            this.resetBaremeOptions();
+            this.resetMontant();
+            
+            // Charger les types de membre si un membre est sélectionné
+            if (membreId) {
+                this.loadTypesMembre(membreId);
+            }
+        },
+        
+        // Gestion du changement de type de membre
+        handleTypeMembreChange(event) {
+            const typeMembreId = event.target.value;
+            Logger.event(`Type de membre changé: ${typeMembreId}`);
+            
+            // Réinitialiser les éléments suivants
+            this.resetBaremeOptions();
+            this.resetMontant();
+            
+            // Charger les barèmes si un type est sélectionné
+            if (typeMembreId) {
+                this.loadBaremes(typeMembreId);
+            }
+        },
+        
+        // Gestion du changement de barème
+        handleBaremeChange(event) {
+            const baremeId = event.target.value;
+            Logger.event(`Barème changé: ${baremeId}`);
+            
+            // Calculer le montant si un barème est sélectionné
+            if (baremeId) {
+                this.calculateMontant(baremeId);
+            } else {
+                this.resetMontant();
+            }
+        },
+        
+        // Gestion du changement d'option "utiliser barème"
+        handleUtiliserBaremeChange(event) {
+            const useBareme = event.target.checked;
+            Logger.event(`Utiliser barème: ${useBareme}`);
+            
+            this.toggleMontantReadOnly(useBareme);
+        },
+
+        // Fonctions de chargement des données
+        
+        // Charge les types de membre pour un membre spécifique
+        loadTypesMembre(membreId) {
+            Logger.info(`Chargement des types pour le membre ${membreId}`);
+            
+            // Désactiver et afficher "Chargement..." dans le sélecteur
+            if (this.elements.typeMembre) {
+                this.elements.typeMembre.disabled = true;
+                this.elements.typeMembre.innerHTML = '<option value="">Chargement...</option>';
+            }
+            
+            // Construire l'URL avec l'ID du membre
+            const url = `${CONFIG.apiUrls.typesMembre}?membre_id=${encodeURIComponent(membreId)}`;
+            Logger.api(`Appel API: ${url}`);
+            
+            // Effectuer la requête
+            this.fetchData(url)
+                .then(data => {
+                    Logger.api('Réponse API Types Membre', data);
+                    this.updateTypeMembreOptions(data);
+                })
+                .catch(error => {
+                    Logger.error('Erreur lors du chargement des types de membre', error);
+                    this.showError("Erreur lors du chargement des types de membre.");
+                    this.resetTypeMembreOptions(true); // true = erreur
+                });
+        },
+        
+        // Charge les barèmes pour un type de membre spécifique
+        loadBaremes(typeMembreId) {
+            Logger.info(`Chargement des barèmes pour le type ${typeMembreId}`);
+            
+            // Désactiver et afficher "Chargement..." dans le sélecteur
+            if (this.elements.bareme) {
+                this.elements.bareme.disabled = true;
+                this.elements.bareme.innerHTML = '<option value="">Chargement...</option>';
+            }
+            
+            // Construire l'URL avec l'ID du type de membre
+            const url = `${CONFIG.apiUrls.baremes}?type_membre=${encodeURIComponent(typeMembreId)}`;
+            Logger.api(`Appel API: ${url}`);
+            
+            // Effectuer la requête
+            this.fetchData(url)
+                .then(data => {
+                    Logger.api('Réponse API Barèmes', data);
+                    this.updateBaremeOptions(data);
+                })
+                .catch(error => {
+                    Logger.error('Erreur lors du chargement des barèmes', error);
+                    this.showError("Erreur lors du chargement des barèmes.");
+                    this.resetBaremeOptions(true); // true = erreur
+                });
+        },
+        
+        // Calcule le montant à partir d'un barème
+        calculateMontant(baremeId) {
+            Logger.info(`Calcul du montant pour le barème ${baremeId}`);
+            
+            // Vérifier si on utilise le barème
+            if (this.elements.utiliserBareme && !this.elements.utiliserBareme.checked) {
+                Logger.info('Calcul ignoré: utilisation du barème désactivée');
+                return;
+            }
+            
+            // Essayer d'abord de récupérer le montant depuis l'option sélectionnée
+            if (this.elements.bareme && this.elements.bareme.selectedIndex > 0) {
+                const selectedOption = this.elements.bareme.options[this.elements.bareme.selectedIndex];
+                if (selectedOption && selectedOption.dataset && selectedOption.dataset.montant) {
+                    const montant = parseFloat(selectedOption.dataset.montant);
+                    Logger.info(`Montant trouvé dans l'option: ${montant}`);
+                    
+                    if (this.elements.montant) {
+                        this.elements.montant.value = montant.toFixed(2);
+                    }
+                    return;
+                }
+            }
+            
+            // Si non disponible dans l'option, faire une requête API
+            const url = `${CONFIG.apiUrls.calculMontant}?bareme_id=${encodeURIComponent(baremeId)}`;
+            Logger.api(`Appel API: ${url}`);
+            
+            // Effectuer la requête
+            this.fetchData(url)
+                .then(data => {
+                    Logger.api('Réponse API Calcul Montant', data);
+                    
+                    if (data.success && this.elements.montant) {
+                        const montant = parseFloat(data.montant);
+                        this.elements.montant.value = montant.toFixed(2);
+                        Logger.success(`Montant calculé: ${montant}`);
+                    } else {
+                        this.showError("Erreur lors du calcul du montant.");
+                    }
+                })
+                .catch(error => {
+                    Logger.error('Erreur lors du calcul du montant', error);
+                    this.showError("Erreur lors du calcul du montant.");
+                });
+        },
+
+        // Méthodes pour mettre à jour l'interface
+        
+        // Met à jour les options du sélecteur de type de membre
+        updateTypeMembreOptions(data) {
+            Logger.info('Mise à jour des options de type de membre');
+            
+            // Vérifier la disponibilité du sélecteur
+            if (!this.elements.typeMembre) {
+                Logger.error('Sélecteur de type de membre non disponible');
+                return;
+            }
+            
+            // Vider et réactiver le sélecteur
+            this.elements.typeMembre.innerHTML = '';
+            this.elements.typeMembre.disabled = false;
+            
+            // Option par défaut
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Sélectionnez un type de membre';
+            this.elements.typeMembre.appendChild(defaultOption);
+            
+            // Ajouter les options si des données sont disponibles
+            if (data.success && data.types_membre && data.types_membre.length > 0) {
+                Logger.info(`Types de membres disponibles: ${data.types_membre.length}`);
+                
+                // Ajouter chaque type de membre comme option
+                data.types_membre.forEach(type => {
+                    const option = document.createElement('option');
+                    option.value = type.id;
+                    option.textContent = type.libelle;
+                    this.elements.typeMembre.appendChild(option);
+                    Logger.info(`Type ajouté: ${type.id} - ${type.libelle}`);
+                });
+                
+                // Sélection automatique si un seul type
+                if (data.single_type && data.types_membre.length === 1) {
+                    try {
+                        // Sélectionner directement par la valeur
+                        this.elements.typeMembre.value = data.types_membre[0].id;
+                        Logger.success(`Type sélectionné automatiquement: ${data.types_membre[0].id}`);
+                        
+                        // Vérifier si la sélection a réussi
+                        if (this.elements.typeMembre.value != data.types_membre[0].id) {
+                            // Méthode alternative: sélectionner par index
+                            Logger.warning('Échec de la sélection par value, tentative par index');
+                            this.elements.typeMembre.selectedIndex = 1; // L'index 0 est l'option vide
+                        }
+                        
+                        // Déclencher l'événement change
+                        this.triggerChangeEvent(this.elements.typeMembre);
+                    } catch (err) {
+                        Logger.error('Erreur lors de la sélection automatique', err);
+                    }
+                }
+            } else {
+                Logger.warning('Aucun type de membre disponible');
+                
+                // Option indiquant qu'aucun type n'est disponible
+                const emptyOption = document.createElement('option');
+                emptyOption.disabled = true;
+                emptyOption.textContent = 'Aucun type de membre disponible';
+                this.elements.typeMembre.appendChild(emptyOption);
+            }
+        },
+        
+        // Met à jour les options du sélecteur de barème
+        updateBaremeOptions(data) {
+            Logger.info('Mise à jour des options de barème');
+            
+            // Vérifier la disponibilité du sélecteur
+            if (!this.elements.bareme) {
+                Logger.error('Sélecteur de barème non disponible');
+                return;
+            }
+            
+            // Vider et réactiver le sélecteur
+            this.elements.bareme.innerHTML = '';
+            this.elements.bareme.disabled = false;
+            
+            // Option par défaut
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Sélectionnez un barème';
+            this.elements.bareme.appendChild(defaultOption);
+            
+            // Ajouter les options si des données sont disponibles
+            if (data.success && data.baremes && data.baremes.length > 0) {
+                Logger.info(`Barèmes disponibles: ${data.baremes.length}`);
+                
+                // Stocker l'ID du barème actif s'il existe
+                let baremeActifId = null;
+                
+                // Ajouter chaque barème comme option
+                data.baremes.forEach(bareme => {
+                    const option = document.createElement('option');
+                    option.value = bareme.id;
+                    
+                    // Construire le libellé avec les informations pertinentes
+                    let label = `${bareme.montant} € (${bareme.periodicite_display})`;
+                    if (bareme.est_actif) {
+                        label += ' - Actif';
+                        baremeActifId = bareme.id;
+                    } else if (bareme.est_futur) {
+                        label += ' - Futur';
+                    }
+                    
+                    option.textContent = label;
+                    
+                    // Stocker les données pour utilisation ultérieure
+                    option.dataset.montant = bareme.montant;
+                    option.dataset.periodicite = bareme.periodicite;
+                    
+                    this.elements.bareme.appendChild(option);
+                    Logger.info(`Barème ajouté: ${bareme.id} - ${label}`);
+                });
+                
+                // Sélection automatique du barème actif ou du premier si un seul
+                if (baremeActifId) {
+                    // Sélectionner le barème actif
+                    this.elements.bareme.value = baremeActifId;
+                    Logger.success(`Barème actif sélectionné: ${baremeActifId}`);
+                } else if (data.baremes.length === 1) {
+                    // S'il n'y a qu'un seul barème, le sélectionner
+                    this.elements.bareme.value = data.baremes[0].id;
+                    Logger.success(`Barème unique sélectionné: ${data.baremes[0].id}`);
+                }
+                
+                // Déclencher l'événement change si une sélection a été faite
+                if (this.elements.bareme.value) {
+                    this.triggerChangeEvent(this.elements.bareme);
+                }
+            } else {
+                Logger.warning('Aucun barème disponible');
+                
+                // Option indiquant qu'aucun barème n'est disponible
+                const emptyOption = document.createElement('option');
+                emptyOption.disabled = true;
+                emptyOption.textContent = 'Aucun barème disponible';
+                this.elements.bareme.appendChild(emptyOption);
+            }
+        },
+        
+        // Active/désactive le mode lecture seule du montant
+        toggleMontantReadOnly(readOnly) {
+            Logger.info(`Mode lecture seule du montant: ${readOnly}`);
+            
+            if (!this.elements.montant) return;
+            
+            this.elements.montant.readOnly = readOnly;
+            
+            if (readOnly) {
+                // Ajouter une classe visuelle
+                this.elements.montant.classList.add('bg-light');
+                
+                // Recalculer le montant si un barème est sélectionné
+                if (this.elements.bareme && this.elements.bareme.value) {
+                    this.calculateMontant(this.elements.bareme.value);
+                }
+            } else {
+                // Retirer la classe visuelle
+                this.elements.montant.classList.remove('bg-light');
+            }
+        },
+        
+        // Affiche un message d'erreur
+        showError(message, duration = 5000) {
+            Logger.error(`Affichage d'erreur: ${message}`);
+            
+            // Afficher dans la console en mode développement
+            if (CONFIG.debugMode) {
+                console.error(message);
+            }
+            
+            // Afficher dans l'élément d'alerte si disponible
+            if (this.elements.alerteBareme) {
+                // Échapper le HTML pour éviter les injections XSS
+                this.elements.alerteBareme.textContent = message;
+                this.elements.alerteBareme.style.display = 'block';
+                
+                // Masquer après un délai
+                setTimeout(() => {
+                    this.elements.alerteBareme.style.display = 'none';
+                }, duration);
+            }
+        },
+
+        // Méthodes de réinitialisation
+        
+        // Réinitialise les options du sélecteur de type de membre
+        resetTypeMembreOptions(isError = false) {
+            Logger.info('Réinitialisation des options de type de membre');
+            
+            if (!this.elements.typeMembre) return;
+            
+            // Vider le sélecteur
+            this.elements.typeMembre.innerHTML = '';
+            
+            // Ajouter une option par défaut
+            const option = document.createElement('option');
+            option.value = '';
+            
+            if (isError) {
+                option.textContent = 'Erreur - Veuillez réessayer';
+            } else {
+                option.textContent = 'Sélectionnez d\'abord un membre';
+            }
+            
+            this.elements.typeMembre.appendChild(option);
+            this.elements.typeMembre.disabled = true;
+        },
+        
+        // Réinitialise les options du sélecteur de barème
+        resetBaremeOptions(isError = false) {
+            Logger.info('Réinitialisation des options de barème');
+            
+            if (!this.elements.bareme) return;
+            
+            // Vider le sélecteur
+            this.elements.bareme.innerHTML = '';
+            
+            // Ajouter une option par défaut
+            const option = document.createElement('option');
+            option.value = '';
+            
+            if (isError) {
+                option.textContent = 'Erreur - Veuillez réessayer';
+            } else {
+                option.textContent = 'Sélectionnez d\'abord un type de membre';
+            }
+            
+            this.elements.bareme.appendChild(option);
+            this.elements.bareme.disabled = true;
+        },
+        
+        // Réinitialise le champ montant
+        resetMontant() {
+            Logger.info('Réinitialisation du montant');
+            
+            if (!this.elements.montant) return;
+            
+            // Ne réinitialiser que si le barème est utilisé
+            if (this.elements.utiliserBareme && this.elements.utiliserBareme.checked) {
+                this.elements.montant.value = '';
+            }
+        },
+
+        // Méthodes utilitaires
+        
+        // Effectue une requête AJAX standard
+        fetchData(url) {
+            return fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP: ${response.status}`);
+                }
+                return response.json();
+            });
+        },
+        
+        // Déclenche un événement change de manière compatible avec tous les navigateurs
+        triggerChangeEvent(element) {
+            if (!element) return;
+            
+            try {
+                // Méthode moderne
+                const event = new Event('change', { bubbles: true });
+                element.dispatchEvent(event);
+            } catch (e) {
+                // Méthode compatible avec les anciens navigateurs
+                const event = document.createEvent('HTMLEvents');
+                event.initEvent('change', true, false);
+                element.dispatchEvent(event);
+            }
+            
+            Logger.info(`Événement change déclenché sur ${element.id || 'élément'}`);
+        }
+    };
+
+    // Lancement de l'initialisation au chargement du document
+    document.addEventListener('DOMContentLoaded', function() {
+        // Message de démarrage
+        console.log('%c=== Formulaire de Cotisation - Initialisation ===', 'color: #28a745; font-weight: bold;');
+        
+        // Initialiser le gestionnaire de formulaire
+        FormManager.init();
+    });
+})();
 </script>
 {% endblock %}

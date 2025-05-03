@@ -108,6 +108,8 @@
                                 {% endif %}
                                 <!-- Élément pour afficher les alertes concernant le barème -->
                                 <div id="alerte-bareme" class="alert alert-danger mt-2" style="display: none;"></div>
+                                <!-- Élément pour afficher les informations de périodicité -->
+                                <div id="periodicite-info" class="form-text text-info mt-1" style="display: none;"></div>
                             </div>
                         </div>
                         
@@ -313,6 +315,7 @@
 {{ block.super }}
 <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
 <script src="{% static 'js/cotisations/cotisations.js' %}"></script>
+<script src="{% static 'js/cotisations/cotisation_forms.js' %}"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -764,15 +767,15 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (!dateEmission.value) {
                 isValid = false;
-                highlightField(dateEmission, '{% trans "La date d'émission est requise." %}');
+                highlightField(dateEmission, '{% trans "La date d\'émission est requise." %}');
             }
             
             if (!dateEcheance.value) {
                 isValid = false;
-                highlightField(dateEcheance, '{% trans "La date d'échéance est requise." %}');
+                highlightField(dateEcheance, '{% trans "La date d\'échéance est requise." %}');
             } else if (dateEmission.value && new Date(dateEcheance.value) < new Date(dateEmission.value)) {
                 isValid = false;
-                highlightField(dateEcheance, '{% trans "La date d'échéance doit être postérieure à la date d'émission." %}');
+                highlightField(dateEcheance, '{% trans "La date d\'échéance doit être postérieure à la date d\'émission." %}');
             }
             
             if (!periodeDebutInput.value) {

@@ -2539,48 +2539,63 @@ def rappel_supprimer_ajax(request, rappel_id):
 # Filtrage dynamique des barèmes par type de membre
 @login_required
 def api_baremes_par_type(request):
-    """
-    API pour récupérer les barèmes disponibles pour un type de membre spécifique.
-    Utilisé pour la mise à jour dynamique des barèmes dans le formulaire de cotisation.
-    """
-    type_membre_id = request.GET.get('type_membre_id')
+    """API pour récupérer les barèmes associés à un type de membre"""
+    type_membre_id = request.GET.get('type_membre')
     
     if not type_membre_id:
-        return JsonResponse({'success': False, 'message': _("Type de membre non spécifié")})
+        return JsonResponse({'success': False, 'message': "Type de membre non spécifié"})
     
     try:
-        # Récupérer les barèmes actifs pour ce type de membre
-        baremes = BaremeCotisation.objects.filter(
-            type_membre_id=type_membre_id,
-            deleted_at__isnull=True
-        ).order_by('-date_debut_validite')
+        # Récupérer le type de membre
+        type_membre = TypeMembre.objects.get(pk=type_membre_id)
         
+        # Logs de débogage
+        print(f"Recherche des barèmes pour le type_membre_id={type_membre_id} ({type_membre.libelle})")
+        
+        # Requête de base - sans filtrage par date pour débloquer
+        baremes = BaremeCotisation.objects.filter(type_membre=type_membre)
+        
+        # Log du nombre de barèmes avant filtrage
+        print(f"Nombre de barèmes avant filtrage: {baremes.count()}")
+        
+        # Pour déboguer, lister tous les barèmes trouvés
+        for b in baremes:
+            print(f"Barème {b.id}: {b.montant}€ ({b.get_periodicite_display()}), "
+                  f"Validité: {b.date_debut_validite} à {b.date_fin_validite}")
+        
+        # Date actuelle pour déterminer si actif/futur
         today = timezone.now().date()
         
-        # Formater les données pour le client
-        baremes_data = []
+        # Préparer les données pour l'API
+        baremes_list = []
         for bareme in baremes:
-            est_actif = bareme.est_actif()
-            est_futur = bareme.date_debut_validite > today if bareme.date_debut_validite else False
+            est_actif = (bareme.date_debut_validite <= today and 
+                         (bareme.date_fin_validite is None or bareme.date_fin_validite >= today))
+            est_futur = bareme.date_debut_validite > today
             
-            baremes_data.append({
+            baremes_list.append({
                 'id': bareme.id,
                 'montant': float(bareme.montant),
-                'periodicite': bareme.get_periodicite_display(),
-                'periodicite_code': bareme.periodicite,
+                'periodicite': bareme.periodicite,
+                'periodicite_display': bareme.get_periodicite_display(),
                 'est_actif': est_actif,
-                'est_futur': est_futur,
-                'date_debut': bareme.date_debut_validite.isoformat() if bareme.date_debut_validite else None,
-                'date_fin': bareme.date_fin_validite.isoformat() if bareme.date_fin_validite else None,
-                'duree_jours': get_duree_jours_par_periodicite(bareme.periodicite)
+                'est_futur': est_futur
             })
         
         return JsonResponse({
-            'success': True, 
-            'baremes': baremes_data
+            'success': True,
+            'baremes': baremes_list,
+            'type_membre_id': type_membre.id,
+            'type_membre_libelle': type_membre.libelle
         })
+        
+    except TypeMembre.DoesNotExist:
+        return JsonResponse({'success': False, 'message': f"Type de membre {type_membre_id} non trouvé"})
     except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)})
+        import traceback
+        print(f"Erreur dans api_baremes_par_type: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({'success': False, 'message': f"Erreur: {str(e)}"})
 
 def get_duree_jours_par_periodicite(periodicite):
     """Helper function to get the standard duration in days for a periodicity"""
@@ -2594,6 +2609,76 @@ def get_duree_jours_par_periodicite(periodicite):
         return 365
     else:
         return 365  # Default to annual
+
+@login_required
+def api_types_membre_par_membre(request):
+    """
+    API pour récupérer les types de membre associés à un membre spécifique.
+    """
+    membre_id = request.GET.get('membre_id')
+    
+    if not membre_id:
+        return JsonResponse({'success': False, 'message': _("Membre non spécifié")})
+    
+    try:
+        membre = Membre.objects.get(pk=membre_id)
+        
+        # Imports en haut de la fonction pour clarté
+        from django.db.models import Q
+        import datetime
+        
+        today = datetime.date.today()
+        
+        # CORRECTION: Utiliser la relation correcte selon votre modèle
+        # Nous utilisons la relation 'membres' qui existe dans le modèle TypeMembre
+        types_actifs = TypeMembre.objects.filter(
+            membres=membre
+        ).distinct()
+        
+        # Si vous avez des dates de début/fin dans la relation, ajoutez le filtrage ici
+        # Par exemple, si vous avez un champ through dans votre relation ManyToMany:
+        # types_actifs = types_actifs.filter(
+        #    membre_types__date_debut__lte=today,
+        #    Q(membre_types__date_fin__isnull=True) | Q(membre_types__date_fin__gte=today)
+        # )
+        
+        # Log pour débogage
+        print(f"Membre: {membre.id} - {membre.prenom} {membre.nom}")
+        print(f"Nombre de types actifs trouvés: {types_actifs.count()}")
+        
+        # Préparer les données
+        types_membre = []
+        for tm in types_actifs:
+            types_membre.append({
+                'id': tm.id,
+                'libelle': tm.libelle,
+            })
+        
+        # Message personnalisé si aucun type actif
+        if not types_membre:
+            return JsonResponse({
+                'success': True,
+                'types_membre': [],
+                'single_type': False,
+                'membre_nom': f"{membre.prenom} {membre.nom}",
+                'message': _("Ce membre n'a aucun type actif à la date d'aujourd'hui")
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'types_membre': types_membre,
+            'single_type': len(types_membre) == 1,
+            'membre_nom': f"{membre.prenom} {membre.nom}"
+        })
+        
+    except Membre.DoesNotExist:
+        return JsonResponse({'success': False, 'message': _("Membre non trouvé")})
+    except Exception as e:
+        # Capture toutes les autres erreurs possibles
+        import traceback
+        print(f"Erreur dans api_types_membre_par_membre: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({'success': False, 'message': _("Une erreur est survenue lors de la récupération des types de membre")})
     
 # Vue de base pour maintenir la compatibilité avec urls.py
 dashboard = DashboardView.as_view()
