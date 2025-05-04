@@ -335,3 +335,18 @@ class UtilsTest(TestCase):
         self.assertTrue(expected_path_part in path, f"Attendu: {expected_path_part}, Obtenu: {path}")
         self.assertTrue(path.endswith('.jpg'))
         self.assertIn(timezone.now().strftime('%Y/%m/%d'), path)
+
+
+class StatutFilterTests(TestCase):
+    def setUp(self):
+        # Créer des statuts de test
+        Statut.objects.create(nom="Statut global", type_entite='global')
+        Statut.objects.create(nom="Statut membre", type_entite='membre')
+        Statut.objects.create(nom="Statut cotisation", type_entite='cotisation')
+        
+    def test_pour_cotisations(self):
+        """Test que pour_cotisations retourne les statuts corrects"""
+        statuts = Statut.pour_cotisations()
+        self.assertTrue(statuts.filter(nom="Statut global").exists())
+        self.assertTrue(statuts.filter(nom="Statut cotisation").exists())
+        self.assertFalse(statuts.filter(nom="Statut membre").exists())

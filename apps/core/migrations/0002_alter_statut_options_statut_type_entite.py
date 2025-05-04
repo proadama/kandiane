@@ -5,7 +5,7 @@ def classifier_statuts_existants(apps, schema_editor):
     
     # Mapping des statuts selon leur usage prévu
     statuts_membres = ['Actif', 'En attente', 'Suspendu', 'Désactivé', 'Honoraire']
-    statuts_cotisations = ['En attente de paiement', 'Payée', 'En retard', 'Annulée']
+    statuts_cotisations = ['Non payé', 'Payée', 'En retard', 'Annulée']
     statuts_paiements = ['Validé', 'En attente', 'Annulé', 'Rejeté']
     
     # Mettre à jour par nom (case insensitive)
@@ -19,7 +19,11 @@ def classifier_statuts_existants(apps, schema_editor):
             statut.type_entite = 'paiement'
         statut.save()
 
+def reverse_classifier_statuts(apps, schema_editor):
+    Statut = apps.get_model('core', 'Statut')
+    Statut.objects.all().update(type_entite='global')
 
+    
 class Migration(migrations.Migration):
 
     dependencies = [

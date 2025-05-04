@@ -136,7 +136,10 @@ class CotisationForm(forms.ModelForm):
         
         # Ne pas filtrer les barèmes ici, ce sera fait par le JavaScript
         # La partie existante qui filtre les barèmes peut être conservée comme fallback
-    
+
+        # Filtrer les statuts pour n'afficher que ceux applicables aux cotisations
+        self.fields['statut'].queryset = Statut.pour_cotisations()
+
     def clean(self):
         cleaned_data = super().clean()
         date_emission = cleaned_data.get('date_emission')
