@@ -73,7 +73,6 @@ class BaseModel(models.Model):
         """Méthode à surcharger pour journaliser la restauration."""
         pass
 
-# apps/core/models.py
 class Statut(BaseModel):
     """
     Modèle pour stocker les différents statuts utilisés dans l'application.

@@ -3,6 +3,61 @@
 {% load static %}
 {% load custom_filters %}
 
+{% block head_extra %}
+{{ block.super }}
+<!-- Styles pour les améliorations UI -->
+<style>
+.loading-indicator {
+    position: relative;
+}
+.loading-indicator::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 10px;
+    width: 20px;
+    height: 100%;
+    background: url('/static/img/spinner.gif') no-repeat center center;
+    background-size: 20px;
+}
+.tooltip-icon {
+    display: inline-block;
+    margin-left: 5px;
+    color: #007bff;
+    cursor: help;
+}
+.help-popover {
+    position: absolute;
+    z-index: 1000;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    max-width: 300px;
+}
+.recent-selections {
+    margin-bottom: 10px;
+    padding: 8px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+}
+.recent-item {
+    display: inline-block;
+    margin: 4px;
+    padding: 4px 8px;
+    background: #e9ecef;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.recent-item:hover {
+    background-color: #dee2e6;
+}
+</style>
+{% endblock %}
+
 {% block breadcrumb %}
 {% if form.instance.pk %}
 <li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
@@ -41,6 +96,14 @@
                         <!-- Première section - Informations de base -->
                         <div class="col-12">
                             <h5 class="border-bottom pb-2">{% trans "Informations de base" %}</h5>
+                        </div>
+                        
+                        <!-- Zone pour les sélections récentes -->
+                        <div class="col-12" id="recent-selections-container" style="display: none;">
+                            <div class="recent-selections">
+                                <strong>{% trans "Sélections récentes" %}</strong>
+                                <div id="recent-selections-list"></div>
+                            </div>
                         </div>
                         
                         <!-- Membre -->
@@ -363,12 +426,15 @@
             alerteBareme: '#alerte-bareme',
             periodeDebut: '#id_periode_debut',
             periodeFin: '#id_periode_fin',
+            dateEmission: '#id_date_emission',
+            dateEcheance: '#id_date_echeance',
+            recentSelectionsContainer: '#recent-selections-container',
+            recentSelectionsList: '#recent-selections-list'
         }
     };
 
     // Ajouter cette fonction au début du script, après la déclaration de CONFIG
-// Elle va tester toutes les URLs avant même d'initialiser le formulaire
-
+    // Elle va tester toutes les URLs avant même d'initialiser le formulaire
     function diagnoseApiUrls() {
         console.log('%c=== DIAGNOSTIC DES URLS API ===', 'color: #ff5722; font-weight: bold; font-size: 14px;');
         
@@ -561,16 +627,6 @@
             });
     }
 
-    // Pour appeler l'outil de diagnostic avant l'initialisation
-    document.addEventListener('DOMContentLoaded', function() {
-        // Exécuter le diagnostic des URLs
-        diagnoseApiUrls();
-        
-        // Continue avec l'initialisation normale
-        console.log('%c=== Formulaire de Cotisation - Initialisation ===', 'color: #28a745; font-weight: bold;');
-        FormManager.init();
-    });
-
     // Système de journalisation amélioré
     const Logger = {
         log(type, message, data = null) {
@@ -598,12 +654,26 @@
     // Gestionnaire principal du formulaire
     const FormManager = {
         elements: {},
+        
+        // 1.1 Mise en cache des options - Ajout du cache
+        cache: {
+            typesMembre: {},  // Cache par ID de membre
+            baremes: {}       // Cache par ID de type de membre
+        },
+        
+        // 4.1 Historique des sélections récentes
+        recentSelections: {
+            membres: [],
+            typesParMembre: {}
+        },
 
         // Initialisation
         init() {
             Logger.info('Initialisation du gestionnaire de formulaire');
             
             this.resetDomCache();
+            // 4.1 Chargement des sélections récentes
+            this.loadRecentSelections();
             this.setupEventListeners();
             this.initializeForm();
             
@@ -678,6 +748,57 @@
                 this.elements.utiliserBareme.addEventListener('change', this.handleUtiliserBaremeChange.bind(this));
                 Logger.info('Écouteur ajouté: utiliser barème');
             }
+            
+            // 2.2 Ajout des écouteurs pour les dates et le calcul au prorata
+            if (this.elements.periodeDebut) {
+                this.elements.periodeDebut.addEventListener('change', () => {
+                    this.calculateProratedAmount();
+                });
+                Logger.info('Écouteur ajouté: changement date début');
+            }
+            
+            if (this.elements.periodeFin) {
+                this.elements.periodeFin.addEventListener('change', () => {
+                    this.calculateProratedAmount();
+                });
+                Logger.info('Écouteur ajouté: changement date fin');
+            }
+            
+            if (this.elements.calculerProrata) {
+                this.elements.calculerProrata.addEventListener('change', () => {
+                    this.calculateProratedAmount();
+                });
+                Logger.info('Écouteur ajouté: calcul prorata');
+            }
+            
+            // 3.1 Validation du formulaire
+            if (this.elements.form) {
+                this.elements.form.addEventListener('submit', (event) => {
+                    // Valider le formulaire avant soumission
+                    if (!this.validateForm()) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        
+                        // Afficher un message d'erreur global
+                        const errorAlert = document.createElement('div');
+                        errorAlert.className = 'alert alert-danger mb-4';
+                        errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i> Veuillez corriger les erreurs ci-dessous.';
+                        
+                        // Ajouter l'alerte en haut du formulaire s'il n'y en a pas déjà une
+                        if (!this.elements.form.querySelector('.alert-danger')) {
+                            this.elements.form.prepend(errorAlert);
+                        }
+                        
+                        // Faire défiler jusqu'au premier champ en erreur
+                        const firstInvalidField = document.querySelector('.is-invalid');
+                        if (firstInvalidField) {
+                            firstInvalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            firstInvalidField.focus();
+                        }
+                    }
+                });
+                Logger.info('Écouteur ajouté: soumission formulaire avec validation');
+            }
         },
 
         // Initialisation du formulaire au chargement
@@ -701,6 +822,12 @@
             
             // Vérifier s'il y a des erreurs de formulaire et les traiter
             this.checkForFormErrors();
+            
+            // 4.1 Afficher les sélections récentes
+            this.updateRecentSelectionsDisplay();
+            
+            // 4.2 Initialiser le système d'aide contextuelle
+            HelpSystem.init();
         },
         
         // Vérifie la présence d'erreurs de validation Django et les traite
@@ -718,6 +845,17 @@
         handleMembreChange(event) {
             const membreId = event.target.value;
             Logger.event(`Membre changé: ${membreId}`);
+            
+            // 4.1 Récupérer le nom du membre depuis l'option sélectionnée
+            let membreNom = '';
+            if (event.target.selectedIndex >= 0) {
+                membreNom = event.target.options[event.target.selectedIndex].text;
+            }
+            
+            // 4.1 Ajouter aux sélections récentes
+            if (membreId && membreNom) {
+                this.addRecentMembre(membreId, membreNom);
+            }
             
             // Réinitialiser les éléments en cascade
             this.resetTypeMembreOptions();
@@ -753,6 +891,11 @@
             // Calculer le montant si un barème est sélectionné
             if (baremeId) {
                 this.calculateMontant(baremeId);
+                
+                // 2.2 Déclencher le calcul au prorata si nécessaire
+                if (this.elements.calculerProrata && this.elements.calculerProrata.checked) {
+                    this.calculateProratedAmount();
+                }
             } else {
                 this.resetMontant();
             }
@@ -768,14 +911,22 @@
 
         // Fonctions de chargement des données
         
-        // Charge les types de membre pour un membre spécifique
+        // 1.1 Mise en cache - Version modifiée pour utiliser le cache
         loadTypesMembre(membreId) {
             Logger.info(`Chargement des types pour le membre ${membreId}`);
             
-            // Désactiver et afficher "Chargement..." dans le sélecteur
+            // 1.1 Vérifier si les données sont en cache
+            if (this.cache.typesMembre[membreId]) {
+                Logger.info(`Utilisation du cache pour les types du membre ${membreId}`);
+                this.updateTypeMembreOptions(this.cache.typesMembre[membreId]);
+                return;
+            }
+            
+            // 2.1 Ajout du visuel de chargement
             if (this.elements.typeMembre) {
                 this.elements.typeMembre.disabled = true;
                 this.elements.typeMembre.innerHTML = '<option value="">Chargement...</option>';
+                this.showLoading(this.elements.typeMembre.parentNode);
             }
             
             // Construire l'URL avec l'ID du membre
@@ -786,23 +937,43 @@
             this.fetchData(url)
                 .then(data => {
                     Logger.api('Réponse API Types Membre', data);
+                    
+                    // 1.1 Mettre en cache les données pour une utilisation future
+                    if (data.success) {
+                        this.cache.typesMembre[membreId] = data;
+                    }
+                    
                     this.updateTypeMembreOptions(data);
                 })
                 .catch(error => {
                     Logger.error('Erreur lors du chargement des types de membre', error);
                     this.showError("Erreur lors du chargement des types de membre.");
                     this.resetTypeMembreOptions(true); // true = erreur
+                })
+                .finally(() => {
+                    // 2.1 Masquer l'indicateur de chargement
+                    if (this.elements.typeMembre) {
+                        this.hideLoading(this.elements.typeMembre.parentNode);
+                    }
                 });
         },
         
-        // Charge les barèmes pour un type de membre spécifique
+        // 1.1 Mise en cache - Version modifiée pour les barèmes
         loadBaremes(typeMembreId) {
             Logger.info(`Chargement des barèmes pour le type ${typeMembreId}`);
             
-            // Désactiver et afficher "Chargement..." dans le sélecteur
+            // 1.1 Vérifier si les données sont en cache
+            if (this.cache.baremes[typeMembreId]) {
+                Logger.info(`Utilisation du cache pour les barèmes du type ${typeMembreId}`);
+                this.updateBaremeOptions(this.cache.baremes[typeMembreId]);
+                return;
+            }
+            
+            // 2.1 Ajout du visuel de chargement
             if (this.elements.bareme) {
                 this.elements.bareme.disabled = true;
                 this.elements.bareme.innerHTML = '<option value="">Chargement...</option>';
+                this.showLoading(this.elements.bareme.parentNode);
             }
             
             // Construire l'URL avec l'ID du type de membre
@@ -813,12 +984,24 @@
             this.fetchData(url)
                 .then(data => {
                     Logger.api('Réponse API Barèmes', data);
+                    
+                    // 1.1 Mettre en cache les données pour une utilisation future
+                    if (data.success) {
+                        this.cache.baremes[typeMembreId] = data;
+                    }
+                    
                     this.updateBaremeOptions(data);
                 })
                 .catch(error => {
                     Logger.error('Erreur lors du chargement des barèmes', error);
                     this.showError("Erreur lors du chargement des barèmes.");
                     this.resetBaremeOptions(true); // true = erreur
+                })
+                .finally(() => {
+                    // 2.1 Masquer l'indicateur de chargement
+                    if (this.elements.bareme) {
+                        this.hideLoading(this.elements.bareme.parentNode);
+                    }
                 });
         },
         
@@ -832,6 +1015,11 @@
                 return;
             }
             
+            // 2.1 Ajout du visuel de chargement
+            if (this.elements.montant) {
+                this.showLoading(this.elements.montant.parentNode);
+            }
+            
             // Essayer d'abord de récupérer le montant depuis l'option sélectionnée
             if (this.elements.bareme && this.elements.bareme.selectedIndex > 0) {
                 const selectedOption = this.elements.bareme.options[this.elements.bareme.selectedIndex];
@@ -841,6 +1029,8 @@
                     
                     if (this.elements.montant) {
                         this.elements.montant.value = montant.toFixed(2);
+                        // 2.1 Masquer l'indicateur de chargement
+                        this.hideLoading(this.elements.montant.parentNode);
                     }
                     return;
                 }
@@ -866,7 +1056,135 @@
                 .catch(error => {
                     Logger.error('Erreur lors du calcul du montant', error);
                     this.showError("Erreur lors du calcul du montant.");
+                })
+                .finally(() => {
+                    // 2.1 Masquer l'indicateur de chargement
+                    if (this.elements.montant) {
+                        this.hideLoading(this.elements.montant.parentNode);
+                    }
                 });
+        },
+        
+        // 2.2 Calcul au prorata amélioré
+        calculateProratedAmount() {
+            Logger.info('Calcul du montant au prorata');
+            
+            // Vérifier si les éléments nécessaires existent
+            const periodeDebut = this.elements.periodeDebut;
+            const periodeFin = this.elements.periodeFin;
+            const calculerProrata = this.elements.calculerProrata;
+            const montant = this.elements.montant;
+            
+            if (!periodeDebut || !periodeFin || !calculerProrata || !montant) {
+                Logger.warning('Éléments manquants pour le calcul au prorata');
+                return;
+            }
+            
+            // Si le calcul au prorata n'est pas activé, sortir
+            if (!calculerProrata.checked) {
+                Logger.info('Calcul au prorata désactivé');
+                return;
+            }
+            
+            // Vérifier si les dates sont valides
+            const dateDebut = new Date(periodeDebut.value);
+            const dateFin = new Date(periodeFin.value);
+            
+            if (isNaN(dateDebut.getTime()) || isNaN(dateFin.getTime())) {
+                Logger.warning('Dates invalides pour le calcul au prorata');
+                return;
+            }
+            
+            // Récupérer le barème sélectionné
+            const bareme = this.elements.bareme;
+            if (!bareme || !bareme.selectedIndex) {
+                Logger.warning('Aucun barème sélectionné');
+                return;
+            }
+            
+            const selectedOption = bareme.options[bareme.selectedIndex];
+            if (!selectedOption || !selectedOption.dataset.montant || !selectedOption.dataset.periodicite) {
+                Logger.warning('Données de barème incomplètes');
+                return;
+            }
+            
+            // Récupérer les données du barème
+            const montantBase = parseFloat(selectedOption.dataset.montant);
+            const periodicite = selectedOption.dataset.periodicite;
+            
+            // Calculer la durée standard selon la périodicité
+            let dureeStandard = 365;  // Par défaut annuelle
+            switch (periodicite) {
+                case 'mensuelle': dureeStandard = 30; break;
+                case 'trimestrielle': dureeStandard = 91; break;
+                case 'semestrielle': dureeStandard = 182; break;
+                case 'unique': return;  // Pas de prorata pour un barème unique
+            }
+            
+            // Calculer la durée effective en jours
+            const diffTime = dateFin.getTime() - dateDebut.getTime();
+            const dureeEffective = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            
+            // Vérifier si la durée est valide
+            if (dureeEffective <= 0) {
+                this.showError('La période est invalide (date de fin antérieure à date de début)');
+                return;
+            }
+            
+            // Calculer le montant au prorata
+            const ratio = dureeEffective / dureeStandard;
+            const montantProrata = montantBase * ratio;
+            
+            // Appliquer le montant calculé
+            montant.value = montantProrata.toFixed(2);
+            
+            // Afficher les informations de calcul
+            this.displayProrataInfo(montantBase, dureeEffective, dureeStandard, montantProrata, periodicite);
+            
+            Logger.success(`Montant proratisé calculé: ${montantProrata.toFixed(2)}€`);
+        },
+        
+        // 2.2 Affichage des informations de prorata
+        displayProrataInfo(montantBase, dureeEffective, dureeStandard, montantProrata, periodicite) {
+            const container = document.getElementById('calcul-prorata-info');
+            const textContainer = document.getElementById('calcul-prorata-texte');
+            
+            if (!container || !textContainer) return;
+            
+            // Traduire la périodicité
+            const periodiciteLabels = {
+                'mensuelle': 'mois',
+                'trimestrielle': 'trimestre',
+                'semestrielle': 'semestre',
+                'annuelle': 'année',
+                'unique': 'période'
+            };
+            
+            const periodiciteLabel = periodiciteLabels[periodicite] || 'période';
+            
+            // Construire le message explicatif de manière sécurisée
+            textContainer.innerHTML = '';
+            
+            const line1 = document.createElement('div');
+            line1.appendChild(document.createTextNode(
+                `Calcul au prorata : ${montantBase.toFixed(2)}€ × (${dureeEffective} jours / ${dureeStandard} jours) = ${montantProrata.toFixed(2)}€`
+            ));
+            
+            const line2 = document.createElement('div');
+            line2.appendChild(document.createTextNode(
+                `Durée standard d'un ${periodiciteLabel} : ${dureeStandard} jours`
+            ));
+            
+            const line3 = document.createElement('div');
+            line3.appendChild(document.createTextNode(
+                `Durée effective : ${dureeEffective} jours`
+            ));
+            
+            textContainer.appendChild(line1);
+            textContainer.appendChild(line2);
+            textContainer.appendChild(line3);
+            
+            container.style.display = 'block';
         },
 
         // Méthodes pour mettre à jour l'interface
@@ -1012,6 +1330,19 @@
             }
         },
         
+        // 2.1 Indicateur visuel de chargement
+        showLoading(element) {
+            if (!element) return;
+            element.classList.add('loading-indicator');
+            element.setAttribute('aria-busy', 'true');
+        },
+        
+        hideLoading(element) {
+            if (!element) return;
+            element.classList.remove('loading-indicator');
+            element.setAttribute('aria-busy', 'false');
+        },
+        
         // Active/désactive le mode lecture seule du montant
         toggleMontantReadOnly(readOnly) {
             Logger.info(`Mode lecture seule du montant: ${readOnly}`);
@@ -1115,6 +1446,204 @@
                 this.elements.montant.value = '';
             }
         },
+        
+        // 3.1 Validation du formulaire améliorée
+        validateForm() {
+            Logger.info('Validation du formulaire');
+            
+            let isValid = true;
+            const errors = [];
+            
+            // Réinitialiser les erreurs précédentes
+            document.querySelectorAll('.is-invalid').forEach(el => {
+                el.classList.remove('is-invalid');
+            });
+            
+            // 1. Valider le membre
+            if (!this.elements.membre || !this.elements.membre.value) {
+                this.highlightError(this.elements.membre, 'Un membre doit être sélectionné');
+                errors.push('Membre manquant');
+                isValid = false;
+            }
+            
+            // 2. Valider le type de membre
+            if (!this.elements.typeMembre || !this.elements.typeMembre.value) {
+                this.highlightError(this.elements.typeMembre, 'Un type de membre doit être sélectionné');
+                errors.push('Type de membre manquant');
+                isValid = false;
+            }
+            
+            // 3. Valider le barème si utilisation du barème activée
+            if (this.elements.utiliserBareme && this.elements.utiliserBareme.checked) {
+                if (!this.elements.bareme || !this.elements.bareme.value) {
+                    this.highlightError(this.elements.bareme, 'Un barème doit être sélectionné');
+                    errors.push('Barème manquant');
+                    isValid = false;
+                }
+            }
+            
+            // 4. Valider le montant
+            if (!this.elements.montant || !this.elements.montant.value || parseFloat(this.elements.montant.value) <= 0) {
+                this.highlightError(this.elements.montant, 'Le montant doit être supérieur à zéro');
+                errors.push('Montant invalide');
+                isValid = false;
+            }
+            
+            // 5. Valider les dates
+            if (!this.elements.dateEmission || !this.elements.dateEmission.value) {
+                this.highlightError(this.elements.dateEmission, 'La date d\'émission est requise');
+                errors.push('Date d\'émission manquante');
+                isValid = false;
+            }
+            
+            if (!this.elements.dateEcheance || !this.elements.dateEcheance.value) {
+                this.highlightError(this.elements.dateEcheance, 'La date d\'échéance est requise');
+                errors.push('Date d\'échéance manquante');
+                isValid = false;
+            } else if (this.elements.dateEmission && this.elements.dateEmission.value && 
+                      new Date(this.elements.dateEcheance.value) < new Date(this.elements.dateEmission.value)) {
+                this.highlightError(this.elements.dateEcheance, 'La date d\'échéance doit être postérieure à la date d\'émission');
+                errors.push('Date d\'échéance invalide');
+                isValid = false;
+            }
+            
+            if (!this.elements.periodeDebut || !this.elements.periodeDebut.value) {
+                this.highlightError(this.elements.periodeDebut, 'La date de début de période est requise');
+                errors.push('Date de début manquante');
+                isValid = false;
+            }
+            
+            if (this.elements.periodeFin && this.elements.periodeFin.value && this.elements.periodeDebut && 
+                this.elements.periodeDebut.value && 
+                new Date(this.elements.periodeFin.value) < new Date(this.elements.periodeDebut.value)) {
+                this.highlightError(this.elements.periodeFin, 'La date de fin de période doit être postérieure à la date de début');
+                errors.push('Date de fin invalide');
+                isValid = false;
+            }
+            
+            // Journaliser les résultats de la validation
+            if (isValid) {
+                Logger.success('Validation du formulaire réussie');
+            } else {
+                Logger.error('Validation du formulaire échouée', errors);
+            }
+            
+            return isValid;
+        },
+        
+        // 3.1 Mise en évidence des champs en erreur
+        highlightError(element, message) {
+            if (!element) return;
+            
+            // Ajouter la classe d'erreur
+            element.classList.add('is-invalid');
+            
+            // Trouver le conteneur parent
+            let container = element.closest('.form-group');
+            if (!container) {
+                container = element.parentNode;
+            }
+            
+            // Créer ou mettre à jour le message d'erreur
+            let errorElement = container.querySelector('.invalid-feedback');
+            if (!errorElement) {
+                errorElement = document.createElement('div');
+                errorElement.className = 'invalid-feedback d-block';
+                
+                // Placer après le champ ou après le groupe d'input
+                if (element.parentNode.classList.contains('input-group')) {
+                    element.parentNode.parentNode.appendChild(errorElement);
+                } else {
+                    container.appendChild(errorElement);
+                }
+            }
+            
+            // Définir le message d'erreur de manière sécurisée
+            errorElement.textContent = message;
+        },
+        
+        // 4.1 Gestion des sélections récentes
+        addRecentMembre(membreId, membreNom) {
+            if (!membreId || !membreNom) return;
+            
+            // Ajouter à l'historique
+            const existingIndex = this.recentSelections.membres.findIndex(m => m.id === membreId);
+            if (existingIndex >= 0) {
+                // Déplacer au début de la liste s'il existe déjà
+                this.recentSelections.membres.splice(existingIndex, 1);
+            }
+            
+            // Ajouter au début
+            this.recentSelections.membres.unshift({
+                id: membreId,
+                nom: membreNom
+            });
+            
+            // Limiter à 5 entrées
+            if (this.recentSelections.membres.length > 5) {
+                this.recentSelections.membres.pop();
+            }
+            
+            // Enregistrer dans le localStorage
+            try {
+                localStorage.setItem('cotisation_recent_membres', JSON.stringify(this.recentSelections.membres));
+            } catch (e) {
+                Logger.error('Erreur lors de l\'enregistrement des sélections récentes', e);
+            }
+            
+            // Mettre à jour l'affichage
+            this.updateRecentSelectionsDisplay();
+        },
+        
+        loadRecentSelections() {
+            try {
+                // Charger depuis localStorage
+                const savedMembres = localStorage.getItem('cotisation_recent_membres');
+                if (savedMembres) {
+                    this.recentSelections.membres = JSON.parse(savedMembres);
+                }
+            } catch (e) {
+                Logger.error('Erreur lors du chargement des sélections récentes', e);
+            }
+        },
+        
+        updateRecentSelectionsDisplay() {
+            const container = this.elements.recentSelectionsContainer;
+            const list = this.elements.recentSelectionsList;
+            
+            if (!container || !list) return;
+            
+            // Masquer le conteneur s'il n'y a pas de sélections récentes
+            if (!this.recentSelections.membres.length) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            // Vider la liste
+            list.innerHTML = '';
+            
+            // Ajouter chaque sélection récente
+            this.recentSelections.membres.forEach(membre => {
+                const item = document.createElement('span');
+                item.className = 'recent-item';
+                item.textContent = membre.nom;
+                item.dataset.id = membre.id;
+                
+                // Ajouter un gestionnaire de clic
+                item.addEventListener('click', () => {
+                    // Sélectionner ce membre dans le dropdown
+                    if (this.elements.membre) {
+                        this.elements.membre.value = membre.id;
+                        this.triggerChangeEvent(this.elements.membre);
+                    }
+                });
+                
+                list.appendChild(item);
+            });
+            
+            // Afficher le conteneur
+            container.style.display = 'block';
+        },
 
         // Méthodes utilitaires
         
@@ -1154,10 +1683,114 @@
             Logger.info(`Événement change déclenché sur ${element.id || 'élément'}`);
         }
     };
+    
+    // 4.2 Système d'aide contextuelle
+    const HelpSystem = {
+        init() {
+            this.addHelpIcons();
+            this.setupEventListeners();
+        },
+        
+        // Ajoute des icônes d'aide aux éléments qui en ont besoin
+        addHelpIcons() {
+            // Définir les aides contextuelles pour différents champs
+            const helpTexts = {
+                'id_membre_label': 'Sélectionnez le membre pour lequel vous créez cette cotisation.',
+                'id_type_membre_label': 'Type d\'adhésion associé au membre sélectionné.',
+                'id_utiliser_bareme_label': 'Activer pour calculer automatiquement le montant selon le barème.',
+                'id_bareme_label': 'Barème tarifaire applicable à ce type de membre.',
+                'calculer_prorata': 'Ajuste le montant proportionnellement à la durée effective de la période.',
+                'id_montant_label': 'Montant total de la cotisation.'
+            };
+            
+            // Ajouter une icône d'aide à chaque élément
+            Object.entries(helpTexts).forEach(([id, text]) => {
+                const element = document.getElementById(id);
+                if (!element) return;
+                
+                const helpIcon = document.createElement('i');
+                helpIcon.className = 'fas fa-question-circle tooltip-icon';
+                helpIcon.setAttribute('data-help', text);
+                helpIcon.setAttribute('tabindex', '0');
+                helpIcon.setAttribute('role', 'button');
+                helpIcon.setAttribute('aria-label', 'Aide contextuelle');
+                
+                element.appendChild(helpIcon);
+            });
+        },
+        
+        // Configure les écouteurs d'événements
+        setupEventListeners() {
+            // Écouteur global pour les bulles d'aide
+            document.addEventListener('click', (event) => {
+                if (event.target.classList.contains('tooltip-icon')) {
+                    this.toggleHelpPopover(event.target);
+                } else {
+                    // Fermer tous les popovers si on clique ailleurs
+                    this.closeAllPopovers();
+                }
+            });
+            
+            // Support clavier
+            document.addEventListener('keydown', (event) => {
+                if (event.target.classList.contains('tooltip-icon')) {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        this.toggleHelpPopover(event.target);
+                    }
+                }
+                
+                // Fermer avec Escape
+                if (event.key === 'Escape') {
+                    this.closeAllPopovers();
+                }
+            });
+        },
+        
+        // Affiche ou masque une bulle d'aide
+        toggleHelpPopover(icon) {
+            // Fermer d'abord toutes les bulles ouvertes
+            this.closeAllPopovers();
+            
+            // Vérifier si l'icône a déjà une bulle ouverte
+            const existingPopover = icon.nextElementSibling;
+            if (existingPopover && existingPopover.classList.contains('help-popover')) {
+                existingPopover.remove();
+                return;
+            }
+            
+            // Créer la bulle d'aide
+            const helpText = icon.getAttribute('data-help');
+            if (!helpText) return;
+            
+            const popover = document.createElement('div');
+            popover.className = 'help-popover';
+            popover.textContent = helpText;
+            
+            // Positionner la bulle
+            icon.parentNode.insertBefore(popover, icon.nextSibling);
+            
+            // Ajuster la position si nécessaire
+            const rect = popover.getBoundingClientRect();
+            if (rect.right > window.innerWidth) {
+                popover.style.right = '0';
+            }
+        },
+        
+        // Ferme toutes les bulles d'aide
+        closeAllPopovers() {
+            document.querySelectorAll('.help-popover').forEach(popover => {
+                popover.remove();
+            });
+        }
+    };
 
-    // Lancement de l'initialisation au chargement du document
+    // Pour appeler l'outil de diagnostic avant l'initialisation
     document.addEventListener('DOMContentLoaded', function() {
-        // Message de démarrage
+        // Exécuter le diagnostic des URLs
+        diagnoseApiUrls();
+        
+        // Continue avec l'initialisation normale
         console.log('%c=== Formulaire de Cotisation - Initialisation ===', 'color: #28a745; font-weight: bold;');
         
         // Initialiser le gestionnaire de formulaire
