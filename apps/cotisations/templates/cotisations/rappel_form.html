@@ -288,6 +288,8 @@
 <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
 
 <script>
+// Voici le code JavaScript amélioré à ajouter à rappel_form.html
+
 document.addEventListener('DOMContentLoaded', function() {
     // Variables globales
     const rappelForm = document.getElementById('rappelForm');
@@ -296,6 +298,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const niveauInput = document.getElementById('id_niveau');
     const datePlanification = document.getElementById('datePlanification');
     const heurePlanification = document.getElementById('heurePlanification');
+    
+    // Ajouter des styles pour les boutons
+    const style = document.createElement('style');
+    style.textContent = `
+        .btn-template {
+            transition: all 0.3s ease;
+        }
+        .btn-template-active {
+            background-color: #28a745 !important;
+            color: white !important;
+            border-color: #28a745 !important;
+            box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+        }
+        .btn-template-inactive {
+            background-color: #f8f9fa;
+            color: #6c757d;
+            border-color: #ced4da;
+        }
+    `;
+    document.head.appendChild(style);
     
     // Gérer les liens de date rapide
     document.querySelectorAll('.set-date').forEach(link => {
@@ -313,13 +335,40 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Gestion des modèles de rappel avec utilisation des filtres
+    // Fonction pour mettre à jour les styles des boutons de modèle
+    function updateTemplateButtonStyles(activeButton) {
+        const templateButtons = [
+            document.getElementById('templateDefault'),
+            document.getElementById('templateUrgent'),
+            document.getElementById('templateFormal')
+        ];
+        
+        templateButtons.forEach(button => {
+            if (!button) return;
+            
+            // Ajouter la classe de base pour tous les boutons
+            button.classList.add('btn-template');
+            
+            // Appliquer la classe active/inactive selon le bouton cliqué
+            if (button === activeButton) {
+                button.classList.add('btn-template-active');
+                button.classList.remove('btn-template-inactive');
+                button.classList.remove('btn-outline-secondary');
+            } else {
+                button.classList.remove('btn-template-active');
+                button.classList.add('btn-template-inactive');
+                button.classList.remove('btn-outline-secondary');
+            }
+        });
+    }
+    
+    // Gestion des modèles de rappel avec mise en évidence du bouton actif
     const templateDefaultBtn = document.getElementById('templateDefault');
     const templateUrgentBtn = document.getElementById('templateUrgent');
     const templateFormalBtn = document.getElementById('templateFormal');
     
     if (templateDefaultBtn) {
-        templateDefaultBtn.addEventListener('click', function() {
+        templateDefaultBtn.onclick = function() {
             // Modèle standard avec date limite à 7 jours
             const dateLimite = new Date();
             dateLimite.setDate(dateLimite.getDate() + 7);
@@ -333,11 +382,14 @@ Nous vous remercions de bien vouloir procéder au règlement avant le ${dateLimi
 
 Cordialement,
 L'équipe de l'association`;
-        });
+
+            // Mettre à jour les styles des boutons
+            updateTemplateButtonStyles(this);
+        };
     }
     
     if (templateUrgentBtn) {
-        templateUrgentBtn.addEventListener('click', function() {
+        templateUrgentBtn.onclick = function() {
             // Modèle urgent avec date limite à 5 jours
             const dateLimite = new Date();
             dateLimite.setDate(dateLimite.getDate() + 5);
@@ -353,11 +405,14 @@ Pour toute question ou difficulté, n'hésitez pas à nous contacter rapidement.
 
 Cordialement,
 L'équipe de l'association`;
-        });
+
+            // Mettre à jour les styles des boutons
+            updateTemplateButtonStyles(this);
+        };
     }
     
     if (templateFormalBtn) {
-        templateFormalBtn.addEventListener('click', function() {
+        templateFormalBtn.onclick = function() {
             // Modèle formel avec date limite à 15 jours
             const dateLimite = new Date();
             dateLimite.setDate(dateLimite.getDate() + 15);
@@ -375,7 +430,10 @@ Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées
 
 Le Trésorier
 Association XYZ`;
-        });
+
+            // Mettre à jour les styles des boutons
+            updateTemplateButtonStyles(this);
+        };
     }
     
     // Adapter le contenu en fonction du type de rappel
@@ -385,17 +443,17 @@ Association XYZ`;
             const type = this.value;
             if (type === 'email') {
                 // Activer tous les modèles pour email
-                templateDefaultBtn.disabled = false;
-                templateUrgentBtn.disabled = false;
-                templateFormalBtn.disabled = false;
+                if (templateDefaultBtn) templateDefaultBtn.disabled = false;
+                if (templateUrgentBtn) templateUrgentBtn.disabled = false;
+                if (templateFormalBtn) templateFormalBtn.disabled = false;
             } else if (type === 'sms') {
                 // Pour SMS, désactiver certains modèles trop longs
-                templateDefaultBtn.disabled = false;
-                templateUrgentBtn.disabled = false;
-                templateFormalBtn.disabled = true;
+                if (templateDefaultBtn) templateDefaultBtn.disabled = false;
+                if (templateUrgentBtn) templateUrgentBtn.disabled = false;
+                if (templateFormalBtn) templateFormalBtn.disabled = true;
                 
                 // Proposer un modèle SMS plus court si le contenu est vide
-                if (!contenuTextarea.value.trim()) {
+                if (contenuTextarea && !contenuTextarea.value.trim()) {
                     // Utiliser le filtre add_days pour la date limite
                     const dateLimite = new Date();
                     dateLimite.setDate(dateLimite.getDate() + 7);
@@ -404,6 +462,14 @@ Association XYZ`;
                     contenuTextarea.value = `Rappel: Votre cotisation (ref. {% if cotisation %}{{ cotisation.reference|escapejs }}{% else %}{reference}{% endif %}) de {% if cotisation %}{{ cotisation.montant_restant|floatformat:2 }}{% else %}{montant}{% endif %} € est due. Merci de régulariser avant le ${dateLimiteStr}.`;
                 }
             }
+            
+            // Réinitialiser tous les styles de boutons lorsque le type change
+            const templateButtons = [templateDefaultBtn, templateUrgentBtn, templateFormalBtn];
+            templateButtons.forEach(button => {
+                if (!button) return;
+                button.classList.remove('btn-template-active', 'btn-template-inactive');
+                button.classList.add('btn-outline-secondary');
+            });
         });
     }
     
@@ -435,41 +501,45 @@ Association XYZ`;
             });
             
             // Vérifier que le type de rappel est sélectionné
-            if (!typeRappelSelect.value) {
+            if (typeRappelSelect && !typeRappelSelect.value) {
                 isValid = false;
-                highlightField(typeRappelSelect, '{% trans "Veuillez sélectionner un type de rappel." %}');
+                highlightField(typeRappelSelect, 'Veuillez sélectionner un type de rappel.');
             }
             
             // Vérifier que le contenu n'est pas vide
-            if (!contenuTextarea.value.trim()) {
+            if (contenuTextarea && !contenuTextarea.value.trim()) {
                 isValid = false;
-                highlightField(contenuTextarea, '{% trans "Le contenu du rappel ne peut pas être vide." %}');
+                highlightField(contenuTextarea, 'Le contenu du rappel ne peut pas être vide.');
             }
             
             // Vérifier le niveau du rappel
-            const niveau = parseInt(niveauInput.value);
-            if (isNaN(niveau) || niveau < 1) {
-                isValid = false;
-                highlightField(niveauInput, '{% trans "Le niveau doit être un nombre positif (1 ou plus)." %}');
+            if (niveauInput) {
+                const niveau = parseInt(niveauInput.value);
+                if (isNaN(niveau) || niveau < 1) {
+                    isValid = false;
+                    highlightField(niveauInput, 'Le niveau doit être un nombre positif (1 ou plus).');
+                }
             }
             
             // Si on planifie l'envoi, vérifier les dates
-            if (!envoyerImmediatementSwitch.checked) {
-                if (!datePlanification.value) {
+            if (envoyerImmediatementSwitch && !envoyerImmediatementSwitch.checked) {
+                if (datePlanification && !datePlanification.value) {
                     isValid = false;
-                    highlightField(datePlanification, '{% trans "Veuillez sélectionner une date d\'envoi." %}');
+                    highlightField(datePlanification, 'Veuillez sélectionner une date d\'envoi.');
                 }
                 
-                if (!heurePlanification.value) {
+                if (heurePlanification && !heurePlanification.value) {
                     isValid = false;
-                    highlightField(heurePlanification, '{% trans "Veuillez sélectionner une heure d\'envoi." %}');
+                    highlightField(heurePlanification, 'Veuillez sélectionner une heure d\'envoi.');
                 }
             }
             
             // Protection XSS
-            contenuTextarea.value = contenuTextarea.value
-                .replace(/<script/gi, "&lt;script")
-                .replace(/<\/script>/gi, "&lt;/script&gt;");
+            if (contenuTextarea) {
+                contenuTextarea.value = contenuTextarea.value
+                    .replace(/<script/gi, "&lt;script")
+                    .replace(/<\/script>/gi, "&lt;/script&gt;");
+            }
             
             if (!isValid) {
                 event.preventDefault();
@@ -477,10 +547,10 @@ Association XYZ`;
                 // Afficher un message d'erreur global
                 const errorAlert = document.createElement('div');
                 errorAlert.className = 'alert alert-danger mb-4';
-                errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>{% trans "Veuillez corriger les erreurs ci-dessous." %}';
+                errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Veuillez corriger les erreurs ci-dessous.';
                 
                 // Ajouter l'alerte au début du formulaire s'il n'y en a pas déjà une
-                if (!document.querySelector('.alert-danger')) {
+                if (rappelForm && !rappelForm.querySelector('.alert-danger')) {
                     rappelForm.prepend(errorAlert);
                 }
             }
@@ -489,6 +559,8 @@ Association XYZ`;
     
     // Fonction pour mettre en évidence un champ en erreur
     function highlightField(field, message) {
+        if (!field) return;
+        
         field.classList.add('is-invalid');
         
         // Ajouter un message d'erreur si pas déjà présent
@@ -500,6 +572,28 @@ Association XYZ`;
             field.parentNode.appendChild(errorDiv);
         }
     }
+    
+    // Si l'un des modèles est déjà dans le contenu, mettre en surbrillance le bouton correspondant
+    function checkExistingTemplateContent() {
+        if (!contenuTextarea || !contenuTextarea.value) return;
+        
+        const content = contenuTextarea.value;
+        
+        // Vérifier quel modèle est actuellement utilisé
+        if (content.includes('RAPPEL URGENT')) {
+            // C'est le modèle urgent
+            updateTemplateButtonStyles(templateUrgentBtn);
+        } else if (content.includes('Veuillez agréer, Madame, Monsieur,')) {
+            // C'est le modèle formel
+            updateTemplateButtonStyles(templateFormalBtn);
+        } else if (content.includes('Nous vous rappelons que votre cotisation')) {
+            // C'est le modèle standard
+            updateTemplateButtonStyles(templateDefaultBtn);
+        }
+    }
+    
+    // Exécuter la vérification initiale pour mettre en surbrillance le bon bouton au chargement
+    checkExistingTemplateContent();
 });
 </script>
 {% endblock %}

@@ -37,23 +37,29 @@
     max-width: 300px;
 }
 .recent-selections {
-    margin-bottom: 10px;
-    padding: 8px;
+    margin-bottom: 15px;
+    padding: 12px;
     border: 1px solid #e0e0e0;
-    border-radius: 4px;
+    border-radius: 6px;
     background-color: #f9f9f9;
 }
+
 .recent-item {
     display: inline-block;
-    margin: 4px;
-    padding: 4px 8px;
-    background: #e9ecef;
+    margin: 4px 8px;
+    padding: 6px 12px;
+    background: #e9f0f7;
+    border: 1px solid #c0d8ea;
     border-radius: 4px;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background-color 0.2s, transform 0.1s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    font-size: 0.9rem;
 }
+
 .recent-item:hover {
-    background-color: #dee2e6;
+    background-color: #d1e2f2;
+    transform: translateY(-1px);
 }
 </style>
 {% endblock %}
@@ -1580,7 +1586,7 @@
             });
             
             // Limiter à 5 entrées
-            if (this.recentSelections.membres.length > 5) {
+            if (this.recentSelections.membres.length > 3) {
                 this.recentSelections.membres.pop();
             }
             
@@ -1622,27 +1628,48 @@
             // Vider la liste
             list.innerHTML = '';
             
-            // Ajouter chaque sélection récente
-            this.recentSelections.membres.forEach(membre => {
+            // Créer un conteneur pour la liste formatée
+            const textContainer = document.createElement('div');
+            textContainer.style.marginTop = '5px';
+            
+            // Parcourir les membres et créer les éléments cliquables séparés par des virgules
+            this.recentSelections.membres.forEach((membre, index) => {
+                // Créer l'élément cliquable pour chaque membre
                 const item = document.createElement('span');
-                item.className = 'recent-item';
                 item.textContent = membre.nom;
                 item.dataset.id = membre.id;
+                item.style.fontWeight = 'bold';
+                item.style.cursor = 'pointer';
+                item.style.color = '#0056b3';
                 
                 // Ajouter un gestionnaire de clic
                 item.addEventListener('click', () => {
-                    // Sélectionner ce membre dans le dropdown
                     if (this.elements.membre) {
                         this.elements.membre.value = membre.id;
                         this.triggerChangeEvent(this.elements.membre);
                     }
                 });
                 
-                list.appendChild(item);
+                // Ajouter l'élément au conteneur
+                textContainer.appendChild(item);
+                
+                // Ajouter une virgule et un espace après chaque élément sauf le dernier
+                if (index < this.recentSelections.membres.length - 1) {
+                    const separator = document.createTextNode(', ');
+                    textContainer.appendChild(separator);
+                }
             });
             
-            // Afficher le conteneur
+            // Ajouter le conteneur de texte à la liste
+            list.appendChild(textContainer);
+            
+            // Style simplifié pour le conteneur principal
             container.style.display = 'block';
+            container.style.padding = '10px';
+            container.style.backgroundColor = '#f8f9fa';
+            container.style.borderRadius = '4px';
+            container.style.border = '1px solid #e2e8f0';
+
         },
 
         // Méthodes utilitaires
