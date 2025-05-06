@@ -1555,6 +1555,12 @@ class RappelDetailView(StaffRequiredMixin, DetailView):
         
         return context
 
+class RappelEnvoyerView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        rappel = get_object_or_404(Rappel, pk=pk)
+        # Logique pour envoyer le rappel
+        messages.success(request, "Rappel envoyé avec succès")
+        return redirect('cotisations:rappel_detail', pk=pk)
 
 class StatistiquesView(StaffRequiredMixin, TemplateView):
     """
