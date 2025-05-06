@@ -1,0 +1,3 @@
+# Les amélioration possibles 
+
+changement de statut de membre : à la création d'un membre statut = création et quand le membre active son compte status = actif
