@@ -19,25 +19,49 @@
     <!-- Informations sur le rappel -->
     <div class="col-lg-8 mb-4">
         <div class="card h-100">
+            <!-- Remplacer cette section dans le fichier rappel_detail.html -->
             <div class="card-header bg-light d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">{% trans "Détails du rappel" %}</h5>
+                
                 <div>
                     {% if rappel.etat == 'planifie' %}
-                    <!-- Suppression du lien pour envoyer le rappel car l'URL n'existe pas -->
-                    <button class="btn btn-sm btn-success disabled" title="{% trans 'Fonctionnalité non disponible' %}">
-                        <i class="fas fa-paper-plane"></i> {% trans "Envoyer maintenant" %}
-                    </button>
-                    {% endif %}
-                    
-                    <!-- Modification du lien pour modifier le rappel si nécessaire -->
-                    {% if 'rappel_modifier' in rappel.get_urls_for_object %}
-                    <a href="{% url 'cotisations:rappel_modifier' pk=rappel.id %}" class="btn btn-sm btn-primary">
-                        <i class="fas fa-edit"></i> {% trans "Modifier" %}
-                    </a>
-                    {% else %}
-                    <button class="btn btn-sm btn-primary disabled" title="{% trans 'Fonctionnalité non disponible' %}">
-                        <i class="fas fa-edit"></i> {% trans "Modifier" %}
-                    </button>
+                        <!-- Boutons pour un rappel planifié -->
+                        <form method="post" action="{% url 'cotisations:rappel_detail' pk=rappel.id %}" style="display: inline-block;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="envoyer">
+                            <button type="submit" class="btn btn-sm btn-success">
+                                <i class="fas fa-paper-plane"></i> {% trans "Envoyer maintenant" %}
+                            </button>
+                        </form>
+                        
+                        <a href="{% url 'cotisations:cotisation_detail' pk=rappel.cotisation.pk %}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-edit"></i> {% trans "Modifier" %}
+                        </a>
+                    {% elif rappel.etat == 'echoue' %}
+                        <!-- Boutons pour un rappel en échec -->
+                        <form method="post" action="{% url 'cotisations:rappel_detail' pk=rappel.id %}" style="display: inline-block;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="reenvoyer">
+                            <button type="submit" class="btn btn-sm btn-warning">
+                                <i class="fas fa-sync"></i> {% trans "Réessayer l'envoi" %}
+                            </button>
+                        </form>
+                        
+                        <a href="{% url 'cotisations:cotisation_detail' pk=rappel.cotisation.pk %}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-edit"></i> {% trans "Modifier" %}
+                        </a>
+                    {% elif rappel.etat == 'envoye' %}
+                        <!-- Info pour un rappel envoyé -->
+                        <span class="badge bg-success p-2">
+                            <i class="fas fa-check me-1"></i> 
+                            {% trans "Envoyé le" %} {{ rappel.date_envoi|date:"d/m/Y à H:i" }}
+                        </span>
+                    {% elif rappel.etat == 'lu' %}
+                        <!-- Info pour un rappel lu -->
+                        <span class="badge bg-info p-2">
+                            <i class="fas fa-eye me-1"></i> 
+                            {% trans "Lu par le destinataire" %}
+                        </span>
                     {% endif %}
                 </div>
             </div>

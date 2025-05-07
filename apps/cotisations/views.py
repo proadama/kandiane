@@ -1533,27 +1533,30 @@ class RappelListView(StaffRequiredMixin, ListView):
         return context
 
 
-class RappelDetailView(StaffRequiredMixin, DetailView):
-    """
-    Vue détaillée d'un rappel.
-    """
+class RappelDetailView(LoginRequiredMixin, DetailView):
     model = Rappel
     template_name = 'cotisations/rappel_detail.html'
     context_object_name = 'rappel'
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        rappel = self.object
+    def post(self, request, *args, **kwargs):
+        rappel = self.get_object()
+        action = request.POST.get('action')
         
-        context.update({
-            'cotisation': rappel.cotisation,
-            'membre': rappel.membre,
-            'autres_rappels': Rappel.objects.filter(
-                cotisation=rappel.cotisation
-            ).exclude(pk=rappel.pk).order_by('-date_envoi'),
-        })
+        if action == 'envoyer':
+            # Logique pour envoyer le rappel
+            rappel.etat = 'envoye'
+            rappel.date_envoi = timezone.now()
+            rappel.save()
+            messages.success(request, _("Le rappel a été envoyé avec succès."))
+            
+        elif action == 'reenvoyer':
+            # Logique pour réessayer l'envoi d'un rappel échoué
+            rappel.etat = 'envoye'
+            rappel.date_envoi = timezone.now()
+            rappel.save()
+            messages.success(request, _("Le rappel a été renvoyé avec succès."))
         
-        return context
+        return redirect('cotisations:rappel_detail', pk=rappel.pk)
 
 class RappelEnvoyerView(LoginRequiredMixin, View):
     def get(self, request, pk):
