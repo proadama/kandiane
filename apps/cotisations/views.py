@@ -686,13 +686,22 @@ class RappelCreateView(StaffRequiredMixin, CreateView):
         return context
     
     def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(
-            self.request, 
-            _("Le rappel a été créé avec succès.")
-        )
-        return response
-    
+        rappel = form.save(commit=False)
+        
+        # La date de création est toujours maintenant
+        rappel.date_creation = timezone.now()
+        
+        # Pour les rappels envoyés immédiatement, date_envoi = date_creation
+        if rappel.etat == 'envoye':
+            rappel.date_envoi = rappel.date_creation
+        # Pour les rappels planifiés, date_envoi est celle spécifiée dans le formulaire
+        elif rappel.etat == 'planifie':
+            # La date_envoi est déjà définie par le formulaire
+            pass
+        
+        rappel.save()
+        return super().form_valid(form)
+        
     def get_success_url(self):
         if hasattr(self, 'cotisation'):
             return reverse('cotisations:cotisation_detail', kwargs={'pk': self.cotisation.pk})
@@ -1598,12 +1607,14 @@ class RappelUpdateView(StaffRequiredMixin, UpdateView):
         return context
     
     def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(
-            self.request, 
-            _("Le rappel a été modifié avec succès.")
-        )
-        return response
+        # Vérifier que la date planifiée est dans le futur
+        if form.cleaned_data.get('etat') == 'planifie':
+            date_envoi = form.cleaned_data.get('date_envoi')
+            if date_envoi and date_envoi <= timezone.now():
+                form.add_error('date_envoi', _("La date d'envoi planifiée doit être dans le futur"))
+                return self.form_invalid(form)
+        
+        return super().form_valid(form)
     
     def get_success_url(self):
         return reverse('cotisations:rappel_detail', kwargs={'pk': self.object.pk})

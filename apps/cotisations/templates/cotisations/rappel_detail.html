@@ -83,8 +83,17 @@
                                 {% endif %}
                             </dd>
                             
+                            <dt class="col-sm-5">{% trans "Date de création" %}</dt>
+                            <dd class="col-sm-7">{{ rappel.date_creation|date:"d/m/Y H:i" }}</dd>
+
                             <dt class="col-sm-5">{% trans "Date d'envoi" %}</dt>
-                            <dd class="col-sm-7">{{ rappel.date_envoi|date:"d/m/Y H:i" }}</dd>
+                            <dd class="col-sm-7">
+                                {% if rappel.etat == 'planifie' %}
+                                <span class="badge bg-info">{% trans "Planifié pour le" %} {{ rappel.date_envoi|date:"d/m/Y H:i" }}</span>
+                                {% else %}
+                                {{ rappel.date_envoi|date:"d/m/Y H:i" }}
+                                {% endif %}
+                            </dd>
                             
                             <dt class="col-sm-5">{% trans "État" %}</dt>
                             <dd class="col-sm-7">

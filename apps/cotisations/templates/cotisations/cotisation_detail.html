@@ -1724,6 +1724,33 @@ const UiManager = (function() {
 
 // Initialisation à la fin du chargement de la page
 document.addEventListener('DOMContentLoaded', function() {
+    // Définir la date minimale pour la planification (aujourd'hui)
+    const formDatePlanification = document.getElementById('formDatePlanification');
+    const formHeurePlanification = document.getElementById('formHeurePlanification');
+    
+    if (formDatePlanification) {
+        // Définir la date minimum à aujourd'hui
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        formDatePlanification.min = `${year}-${month}-${day}`;
+        
+        // Valider la combinaison date/heure lors de la soumission
+        document.getElementById('submitRappel').addEventListener('click', function(e) {
+            if (!document.getElementById('envoyerImmediatement').checked) {
+                const selectedDate = new Date(`${formDatePlanification.value}T${formHeurePlanification.value}`);
+                const now = new Date();
+                
+                if (selectedDate <= now) {
+                    e.preventDefault();
+                    alert("La date et l'heure d'envoi doivent être dans le futur");
+                    formDatePlanification.classList.add('is-invalid');
+                    return false;
+                }
+            }
+        });
+    }
     // Initialiser la gestion des formulaires
     FormManager.initFormHandlers();
     

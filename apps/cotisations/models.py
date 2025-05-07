@@ -688,6 +688,17 @@ class Rappel(BaseModel):
         verbose_name=_("Niveau de rappel"),
         help_text=_("Niveau de priorité/sévérité du rappel (1: premier rappel, 2: relance, etc.)")
     )
+    # Date de création (toujours maintenant)
+    date_creation = models.DateTimeField(
+        verbose_name=_("Date de création"),
+        default=timezone.now,
+        editable=False
+    )
+    # Date d'envoi (peut être dans le futur si planifié)
+    date_envoi = models.DateTimeField(
+        verbose_name=_("Date d'envoi"),
+        default=timezone.now
+    )
     cree_par = models.ForeignKey(
         CustomUser,
         on_delete=models.SET_NULL,
