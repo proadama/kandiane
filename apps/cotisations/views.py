@@ -1565,6 +1565,49 @@ class RappelEnvoyerView(LoginRequiredMixin, View):
         messages.success(request, "Rappel envoyé avec succès")
         return redirect('cotisations:rappel_detail', pk=pk)
 
+
+class RappelUpdateView(StaffRequiredMixin, UpdateView):
+    """
+    Vue pour modifier un rappel existant.
+    """
+    model = Rappel
+    form_class = RappelForm
+    template_name = 'cotisations/rappel_form.html'
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        
+        # S'assurer que self.object (le rappel) est chargé
+        if not hasattr(self, 'object'):
+            self.object = self.get_object()
+        
+        # Vérifier que la cotisation et le membre existent avant de les ajouter
+        if self.object.cotisation:
+            kwargs['cotisation'] = self.object.cotisation
+        if self.object.membre:
+            kwargs['membre'] = self.object.membre
+        
+        return kwargs
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Ajouter explicitement la cotisation au contexte
+        if self.object and self.object.cotisation:
+            context['cotisation'] = self.object.cotisation
+        return context
+    
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(
+            self.request, 
+            _("Le rappel a été modifié avec succès.")
+        )
+        return response
+    
+    def get_success_url(self):
+        return reverse('cotisations:rappel_detail', kwargs={'pk': self.object.pk})
+
 class StatistiquesView(StaffRequiredMixin, TemplateView):
     """
     Vue pour afficher les statistiques financières des cotisations et paiements.
@@ -2713,3 +2756,4 @@ corbeille = CotisationCorbeilleView.as_view()
 statistiques = StatistiquesView.as_view()
 export = ExportCotisationsView.as_view()
 import_cotisations = ImportCotisationsView.as_view()
+rappel_update = RappelUpdateView.as_view()

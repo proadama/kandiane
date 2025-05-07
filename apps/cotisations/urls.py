@@ -34,6 +34,7 @@ urlpatterns = [
     path('rappels/<int:pk>/', views.rappel_detail, name='rappel_detail'),
     path('rappels/nouveau/<int:cotisation_id>/', views.rappel_create, name='rappel_creer'),
     path('rappels/<int:rappel_id>/envoyer/', views.envoyer_rappel, name='envoyer_rappel'),
+    path('rappels/<int:pk>/modifier/', views.rappel_update, name='rappel_modifier'),
     path('rappels/<int:pk>/envoyer/', views.RappelEnvoyerView.as_view(), name='rappel_envoyer'),
     path('rappels/<int:rappel_id>/contenu/', views.rappel_contenu_ajax, name='rappel_contenu_ajax'),
     path('rappels/<int:rappel_id>/envoyer/', views.rappel_envoi_ajax, name='rappel_envoi_ajax'),

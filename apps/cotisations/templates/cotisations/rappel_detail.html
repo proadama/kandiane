@@ -34,7 +34,7 @@
                             </button>
                         </form>
                         
-                        <a href="{% url 'cotisations:cotisation_detail' pk=rappel.cotisation.pk %}" class="btn btn-sm btn-primary">
+                        <a href="{% url 'cotisations:rappel_modifier' pk=rappel.pk %}" class="btn btn-sm btn-primary">
                             <i class="fas fa-edit"></i> {% trans "Modifier" %}
                         </a>
                     {% elif rappel.etat == 'echoue' %}
@@ -47,7 +47,7 @@
                             </button>
                         </form>
                         
-                        <a href="{% url 'cotisations:cotisation_detail' pk=rappel.cotisation.pk %}" class="btn btn-sm btn-primary">
+                        <a href="{% url 'cotisations:rappel_modifier' pk=rappel.pk %}" class="btn btn-sm btn-primary">
                             <i class="fas fa-edit"></i> {% trans "Modifier" %}
                         </a>
                     {% elif rappel.etat == 'envoye' %}
