@@ -660,6 +660,22 @@
 .invalid-feedback.show {
     display: block;
 }
+
+/* Ajouter ces styles dans la section CSS du fichier cotisation_detail.html */
+.btn-template {
+    transition: all 0.3s ease;
+}
+.btn-template-active {
+    background-color: #28a745 !important;
+    color: white !important;
+    border-color: #28a745 !important;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+.btn-template-inactive {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    border-color: #ced4da;
+}
 </style>
 {% endblock %}
 
@@ -1226,6 +1242,9 @@ const RappelManager = (function() {
         // Initialiser les templates de rappel
         initRappelTemplates();
         
+        // AJOUTER CETTE LIGNE - Mettre en surbrillance le bouton standard par défaut
+        updateTemplateButtonStyles(document.getElementById('templateDefault'));
+
         // Soumission du formulaire
         submitBtn.addEventListener('click', function(e) {
             e.preventDefault();
@@ -1298,6 +1317,33 @@ const RappelManager = (function() {
                 console.error('Erreur:', error);
                 NotificationManager.showToast("{% trans 'Une erreur est survenue lors de la communication avec le serveur' %}", 'error');
             });
+        });
+    }
+
+    // Fonction pour mettre à jour les styles des boutons de modèle
+    function updateTemplateButtonStyles(activeButton) {
+        if (!activeButton) return;
+        
+        const templateButtons = [
+            document.getElementById('templateDefault'),
+            document.getElementById('templateUrgent'),
+            document.getElementById('templateFormal')
+        ];
+        
+        templateButtons.forEach(button => {
+            if (!button) return;
+            
+            // Ajouter la classe de base pour tous les boutons
+            button.classList.add('btn-template');
+            
+            // Appliquer la classe active/inactive selon le bouton cliqué
+            if (button === activeButton) {
+                button.classList.add('btn-template-active');
+                button.classList.remove('btn-template-inactive', 'btn-outline-secondary');
+            } else {
+                button.classList.remove('btn-template-active', 'btn-outline-secondary');
+                button.classList.add('btn-template-inactive');
+            }
         });
     }
     
