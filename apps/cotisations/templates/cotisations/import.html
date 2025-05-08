@@ -189,29 +189,15 @@
 <div class="row">
     <div class="col-lg-10 mx-auto">
         <!-- Indicateur d'étapes -->
-        <div class="step-indicator mb-4">
-            <div class="step {% if not preview_data and not import_completed %}active{% else %}completed{% endif %}">
-                <div class="step-number">1</div>
-                <div class="step-title">{% trans "Chargement du fichier" %}</div>
-            </div>
-            <div class="step {% if preview_data and not import_completed %}active{% elif import_completed %}completed{% endif %}">
-                <div class="step-number">2</div>
-                <div class="step-title">{% trans "Prévisualisation & Validation" %}</div>
-            </div>
-            <div class="step {% if import_completed %}active{% endif %}">
-                <div class="step-number">3</div>
-                <div class="step-title">{% trans "Résultats" %}</div>
-            </div>
-        </div>
         
         <!-- Étape 1: Upload du fichier -->
         {% if not preview_data and not import_completed %}
         <div class="card">
             <div class="card-header bg-light">
-                <h5 class="card-title mb-0">{% trans "Étape 1 : Sélectionner un fichier" %}</h5>
+                <h5 class="card-title mb-0">{% trans "Sélectionner un fichier" %}</h5>
             </div>
             <div class="card-body">
-                <p class="mb-4">{% trans "Vous pouvez importer des cotisations à partir d'un fichier CSV ou Excel. Sélectionnez le fichier à importer ci-dessous." %}</p>
+                <p class="mb-4">{% trans "Vous pouvez importer des cotisations à partir d'un fichier CSV ou Excel." %}</p>
                 
                 <form method="post" enctype="multipart/form-data" id="upload-form">
                     {% csrf_token %}
