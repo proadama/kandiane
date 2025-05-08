@@ -1,0 +1,968 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block head_extra %}
+{{ block.super }}
+<!-- Styles pour l'importation et la prévisualisation -->
+<style>
+.step-indicator {
+    display: flex;
+    margin-bottom: 2rem;
+}
+.step {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    position: relative;
+}
+.step:not(:last-child):after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 0;
+    width: 100%;
+    height: 2px;
+    background-color: #e9ecef;
+    z-index: 0;
+}
+.step-number {
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    border-radius: 50%;
+    background-color: #e9ecef;
+    color: #6c757d;
+    margin: 0 auto 10px;
+    position: relative;
+    z-index: 1;
+}
+.step.active .step-number {
+    background-color: #007bff;
+    color: white;
+}
+.step.completed .step-number {
+    background-color: #28a745;
+    color: white;
+}
+.custom-file-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+.custom-file-label {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    height: 38px;
+    padding: .375rem .75rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: .25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.custom-file-label::after {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    padding: .375rem .75rem;
+    color: #495057;
+    content: "Parcourir";
+    background-color: #e9ecef;
+    border-left: 1px solid #ced4da;
+    border-radius: 0 .25rem .25rem 0;
+}
+.custom-file-input {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+.file-info {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+    font-size: 0.9rem;
+}
+.file-info i {
+    margin-right: 8px;
+    font-size: 1.2rem;
+}
+.spinner-border {
+    width: 1rem;
+    height: 1rem;
+    border-width: 0.15em;
+}
+.file-help-text {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+.is-invalid ~ .custom-file-label {
+    border-color: #dc3545;
+}
+.preview-table {
+    max-height: 400px;
+    overflow-y: auto;
+}
+.validation-badge {
+    margin-right: 5px;
+}
+.validation-issue {
+    background-color: #fef8f8;
+    border-left: 3px solid #dc3545;
+    padding: 0.5rem 1rem;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+}
+.preview-progress {
+    height: 3px;
+    margin-top: 1rem;
+}
+.highlight-row {
+    animation: highlightRow 2s ease-in-out;
+}
+@keyframes highlightRow {
+    0% { background-color: #fff3cd; }
+    100% { background-color: transparent; }
+}
+.mapping-section {
+    border: 1px solid #e9ecef;
+    border-radius: 5px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+#debug-info {
+    font-family: monospace;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    padding: 1rem;
+    margin-top: 1rem;
+    max-height: 200px;
+    overflow-y: auto;
+    word-break: break-all;
+}
+.column-match {
+    color: #28a745;
+}
+.column-missing {
+    color: #dc3545;
+}
+.column-optional {
+    color: #ffc107;
+}
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item active">{% trans "Importation de cotisations" %}</li>
+{% endblock %}
+
+{% block page_title %}
+{% trans "Importation de cotisations" %}
+{% endblock %}
+
+{% block cotisations_content %}
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <!-- Indicateur d'étapes -->
+        <div class="step-indicator mb-4">
+            <div class="step {% if not preview_data and not import_completed %}active{% else %}completed{% endif %}">
+                <div class="step-number">1</div>
+                <div class="step-title">{% trans "Chargement du fichier" %}</div>
+            </div>
+            <div class="step {% if preview_data and not import_completed %}active{% elif import_completed %}completed{% endif %}">
+                <div class="step-number">2</div>
+                <div class="step-title">{% trans "Prévisualisation & Validation" %}</div>
+            </div>
+            <div class="step {% if import_completed %}active{% endif %}">
+                <div class="step-number">3</div>
+                <div class="step-title">{% trans "Résultats" %}</div>
+            </div>
+        </div>
+        
+        <!-- Étape 1: Upload du fichier -->
+        {% if not preview_data and not import_completed %}
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">{% trans "Étape 1 : Sélectionner un fichier" %}</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-4">{% trans "Vous pouvez importer des cotisations à partir d'un fichier CSV ou Excel. Sélectionnez le fichier à importer ci-dessous." %}</p>
+                
+                <form method="post" enctype="multipart/form-data" id="upload-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="step" value="upload">
+                    
+                    {% if form.errors %}
+                    <div class="alert alert-danger" id="error-box">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        {% if form.fichier.errors %}
+                            {% for error in form.fichier.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        {% else %}
+                            {% trans "Veuillez sélectionner un fichier valide au format CSV, XLS ou XLSX." %}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    {% if server_error %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        {{ server_error }}
+                        
+                        {% if debug_info %}
+                        <button class="btn btn-sm btn-outline-danger mt-2" type="button" 
+                                data-bs-toggle="collapse" data-bs-target="#debugInfo" 
+                                aria-expanded="false" aria-controls="debugInfo">
+                            {% trans "Afficher les détails de l'erreur" %}
+                        </button>
+                        <div class="collapse mt-2" id="debugInfo">
+                            <div id="debug-info">{{ debug_info }}</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="id_fichier" class="form-label">{% trans "Fichier" %}</label>
+                        <div class="custom-file-wrapper">
+                            <div class="custom-file">
+                                <input type="file" class="custom-file-input {% if form.fichier.errors %}is-invalid{% endif %}" 
+                                       id="id_fichier" name="fichier" accept=".csv,.xls,.xlsx"
+                                       aria-describedby="fileHelpText"
+                                       required>
+                                <label class="custom-file-label" for="id_fichier" id="file-label">
+                                    {% trans "Choisir un fichier" %}
+                                </label>
+                            </div>
+                            <div id="fileHelpText" class="file-help-text">
+                                {% trans "Formats acceptés: CSV (.csv), Excel (.xls, .xlsx)" %}
+                            </div>
+                            
+                            <!-- Affichage des informations du fichier -->
+                            <div id="file-info" class="file-info" style="display: none;">
+                                <i class="far fa-file-alt"></i>
+                                <span id="file-name"></span>
+                                <span id="file-size" class="ms-2 text-muted"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'cotisations:cotisation_liste' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i> {% trans "Annuler" %}
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="preview-button">
+                            <i class="fas fa-eye"></i> {% trans "Prévisualiser" %}
+                            <span class="spinner-border spinner-border-sm ms-1 d-none" id="submit-spinner" role="status" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Étape 2: Prévisualisation et validation -->
+        {% if preview_data %}
+        <div class="card">
+            <div class="card-header bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">{% trans "Étape 2 : Prévisualisation et validation" %}</h5>
+                    <span class="badge {% if validation_issues %}bg-warning{% else %}bg-success{% endif %} px-3 py-2">
+                        <i class="fas {% if validation_issues %}fa-exclamation-triangle{% else %}fa-check-circle{% endif %} me-1"></i>
+                        {% if validation_issues %}
+                            {{ validation_issues|length }} {% trans "problèmes potentiels" %}
+                        {% else %}
+                            {% trans "Données valides" %}
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Résumé du fichier -->
+                <div class="alert alert-info">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>{% trans "Fichier" %} :</strong> {{ file_name }}</p>
+                            <p class="mb-1"><strong>{% trans "Nombre de lignes" %} :</strong> {{ total_rows }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>{% trans "Format" %} :</strong> {{ file_format }}</p>
+                            <p class="mb-1"><strong>{% trans "Colonnes détectées" %} :</strong> {{ column_count }}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Analyse des colonnes -->
+                <div class="mapping-section">
+                    <h6 class="mb-3">{% trans "Colonnes détectées" %}</h6>
+                    <p class="small mb-3">{% trans "Vérification des colonnes trouvées dans votre fichier:" %}</p>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="mb-2">{% trans "Colonnes obligatoires" %}</h6>
+                            <ul class="list-group mb-3">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    email
+                                    {% if column_analysis.email %}
+                                        <span class="badge bg-success">{% trans "Trouvée" %}</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">{% trans "Manquante" %}</span>
+                                    {% endif %}
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    montant
+                                    {% if column_analysis.montant %}
+                                        <span class="badge bg-success">{% trans "Trouvée" %}</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">{% trans "Manquante" %}</span>
+                                    {% endif %}
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="mb-2">{% trans "Colonnes optionnelles" %}</h6>
+                            <ul class="list-group mb-3">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    date_emission
+                                    {% if column_analysis.date_emission %}
+                                        <span class="badge bg-success">{% trans "Trouvée" %}</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">{% trans "Non trouvée" %}</span>
+                                    {% endif %}
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    date_echeance
+                                    {% if column_analysis.date_echeance %}
+                                        <span class="badge bg-success">{% trans "Trouvée" %}</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">{% trans "Non trouvée" %}</span>
+                                    {% endif %}
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    type_membre
+                                    {% if column_analysis.type_membre %}
+                                        <span class="badge bg-success">{% trans "Trouvée" %}</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">{% trans "Non trouvée" %}</span>
+                                    {% endif %}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- Mappage des colonnes -->
+                    {% if detected_columns %}
+                    <form method="post" id="mapping-form" class="mt-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="step" value="mapping">
+                        <input type="hidden" name="file_id" value="{{ file_id }}">
+                        
+                        <h6 class="mb-2">{% trans "Mappage personnalisé des colonnes" %}</h6>
+                        <p class="small mb-3">{% trans "Si certaines colonnes n'ont pas été détectées automatiquement, vous pouvez les mapper manuellement:" %}</p>
+                        
+                        <div class="row">
+                            {% for field in required_fields %}
+                            <div class="col-md-4 mb-3">
+                                <label for="map_{{ field.name }}" class="form-label">
+                                    {{ field.label }} 
+                                    {% if field.required %}
+                                    <span class="text-danger">*</span>
+                                    {% endif %}
+                                </label>
+                                <select class="form-select" id="map_{{ field.name }}" name="map_{{ field.name }}">
+                                    <option value="">-- {% trans "Sélectionner" %} --</option>
+                                    {% for column in detected_columns %}
+                                    <option value="{{ column }}" {% if field.name == column or field.mapped_to == column %}selected{% endif %}>{{ column }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% if field.required %}
+                                <div class="form-text small">{% trans "Champ obligatoire" %}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-sync-alt"></i> {% trans "Mettre à jour le mappage" %}
+                            </button>
+                        </div>
+                    </form>
+                    {% endif %}
+                </div>
+                
+                <!-- Problèmes de validation -->
+                {% if validation_issues %}
+                <div class="mb-4">
+                    <h6 class="mb-3">{% trans "Problèmes détectés" %}</h6>
+                    <div class="validation-issues">
+                        {% for issue in validation_issues %}
+                        <div class="validation-issue" data-row="{{ issue.row }}">
+                            <div class="d-flex justify-content-between">
+                                <p class="mb-1">
+                                    <span class="badge bg-danger validation-badge">{% trans "Ligne" %} {{ issue.row }}</span>
+                                    <strong>{{ issue.type }}</strong>
+                                </p>
+                                <small class="text-muted">{% trans "Cliquez pour voir dans le tableau" %}</small>
+                            </div>
+                            <p class="mb-0 small">{{ issue.message }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Prévisualisation des données -->
+                <h6 class="mb-3">{% trans "Aperçu des données" %}</h6>
+                <div class="preview-table table-responsive">
+                    <table class="table table-sm table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                {% for column in preview_headers %}
+                                <th>{{ column }}</th>
+                                {% endfor %}
+                                <th>{% trans "Statut" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in preview_data %}
+                            <tr id="row-{{ row.row_num }}" {% if row.has_issue %}class="table-warning"{% endif %}>
+                                <td>{{ row.row_num }}</td>
+                                {% for cell in row.data %}
+                                <td>{{ cell }}</td>
+                                {% endfor %}
+                                <td>
+                                    {% if row.has_issue %}
+                                    <span class="badge bg-warning">{% trans "Problème" %}</span>
+                                    {% else %}
+                                    <span class="badge bg-success">{% trans "Valide" %}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% if preview_data|length < total_rows %}
+                <div class="text-center small text-muted mt-2">
+                    {% trans "Affichage de" %} {{ preview_data|length }} {% trans "lignes sur" %} {{ total_rows }}
+                </div>
+                {% endif %}
+                
+                <!-- Actions -->
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{% url 'cotisations:import' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> {% trans "Retour" %}
+                    </a>
+                    
+                    <div>
+                        <form method="post" class="d-inline" id="import-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="step" value="import">
+                            <input type="hidden" name="file_id" value="{{ file_id }}">
+                            
+                            {% if column_missing %}
+                                <button type="button" class="btn btn-secondary" disabled>
+                                    <i class="fas fa-ban"></i> {% trans "Impossible d'importer" %}
+                                </button>
+                                <div class="text-danger small mt-2">
+                                    {% trans "Colonnes obligatoires manquantes" %}
+                                </div>
+                            {% elif validation_issues %}
+                                <button type="submit" class="btn btn-warning" name="force_import" value="1">
+                                    <i class="fas fa-exclamation-triangle"></i> {% trans "Importer malgré les erreurs" %}
+                                </button>
+                            {% else %}
+                                <button type="submit" class="btn btn-primary" id="import-button">
+                                    <i class="fas fa-file-import"></i> {% trans "Importer les données" %}
+                                    <span class="spinner-border spinner-border-sm ms-1 d-none" id="import-spinner" role="status" aria-hidden="true"></span>
+                                </button>
+                            {% endif %}
+                        </form>
+                    </div>
+                </div>
+                
+                {% if preview_error %}
+                <div class="alert alert-danger mt-4">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>{% trans "Erreur lors de la prévisualisation:" %}</strong> {{ preview_error }}
+                    
+                    {% if debug_info %}
+                    <button class="btn btn-sm btn-outline-danger mt-2" type="button" 
+                            data-bs-toggle="collapse" data-bs-target="#debugInfo" 
+                            aria-expanded="false" aria-controls="debugInfo">
+                        {% trans "Afficher les détails de l'erreur" %}
+                    </button>
+                    <div class="collapse mt-2" id="debugInfo">
+                        <div id="debug-info">{{ debug_info }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Étape 3: Résultats -->
+        {% if import_completed %}
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">{% trans "Résultats de l'importation" %}</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert {% if results.errors > 0 %}alert-warning{% else %}alert-success{% endif %}">
+                    <i class="fas {% if results.errors > 0 %}fa-exclamation-triangle{% else %}fa-check-circle{% endif %} me-2"></i>
+                    {% blocktrans with success=results.success errors=results.errors total=results.total %}
+                    <strong>{{ success }}</strong> cotisations importées sur {{ total }}, <strong>{{ errors }}</strong> erreurs.
+                    {% endblocktrans %}
+                </div>
+                
+                {% if results.details %}
+                <div class="table-responsive mt-3">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>{% trans "Ligne" %}</th>
+                                <th>{% trans "Membre" %}</th>
+                                <th>{% trans "Montant" %}</th>
+                                <th>{% trans "Statut" %}</th>
+                                <th>{% trans "Message" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for detail in results.details %}
+                            <tr class="{% if detail.status == 'error' %}table-danger{% endif %}">
+                                <td>{{ detail.row }}</td>
+                                <td>{{ detail.membre|default:"-" }}</td>
+                                <td>{% if detail.montant %}{{ detail.montant }} €{% else %}-{% endif %}</td>
+                                <td>
+                                    {% if detail.status == 'success' %}
+                                    <span class="badge bg-success">{% trans "Succès" %}</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">{% trans "Erreur" %}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ detail.message }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+                
+                {% if import_error %}
+                <div class="alert alert-danger mt-4">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>{% trans "Erreur lors de l'importation:" %}</strong> {{ import_error }}
+                    
+                    {% if debug_info %}
+                    <button class="btn btn-sm btn-outline-danger mt-2" type="button" 
+                            data-bs-toggle="collapse" data-bs-target="#debugInfo" 
+                            aria-expanded="false" aria-controls="debugInfo">
+                        {% trans "Afficher les détails techniques" %}
+                    </button>
+                    <div class="collapse mt-2" id="debugInfo">
+                        <div id="debug-info">{{ debug_info }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                <div class="mt-4 d-flex justify-content-between">
+                    <a href="{% url 'cotisations:import' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-file-upload"></i> {% trans "Nouvel import" %}
+                    </a>
+                    <a href="{% url 'cotisations:cotisation_liste' %}" class="btn btn-primary">
+                        <i class="fas fa-list"></i> {% trans "Retour à la liste" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Informations sur le format -->
+        {% if not import_completed %}
+        <div class="card mt-4">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">{% trans "Instructions d'importation" %}</h5>
+            </div>
+            <div class="card-body">
+                <h6>{% trans "Format du fichier" %}</h6>
+                <p>{% trans "Le fichier d'importation doit être au format CSV (.csv) ou Excel (.xlsx, .xls) avec les colonnes suivantes :" %}</p>
+                
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>{% trans "Colonne" %}</th>
+                                <th>{% trans "Description" %}</th>
+                                <th>{% trans "Obligatoire" %}</th>
+                                <th>{% trans "Format / Exemple" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>email</td>
+                                <td>{% trans "Email du membre" %}</td>
+                                <td><span class="badge bg-success">{% trans "Oui" %}</span></td>
+                                <td><code>jean.dupont@example.com</code></td>
+                            </tr>
+                            <tr>
+                                <td>montant</td>
+                                <td>{% trans "Montant de la cotisation" %}</td>
+                                <td><span class="badge bg-success">{% trans "Oui" %}</span></td>
+                                <td><code>120.00</code> ou <code>120,00</code></td>
+                            </tr>
+                            <tr>
+                                <td>date_emission</td>
+                                <td>{% trans "Date d'émission" %}</td>
+                                <td><span class="badge bg-warning">{% trans "Non" %}</span></td>
+                                <td><code>YYYY-MM-DD</code> ou <code>DD/MM/YYYY</code></td>
+                            </tr>
+                            <tr>
+                                <td>date_echeance</td>
+                                <td>{% trans "Date d'échéance" %}</td>
+                                <td><span class="badge bg-warning">{% trans "Non" %}</span></td>
+                                <td><code>YYYY-MM-DD</code> ou <code>DD/MM/YYYY</code></td>
+                            </tr>
+                            <tr>
+                                <td>type_membre</td>
+                                <td>{% trans "Type de membre" %}</td>
+                                <td><span class="badge bg-warning">{% trans "Non" %}</span></td>
+                                <td><code>Actif</code>, <code>Bienfaiteur</code>, etc.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <h6 class="mt-4">{% trans "Exemple" %}</h6>
+                <pre class="bg-light p-3 rounded">email,montant,date_emission,date_echeance,type_membre
+jean.dupont@example.com,120.00,2025-01-01,2025-12-31,Actif
+marie.martin@example.com,75.50,2025-01-15,2025-12-31,Bienfaiteur</pre>
+                
+                <a href="{% url 'cotisations:export' %}?format=csv&template=true" class="btn btn-outline-primary mt-3">
+                    <i class="fas fa-download"></i> {% trans "Télécharger un modèle CSV" %}
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Variables d'état d'initialisation
+    let fileSelected = false;
+    let processingFile = false;
+
+    // Éléments du DOM pour l'étape 1 (upload)
+    const fileInput = document.getElementById('id_fichier');
+    const fileLabel = document.getElementById('file-label');
+    const fileInfo = document.getElementById('file-info');
+    const fileName = document.getElementById('file-name');
+    const fileSize = document.getElementById('file-size');
+    const uploadForm = document.getElementById('upload-form');
+    const previewButton = document.getElementById('preview-button');
+    const submitSpinner = document.getElementById('submit-spinner');
+    const errorBox = document.getElementById('error-box');
+    
+    // Éléments du DOM pour l'étape 2 (prévisualisation)
+    const issueElements = document.querySelectorAll('.validation-issue');
+    const importForm = document.getElementById('import-form');
+    const importButton = document.getElementById('import-button');
+    const importSpinner = document.getElementById('import-spinner');
+    
+    // Fonction pour formater la taille du fichier
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    // Vérifier l'extension du fichier
+    function checkFileExtension(filename) {
+        const allowedExtensions = ['.csv', '.xls', '.xlsx'];
+        const extension = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+        return allowedExtensions.includes(extension);
+    }
+    
+    // Système de journalisation pour faciliter le débogage
+    const Logger = {
+        log(message, data) {
+            if (window.console && window.console.log) {
+                if (data) {
+                    console.log(`[IMPORT] ${message}`, data);
+                } else {
+                    console.log(`[IMPORT] ${message}`);
+                }
+            }
+        },
+        error(message, data) {
+            if (window.console && window.console.error) {
+                if (data) {
+                    console.error(`[IMPORT ERROR] ${message}`, data);
+                } else {
+                    console.error(`[IMPORT ERROR] ${message}`);
+                }
+            }
+            
+            // Afficher l'erreur dans l'interface si errorBox existe
+            if (errorBox) {
+                errorBox.style.display = 'block';
+                errorBox.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>${message}`;
+            }
+        }
+    };
+    
+    // Afficher une erreur dans l'interface
+    function showError(message) {
+        // Si errorBox n'existe pas, le créer
+        if (!errorBox) {
+            const newErrorBox = document.createElement('div');
+            newErrorBox.id = 'error-box';
+            newErrorBox.className = 'alert alert-danger';
+            newErrorBox.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>${message}`;
+            
+            // L'insérer au début du formulaire
+            if (uploadForm) {
+                uploadForm.insertBefore(newErrorBox, uploadForm.firstChild);
+            }
+        } else {
+            errorBox.style.display = 'block';
+            errorBox.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>${message}`;
+        }
+        
+        Logger.error(message);
+    }
+    
+    // Masquer les erreurs
+    function hideError() {
+        if (errorBox) {
+            errorBox.style.display = 'none';
+        }
+    }
+    
+    // Gérer les changements de fichier (étape 1)
+    if (fileInput) {
+        fileInput.addEventListener('change', function(e) {
+            // Réinitialiser les états
+            fileSelected = false;
+            
+            if (this.files && this.files.length > 0) {
+                const file = this.files[0];
+                
+                Logger.log(`Fichier sélectionné: ${file.name} (${formatFileSize(file.size)})`);
+                
+                // Vérifier l'extension
+                if (checkFileExtension(file.name)) {
+                    // Mettre à jour le label avec le nom du fichier
+                    fileLabel.textContent = file.name;
+                    
+                    // Afficher les informations du fichier
+                    fileName.textContent = file.name;
+                    fileSize.textContent = formatFileSize(file.size);
+                    fileInfo.style.display = 'flex';
+                    
+                    // Supprimer la classe d'erreur si présente
+                    fileInput.classList.remove('is-invalid');
+                    hideError();
+                    
+                    // Activer le bouton de prévisualisation
+                    if (previewButton) {
+                        previewButton.disabled = false;
+                    }
+                    
+                    fileSelected = true;
+                    Logger.log('Fichier valide');
+                } else {
+                    // Extension non valide
+                    fileLabel.textContent = "Format de fichier non pris en charge";
+                    fileInput.classList.add('is-invalid');
+                    fileInfo.style.display = 'none';
+                    
+                    showError('Veuillez sélectionner un fichier au format CSV, XLS ou XLSX.');
+                    
+                    // Désactiver le bouton de prévisualisation
+                    if (previewButton) {
+                        previewButton.disabled = true;
+                    }
+                    
+                    // Réinitialiser le champ de fichier
+                    this.value = '';
+                    fileSelected = false;
+                    Logger.error('Format de fichier non pris en charge');
+                }
+            } else {
+                // Aucun fichier sélectionné
+                fileLabel.textContent = "{% trans 'Choisir un fichier' %}";
+                fileInfo.style.display = 'none';
+                
+                // Désactiver le bouton de prévisualisation
+                if (previewButton) {
+                    previewButton.disabled = true;
+                }
+                
+                fileSelected = false;
+                Logger.log('Aucun fichier sélectionné');
+            }
+        });
+    }
+    
+    // Validation avant soumission (étape 1)
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', function(e) {
+            // Si déjà en cours de traitement, empêcher la double soumission
+            if (processingFile) {
+                e.preventDefault();
+                Logger.log('Soumission bloquée - déjà en cours de traitement');
+                return;
+            }
+            
+            // Vérifier si un fichier est sélectionné
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                e.preventDefault();
+                fileInput.classList.add('is-invalid');
+                showError('Veuillez sélectionner un fichier à importer.');
+                Logger.error('Aucun fichier sélectionné');
+                return;
+            }
+            
+            // Vérifier l'extension du fichier
+            const file = fileInput.files[0];
+            if (!checkFileExtension(file.name)) {
+                e.preventDefault();
+                fileInput.classList.add('is-invalid');
+                showError('Format de fichier non pris en charge. Utilisez CSV, XLS ou XLSX.');
+                Logger.error('Format de fichier non pris en charge');
+                return;
+            }
+            
+            // Vérifier la taille du fichier (max 10 Mo)
+            const maxSize = 10 * 1024 * 1024; // 10 Mo
+            if (file.size > maxSize) {
+                e.preventDefault();
+                fileInput.classList.add('is-invalid');
+                showError(`Le fichier est trop volumineux (${formatFileSize(file.size)}). La taille maximale est de ${formatFileSize(maxSize)}.`);
+                Logger.error(`Fichier trop volumineux: ${formatFileSize(file.size)}`);
+                return;
+            }
+            
+            // Tout est valide, empêcher la double soumission
+            processingFile = true;
+            
+            // Désactiver le bouton et afficher le spinner
+            if (previewButton) {
+                previewButton.disabled = true;
+                if (submitSpinner) {
+                    submitSpinner.classList.remove('d-none');
+                }
+            }
+            
+            Logger.log('Formulaire soumis pour prévisualisation');
+        });
+    }
+    
+    // Navigation vers les lignes problématiques (étape 2)
+    issueElements.forEach(element => {
+        element.addEventListener('click', function() {
+            const rowNum = this.dataset.row;
+            const rowElement = document.getElementById('row-' + rowNum);
+            
+            if (rowElement) {
+                // Faire défiler vers la ligne
+                rowElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Effet de surbrillance temporaire
+                rowElement.classList.add('highlight-row');
+                setTimeout(() => {
+                    rowElement.classList.remove('highlight-row');
+                }, 2000);
+                
+                Logger.log(`Navigation vers la ligne problématique ${rowNum}`);
+            } else {
+                Logger.error(`Ligne ${rowNum} non trouvée dans le tableau`);
+            }
+        });
+    });
+    
+    // Gérer le formulaire d'import final (étape 2)
+    if (importForm) {
+        importForm.addEventListener('submit', function(e) {
+            // Si déjà en cours d'importation, empêcher la double soumission
+            if (processingFile) {
+                e.preventDefault();
+                Logger.log('Import bloqué - déjà en cours de traitement');
+                return;
+            }
+            
+            // Tout est valide, empêcher la double soumission
+            processingFile = true;
+            
+            // Désactiver le bouton et afficher le spinner
+            if (importButton) {
+                importButton.disabled = true;
+                if (importSpinner) {
+                    importSpinner.classList.remove('d-none');
+                }
+            }
+            
+            Logger.log('Formulaire soumis pour importation finale');
+        });
+    }
+    
+    // Initialisation (étape 1)
+    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+        fileLabel.textContent = fileInput.files[0].name;
+        fileName.textContent = fileInput.files[0].name;
+        fileSize.textContent = formatFileSize(fileInput.files[0].size);
+        fileInfo.style.display = 'flex';
+        fileSelected = true;
+        
+        Logger.log('Fichier pré-sélectionné trouvé');
+    }
+    
+    // Activer les tooltips Bootstrap s'ils sont disponibles
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+    
+    Logger.log('Initialisation du système d\'importation terminée');
+});
+</script>
+{% endblock %}

@@ -1,28 +1,53 @@
 # apps/cotisations/views.py
+"""
+Vues pour la gestion des cotisations, paiements, rappels et barèmes.
+"""
+# Importations standard
+import csv
+import datetime
+import io
+import json
+import logging
+import os
+import tempfile
+import traceback
+from decimal import Decimal, InvalidOperation
+
+# Importations Django
+from django.contrib import messages
+from django import forms
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.core.serializers.json import DjangoJSONEncoder
+from django.db.models import Q, Sum, Count, F, ExpressionWrapper, DecimalField
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse, reverse_lazy
-from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
+from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
+from django.views.decorators.http import require_POST
 from django.views.generic import (
     View, TemplateView, ListView, DetailView, 
     CreateView, UpdateView, DeleteView
 )
-from django.views.decorators.http import require_POST
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.db.models import Q, Sum, Count, F, ExpressionWrapper, DecimalField
-from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
-from decimal import Decimal
-import json
-import csv
-import datetime
-from django.core.serializers.json import DjangoJSONEncoder
-from . import export_utils
 
+# Importations conditionnelles
+try:
+    import pandas as pd
+    import numpy as np
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
+
+# Importations des applications
 from apps.core.mixins import StaffRequiredMixin, TrashViewMixin, RestoreViewMixin
-from apps.membres.models import Membre, TypeMembre
+from apps.core.models import Statut
+from apps.membres.models import Membre, TypeMembre, MembreTypeMembre
 
+# Importations locales
+from . import export_utils
 from .models import (
     Cotisation, Paiement, ModePaiement, BaremeCotisation,
     Rappel, HistoriqueCotisation, ConfigurationCotisation
@@ -32,6 +57,9 @@ from .forms import (
     RappelForm, CotisationSearchForm, ImportCotisationsForm,
     ConfigurationCotisationForm
 )
+
+# Configuration du logging
+logger = logging.getLogger(__name__)
 
 
 class ExtendedJSONEncoder(DjangoJSONEncoder):
@@ -49,6 +77,9 @@ class ExtendedJSONEncoder(DjangoJSONEncoder):
         return super().default(obj)
 
 
+#
+# Vues pour le tableau de bord
+#
 class DashboardView(StaffRequiredMixin, TemplateView):
     """
     Vue du tableau de bord des cotisations avec statistiques et visualisations.
@@ -96,7 +127,10 @@ class DashboardView(StaffRequiredMixin, TemplateView):
         
         # Statistiques générales
         total_cotisations = Cotisation.objects.filter(cotisations_filter).count()
-        montant_total = Cotisation.objects.filter(cotisations_filter).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        montant_total = Cotisation.objects.filter(cotisations_filter).aggregate(
+            total=Sum('montant')
+        ).get('total') or Decimal('0.00')
+        
         montant_paye = Cotisation.objects.filter(cotisations_filter).aggregate(
             total=Sum(ExpressionWrapper(
                 F('montant') - F('montant_restant'),
@@ -216,9 +250,10 @@ class DashboardView(StaffRequiredMixin, TemplateView):
         
         return context
 
-    
 
-
+#
+# Vues pour les cotisations
+#
 class CotisationListView(StaffRequiredMixin, ListView):
     """
     Vue pour afficher la liste des cotisations avec filtres.
@@ -383,7 +418,7 @@ class CotisationCreateView(StaffRequiredMixin, CreateView):
                         initial['bareme'] = bareme.id
                         initial['montant'] = bareme.montant
             except Membre.DoesNotExist:
-                pass
+                logger.warning(f"Membre non trouvé avec l'ID {membre_id}")
         
         return initial
     
@@ -447,6 +482,174 @@ class CotisationDeleteView(StaffRequiredMixin, DeleteView):
             _("La cotisation a été supprimée avec succès.")
         )
         return redirect(self.success_url)
+
+
+#
+# Vues pour les paiements
+#
+class PaiementListView(StaffRequiredMixin, ListView):
+    """
+    Vue pour afficher la liste des paiements avec filtres.
+    """
+    model = Paiement
+    template_name = 'cotisations/paiement_liste.html'
+    context_object_name = 'paiements'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        queryset = Paiement.objects.all().select_related(
+            'cotisation', 'cotisation__membre', 'mode_paiement', 'statut'
+        )
+        
+        # Filtres par cotisation
+        cotisation_id = self.request.GET.get('cotisation')
+        if cotisation_id:
+            queryset = queryset.filter(cotisation_id=cotisation_id)
+        
+        # Filtre par mode de paiement
+        mode_paiement_id = self.request.GET.get('mode_paiement')
+        if mode_paiement_id:
+            queryset = queryset.filter(mode_paiement_id=mode_paiement_id)
+        
+        # Filtre par type de transaction
+        type_transaction = self.request.GET.get('type_transaction')
+        if type_transaction:
+            queryset = queryset.filter(type_transaction=type_transaction)
+        
+        # Recherche textuelle
+        recherche = self.request.GET.get('recherche')
+        if recherche:
+            queryset = queryset.filter(
+                Q(reference_paiement__icontains=recherche) |
+                Q(commentaire__icontains=recherche) |
+                Q(cotisation__reference__icontains=recherche) |
+                Q(cotisation__membre__nom__icontains=recherche) |
+                Q(cotisation__membre__prenom__icontains=recherche)
+            )
+        
+        # Filtre par date
+        date_debut = self.request.GET.get('date_debut')
+        if date_debut:
+            try:
+                queryset = queryset.filter(date_paiement__gte=date_debut)
+            except (ValueError, TypeError):
+                logger.warning(f"Format de date de début invalide: {date_debut}")
+        
+        date_fin = self.request.GET.get('date_fin')
+        if date_fin:
+            try:
+                # Ajouter un jour pour inclure toute la journée de fin
+                date_fin_dt = datetime.datetime.strptime(date_fin, '%Y-%m-%d')
+                date_fin_next = (date_fin_dt + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+                queryset = queryset.filter(date_paiement__lt=date_fin_next)
+            except (ValueError, TypeError):
+                logger.warning(f"Format de date de fin invalide: {date_fin}")
+        
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Liste des cotisations pour le filtre
+        context['cotisations_list'] = Cotisation.objects.all().order_by('-date_emission')[:100]
+        
+        # Liste des modes de paiement pour le filtre
+        context['modes_paiement'] = ModePaiement.objects.filter(actif=True)
+        
+        # Calculer les statistiques
+        paiements = Paiement.objects.all()
+        
+        # Total des paiements
+        context['total_paiements'] = paiements.count()
+        
+        # Montant total des paiements (entrées d'argent)
+        montant_paiements = paiements.filter(
+            type_transaction='paiement'
+        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        
+        context['montant_total'] = montant_paiements
+        
+        # Montant des remboursements
+        montant_remboursements = paiements.filter(
+            type_transaction='remboursement'
+        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        
+        context['montant_remboursements'] = montant_remboursements
+        
+        # Montant des rejets
+        montant_rejets = paiements.filter(
+            type_transaction='rejet'
+        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        
+        context['montant_rejets'] = montant_rejets
+        
+        # Total des déductions (remboursements + rejets)
+        context['total_deductions'] = montant_remboursements + montant_rejets
+        
+        # Solde net
+        context['solde_net'] = montant_paiements - (montant_remboursements + montant_rejets)
+        
+        return context
+
+
+# Import conditionnel pour historique des transactions
+try:
+    from .models import HistoriqueTransaction
+except ImportError:
+    # Fallback - utiliser une classe abstraite si le modèle n'existe pas
+    class HistoriqueTransaction:
+        objects = None
+        
+        @staticmethod
+        def get_empty_queryset():
+            from django.db.models.query import EmptyQuerySet
+            return EmptyQuerySet(model=None)
+
+
+class PaiementDetailView(StaffRequiredMixin, DetailView):
+    """
+    Vue détaillée d'un paiement avec son historique.
+    """
+    model = Paiement
+    template_name = 'cotisations/paiement_detail.html'
+    context_object_name = 'paiement'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        paiement = self.object
+        
+        # Récupérer l'historique des actions liées à ce paiement
+        if hasattr(HistoriqueTransaction, 'objects') and HistoriqueTransaction.objects:
+            context['historique'] = HistoriqueTransaction.objects.filter(
+                type='paiement',
+                reference_id=paiement.id
+            ).order_by('-date_creation')
+        else:
+            # Vérifier s'il existe une table directe historique_transactions
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT * FROM historique_transactions 
+                        WHERE type = 'paiement' AND reference_id = %s
+                        ORDER BY date_creation DESC
+                    """, [paiement.id])
+                    columns = [col[0] for col in cursor.description]
+                    context['historique'] = [
+                        dict(zip(columns, row)) for row in cursor.fetchall()
+                    ]
+            except Exception as e:
+                # Si rien ne fonctionne, initialiser avec une liste vide
+                logger.error(f"Erreur lors de la récupération de l'historique: {str(e)}")
+                context['historique'] = []
+        
+        # Calculer le montant payé
+        if hasattr(paiement.cotisation, 'montant') and hasattr(paiement.cotisation, 'montant_restant'):
+            context['montant_paye'] = paiement.cotisation.montant - paiement.cotisation.montant_restant
+        else:
+            context['montant_paye'] = Decimal('0.00')
+        
+        return context
 
 
 class PaiementCreateView(StaffRequiredMixin, CreateView):
@@ -552,7 +755,7 @@ def paiement_create_ajax(request, cotisation_id):
             error_message = _("Format de données invalide.")
             return JsonResponse({
                 'success': False,
-                'message': str(_("Format de données invalide."))  # Convertir explicitement en chaîne
+                'message': str(error_message)
             }, encoder=ExtendedJSONEncoder, status=400)
     
     # Pour les requêtes standard
@@ -592,7 +795,6 @@ def paiement_create_ajax(request, cotisation_id):
                 'errors': form.errors.as_json(),
                 'message': error_message
             }, encoder=ExtendedJSONEncoder)
-
 
 class PaiementUpdateView(StaffRequiredMixin, UpdateView):
     """
@@ -652,13 +854,12 @@ class PaiementDeleteView(StaffRequiredMixin, DeleteView):
     def get_success_url(self):
         # Récupérer l'ID de la cotisation avant que le paiement ne soit supprimé
         cotisation_id = self.object.cotisation.id
-        messages.success(
-            self.request, 
-            _("Le paiement a été supprimé avec succès.")
-        )
-        # Rediriger vers la page de détail de la cotisation associée
         return reverse('cotisations:cotisation_detail', kwargs={'pk': cotisation_id})
 
+
+#
+# Vues pour les rappels
+#
 class RappelCreateView(StaffRequiredMixin, CreateView):
     """
     Vue pour créer un nouveau rappel.
@@ -676,6 +877,7 @@ class RappelCreateView(StaffRequiredMixin, CreateView):
         if cotisation_id:
             self.cotisation = get_object_or_404(Cotisation, pk=cotisation_id)
             kwargs['cotisation'] = self.cotisation
+            kwargs['membre'] = self.cotisation.membre  # Ajouter le membre pour le formulaire
         
         return kwargs
     
@@ -695,9 +897,6 @@ class RappelCreateView(StaffRequiredMixin, CreateView):
         if rappel.etat == 'envoye':
             rappel.date_envoi = rappel.date_creation
         # Pour les rappels planifiés, date_envoi est celle spécifiée dans le formulaire
-        elif rappel.etat == 'planifie':
-            # La date_envoi est déjà définie par le formulaire
-            pass
         
         rappel.save()
         return super().form_valid(form)
@@ -707,109 +906,6 @@ class RappelCreateView(StaffRequiredMixin, CreateView):
             return reverse('cotisations:cotisation_detail', kwargs={'pk': self.cotisation.pk})
         return reverse('cotisations:cotisation_liste')
 
-@require_POST
-def paiement_create_ajax(request, cotisation_id):
-    """
-    Vue AJAX pour créer un paiement depuis la page de détail d'une cotisation.
-    """
-    cotisation = get_object_or_404(Cotisation, pk=cotisation_id)
-    
-    # Pour les requêtes AJAX avec JSON
-    if request.content_type == 'application/json':
-        try:
-            data = json.loads(request.body)
-            
-            # Créer un dictionnaire de données pour le formulaire
-            form_data = {
-                'montant': data.get('montant'),
-                'mode_paiement': data.get('mode_paiement'),
-                'date_paiement': data.get('date_paiement'),
-                'type_transaction': data.get('type_transaction', 'paiement'),
-                'reference_paiement': data.get('reference_paiement', ''),
-                'commentaire': data.get('commentaire', '')
-            }
-            
-            # Utiliser None comme user si non authentifié
-            user = request.user if request.user.is_authenticated else None
-            form = PaiementForm(form_data, user=user, cotisation=cotisation)
-            
-            if form.is_valid():
-                paiement = form.save()
-                
-                # Recharger la cotisation pour avoir les informations à jour
-                cotisation.refresh_from_db()
-                
-                # Préparer les données de réponse
-                success_message = "Le paiement a été enregistré avec succès."
-                
-                # Retourner les infos sur le paiement et la cotisation mise à jour
-                return JsonResponse({
-                    'success': True,
-                    'paiement': {
-                        'id': paiement.id,
-                        'montant': float(paiement.montant),
-                        'date_paiement': paiement.date_paiement.strftime('%Y-%m-%dT%H:%M:%S'),
-                        'mode_paiement': paiement.mode_paiement.libelle if paiement.mode_paiement else '-',
-                        'type_transaction': str(paiement.get_type_transaction_display()),
-                        'reference_paiement': paiement.reference_paiement or ''
-                    },
-                    'cotisation': {
-                        'montant_restant': float(cotisation.montant_restant),
-                        'statut_paiement': str(cotisation.get_statut_paiement_display())
-                    },
-                    'message': success_message
-                }, encoder=ExtendedJSONEncoder)
-            else:
-                error_message = "Erreur lors de l'enregistrement du paiement."
-                return JsonResponse({
-                    'success': False,
-                    'errors': form.errors.as_json(),
-                    'message': error_message
-                }, encoder=ExtendedJSONEncoder)
-        except json.JSONDecodeError:
-            error_message = "Format de données invalide."
-            return JsonResponse({
-                'success': False,
-                'message': error_message
-            }, encoder=ExtendedJSONEncoder, status=400)
-    
-    # Pour les requêtes standard
-    else:
-        # Utiliser None comme user si non authentifié
-        user = request.user if request.user.is_authenticated else None
-        form = PaiementForm(request.POST, user=user, cotisation=cotisation)
-        
-        if form.is_valid():
-            paiement = form.save()
-            
-            # Retourner les infos sur le paiement et la cotisation mise à jour
-            cotisation.refresh_from_db()
-            
-            success_message = "Le paiement a été enregistré avec succès."
-            
-            return JsonResponse({
-                'success': True,
-                'paiement': {
-                    'id': paiement.id,
-                    'montant': float(paiement.montant),
-                    'date_paiement': paiement.date_paiement.strftime('%Y-%m-%dT%H:%M:%S'),
-                    'mode_paiement': paiement.mode_paiement.libelle if paiement.mode_paiement else '-',
-                    'type_transaction': str(paiement.get_type_transaction_display()),
-                    'reference_paiement': paiement.reference_paiement or ''
-                },
-                'cotisation': {
-                    'montant_restant': float(cotisation.montant_restant),
-                    'statut_paiement': str(cotisation.get_statut_paiement_display())
-                },
-                'message': success_message
-            }, encoder=ExtendedJSONEncoder)
-        else:
-            error_message = "Erreur lors de l'enregistrement du paiement."
-            return JsonResponse({
-                'success': False,
-                'errors': form.errors.as_json(),
-                'message': error_message
-            }, encoder=ExtendedJSONEncoder)
 
 @require_POST
 def rappel_create_ajax(request, cotisation_id):
@@ -840,7 +936,7 @@ def rappel_create_ajax(request, cotisation_id):
                     date_planifiee = datetime.datetime.fromisoformat(data.get('date_planifiee'))
                     form_data['date_envoi'] = date_planifiee
                 except (ValueError, TypeError):
-                    error_message = "Format de date invalide"
+                    error_message = _("Format de date invalide")
                     return JsonResponse({
                         'success': False,
                         'message': error_message
@@ -864,7 +960,7 @@ def rappel_create_ajax(request, cotisation_id):
                     # Ici, vous pouvez ajouter votre logique d'envoi de mail, SMS, etc.
                     pass
                 
-                success_message = "Le rappel a été créé avec succès."
+                success_message = _("Le rappel a été créé avec succès.")
                 
                 # Retourner les infos sur le rappel créé
                 return JsonResponse({
@@ -880,14 +976,14 @@ def rappel_create_ajax(request, cotisation_id):
                     'message': success_message
                 }, encoder=ExtendedJSONEncoder)
             else:
-                error_message = "Erreur lors de la création du rappel."
+                error_message = _("Erreur lors de la création du rappel.")
                 return JsonResponse({
                     'success': False,
                     'errors': form.errors.as_json(),
                     'message': error_message
                 }, encoder=ExtendedJSONEncoder)
         except json.JSONDecodeError:
-            error_message = "Format de données invalide."
+            error_message = _("Format de données invalide.")
             return JsonResponse({
                 'success': False,
                 'message': error_message
@@ -902,7 +998,7 @@ def rappel_create_ajax(request, cotisation_id):
         if form.is_valid():
             rappel = form.save()
             
-            success_message = "Le rappel a été créé avec succès."
+            success_message = _("Le rappel a été créé avec succès.")
             
             return JsonResponse({
                 'success': True,
@@ -917,7 +1013,7 @@ def rappel_create_ajax(request, cotisation_id):
                 'message': success_message
             }, encoder=ExtendedJSONEncoder)
         else:
-            error_message = "Erreur lors de la création du rappel."
+            error_message = _("Erreur lors de la création du rappel.")
             return JsonResponse({
                 'success': False,
                 'errors': form.errors.as_json(),
@@ -946,7 +1042,6 @@ def envoyer_rappel(request, rappel_id):
     rappel.save()
     
     # Envoyer l'email si le type de rappel est 'email'
-    # Note: cette partie serait remplacée par votre système d'envoi de mail
     if rappel.type_rappel == 'email':
         try:
             # Envoi d'email simulé ici
@@ -959,6 +1054,7 @@ def envoyer_rappel(request, rappel_id):
                 }
             )
         except Exception as e:
+            logger.error(f"Erreur lors de l'envoi du rappel: {str(e)}")
             rappel.etat = 'echoue'
             rappel.resultat = str(e)
             rappel.save()
@@ -978,6 +1074,174 @@ def envoyer_rappel(request, rappel_id):
     return redirect('cotisations:cotisation_detail', pk=rappel.cotisation.pk)
 
 
+class RappelListView(StaffRequiredMixin, ListView):
+    """
+    Vue pour afficher la liste des rappels avec filtres.
+    """
+    model = Rappel
+    template_name = 'cotisations/rappel_liste.html'
+    context_object_name = 'rappels'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        queryset = Rappel.objects.all()
+        
+        # Filtres disponibles
+        type_rappel = self.request.GET.get('type_rappel')
+        etat = self.request.GET.get('etat')
+        date_debut = self.request.GET.get('date_debut')
+        date_fin = self.request.GET.get('date_fin')
+        membre_id = self.request.GET.get('membre_id')
+        
+        # Appliquer les filtres
+        if type_rappel:
+            queryset = queryset.filter(type_rappel=type_rappel)
+            
+        if etat:
+            queryset = queryset.filter(etat=etat)
+            
+        if date_debut:
+            try:
+                date_debut = datetime.datetime.strptime(date_debut, '%Y-%m-%d').date()
+                queryset = queryset.filter(date_envoi__gte=date_debut)
+            except ValueError:
+                logger.warning(f"Format de date de début invalide: {date_debut}")
+                
+        if date_fin:
+            try:
+                date_fin = datetime.datetime.strptime(date_fin, '%Y-%m-%d').date()
+                queryset = queryset.filter(date_envoi__lte=date_fin)
+            except ValueError:
+                logger.warning(f"Format de date de fin invalide: {date_fin}")
+                
+        if membre_id:
+            queryset = queryset.filter(membre_id=membre_id)
+        
+        return queryset.select_related('membre', 'cotisation')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Statistiques pour le tableau de bord
+        rappels_par_etat = Rappel.objects.values('etat').annotate(count=Count('id'))
+        rappels_par_type = Rappel.objects.values('type_rappel').annotate(count=Count('id'))
+        
+        context.update({
+            'rappels_par_etat': rappels_par_etat,
+            'rappels_par_type': rappels_par_type,
+            'filtres': {
+                'type_rappel': self.request.GET.get('type_rappel', ''),
+                'etat': self.request.GET.get('etat', ''),
+                'date_debut': self.request.GET.get('date_debut', ''),
+                'date_fin': self.request.GET.get('date_fin', ''),
+                'membre_id': self.request.GET.get('membre_id', '')
+            }
+        })
+        
+        return context
+
+
+class RappelDetailView(LoginRequiredMixin, DetailView):
+    """
+    Vue détaillée d'un rappel.
+    """
+    model = Rappel
+    template_name = 'cotisations/rappel_detail.html'
+    context_object_name = 'rappel'
+    
+    def post(self, request, *args, **kwargs):
+        rappel = self.get_object()
+        action = request.POST.get('action')
+        
+        if action == 'envoyer':
+            # Logique pour envoyer le rappel
+            rappel.etat = 'envoye'
+            rappel.date_envoi = timezone.now()
+            rappel.save()
+            messages.success(request, _("Le rappel a été envoyé avec succès."))
+            
+        elif action == 'reenvoyer':
+            # Logique pour réessayer l'envoi d'un rappel échoué
+            rappel.etat = 'envoye'
+            rappel.date_envoi = timezone.now()
+            rappel.save()
+            messages.success(request, _("Le rappel a été renvoyé avec succès."))
+        
+        return redirect('cotisations:rappel_detail', pk=rappel.pk)
+
+
+class RappelUpdateView(StaffRequiredMixin, UpdateView):
+    """
+    Vue pour modifier un rappel existant.
+    """
+    model = Rappel
+    form_class = RappelForm
+    template_name = 'cotisations/rappel_form.html'
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        
+        # S'assurer que self.object (le rappel) est chargé
+        if not hasattr(self, 'object'):
+            self.object = self.get_object()
+        
+        # Vérifier que la cotisation et le membre existent avant de les ajouter
+        if self.object.cotisation:
+            kwargs['cotisation'] = self.object.cotisation
+        if self.object.membre:
+            kwargs['membre'] = self.object.membre
+        
+        return kwargs
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Ajouter explicitement la cotisation au contexte
+        if self.object and self.object.cotisation:
+            context['cotisation'] = self.object.cotisation
+        return context
+    
+    def form_valid(self, form):
+        # Vérifier que la date planifiée est dans le futur
+        if form.cleaned_data.get('etat') == 'planifie':
+            date_envoi = form.cleaned_data.get('date_envoi')
+            if date_envoi and date_envoi <= timezone.now():
+                form.add_error('date_envoi', _("La date d'envoi planifiée doit être dans le futur"))
+                return self.form_invalid(form)
+        
+        messages.success(self.request, _("Le rappel a été modifié avec succès."))
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse('cotisations:rappel_detail', kwargs={'pk': self.object.pk})
+
+
+class RappelEnvoyerView(LoginRequiredMixin, View):
+    """
+    Vue pour envoyer un rappel (raccourci).
+    """
+    def get(self, request, pk):
+        rappel = get_object_or_404(Rappel, pk=pk)
+        
+        # Vérifier si le rappel peut être envoyé
+        if rappel.etat != 'planifie':
+            messages.error(request, _("Ce rappel ne peut pas être envoyé car il n'est pas planifié."))
+            return redirect('cotisations:rappel_detail', pk=pk)
+            
+        # Logique pour envoyer le rappel
+        rappel.etat = 'envoye'
+        rappel.date_envoi = timezone.now()
+        rappel.save()
+        
+        # Ici, vous pourriez ajouter du code pour l'envoi réel (email, SMS, etc.)
+        
+        messages.success(request, _("Rappel envoyé avec succès"))
+        return redirect('cotisations:rappel_detail', pk=pk)
+
+
+#
+# Vues pour les barèmes de cotisation
+#
 class BaremeCotisationListView(StaffRequiredMixin, ListView):
     """
     Vue pour afficher la liste des barèmes de cotisation.
@@ -990,11 +1254,38 @@ class BaremeCotisationListView(StaffRequiredMixin, ListView):
         return BaremeCotisation.objects.all().select_related('type_membre')
         
     def get_context_data(self, **kwargs):
-        # Ajouter cette méthode pour inclure current_date dans le contexte
         context = super().get_context_data(**kwargs)
         context['current_date'] = timezone.now().date()
-        # Vous pouvez également ajouter "today" comme synonyme si nécessaire
-        context['today'] = timezone.now().date()
+        context['today'] = timezone.now().date()  # Alias pour compatibilité
+        return context
+
+
+class BaremeDetailView(StaffRequiredMixin, DetailView):
+    """
+    Vue détaillée d'un barème de cotisation.
+    """
+    model = BaremeCotisation
+    template_name = 'cotisations/bareme_detail.html'
+    context_object_name = 'bareme'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        bareme = self.object
+        
+        # Récupérer les cotisations utilisant ce barème
+        context['cotisations'] = Cotisation.objects.filter(bareme=bareme).order_by('-date_emission')
+        
+        # Calculer des statistiques
+        nb_cotisations = context['cotisations'].count()
+        montant_total = context['cotisations'].aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        
+        context.update({
+            'nb_cotisations': nb_cotisations,
+            'montant_total': montant_total,
+            'est_actif': bareme.est_actif(),
+            'type_membre': bareme.type_membre
+        })
+        
         return context
 
 
@@ -1050,6 +1341,56 @@ class BaremeCotisationDeleteView(StaffRequiredMixin, DeleteView):
         return super().delete(request, *args, **kwargs)
 
 
+@login_required
+@require_POST
+def bareme_reactive(request):
+    """
+    Vue pour réactiver un barème inactif.
+    """
+    if not request.user.is_staff:
+        messages.error(request, _("Vous n'avez pas les permissions nécessaires."))
+        return redirect('cotisations:bareme_liste')
+        
+    bareme_id = request.POST.get('bareme_id')
+    date_fin_validite = request.POST.get('date_fin_validite') or None
+    
+    if not bareme_id:
+        messages.error(request, _("Barème non spécifié"))
+        return redirect('cotisations:bareme_liste')
+    
+    try:
+        bareme = BaremeCotisation.objects.get(pk=bareme_id)
+        
+        # Convertir la date de fin si elle est fournie
+        if date_fin_validite:
+            try:
+                date_fin_validite = datetime.datetime.strptime(date_fin_validite, '%Y-%m-%d').date()
+            except ValueError:
+                messages.error(request, _("Format de date invalide"))
+                return redirect('cotisations:bareme_liste')
+        
+        # Mettre à jour la date de fin
+        bareme.date_fin_validite = date_fin_validite
+        bareme.save()
+        
+        messages.success(
+            request, 
+            _("Le barème pour %(type)s a été réactivé avec succès.") % {
+                'type': bareme.type_membre.libelle
+            }
+        )
+    except BaremeCotisation.DoesNotExist:
+        messages.error(request, _("Barème introuvable"))
+    except Exception as e:
+        logger.error(f"Erreur lors de la réactivation du barème: {str(e)}")
+        messages.error(request, _("Erreur lors de la réactivation du barème: %(error)s") % {'error': str(e)})
+    
+    return redirect('cotisations:bareme_liste')
+
+
+#
+# Vues pour la corbeille
+#
 class CotisationCorbeilleView(StaffRequiredMixin, TrashViewMixin, ListView):
     """
     Vue pour afficher les cotisations supprimées (corbeille).
@@ -1102,78 +1443,1205 @@ class PaiementRestoreView(StaffRequiredMixin, RestoreViewMixin, View):
     
     def get_success_message(self):
         return _("Le paiement a été restauré avec succès.")
+	
+#
+# Vues pour l'importation des cotisations
+#
+
+class ImportCotisationsForm(forms.Form):
+    """Formulaire pour l'importation de cotisations."""
+    fichier = forms.FileField(
+        label=_("Fichier"),
+        help_text=_("Sélectionnez un fichier CSV ou Excel (.xlsx, .xls) contenant les cotisations à importer."),
+        error_messages={
+            'required': _("Veuillez sélectionner un fichier."),
+            'invalid': _("Le fichier sélectionné n'est pas valide."),
+        }
+    )
+    
+    def clean_fichier(self):
+        """Valide le fichier téléchargé."""
+        fichier = self.cleaned_data.get('fichier')
+        
+        if fichier:
+            # Vérifier l'extension du fichier
+            extension = os.path.splitext(fichier.name)[1].lower()
+            if extension not in ['.csv', '.xlsx', '.xls']:
+                raise forms.ValidationError(
+                    _("Le format du fichier n'est pas pris en charge. Utilisez CSV ou Excel (.xlsx, .xls).")
+                )
+            
+            # Vérifier la taille du fichier (max 10 Mo)
+            if fichier.size > 10 * 1024 * 1024:  # 10 Mo
+                raise forms.ValidationError(
+                    _("Le fichier est trop volumineux. La taille maximum est de 10 Mo.")
+                )
+        
+        return fichier
 
 
 class ImportCotisationsView(StaffRequiredMixin, TemplateView):
-    """
-    Vue pour importer des cotisations depuis un fichier CSV ou Excel.
-    """
+    """Vue pour l'importation des cotisations à partir d'un fichier CSV ou Excel."""
     template_name = 'cotisations/import.html'
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['form'] = ImportCotisationsForm()
-        return context
-    
-    def post(self, request, *args, **kwargs):
-        form = ImportCotisationsForm(request.POST, request.FILES)
-        results = {
-            'success': 0,
-            'errors': 0,
-            'details': []
-        }
-        
-        if form.is_valid():
-            fichier = form.cleaned_data['fichier']
-            
-            # Traiter selon le type de fichier
-            extension = fichier.name.split('.')[-1].lower()
-            
-            if extension == 'csv':
-                results = self._process_csv(fichier, form)
-            elif extension in ['xlsx', 'xls']:
-                results = self._process_excel(fichier, form)
-        
-        return render(request, self.template_name, {
+    def get(self, request):
+        """Affiche le formulaire d'importation."""
+        form = ImportCotisationsForm()
+        context = {
             'form': form,
-            'results': results
-        })
-    
-    def _process_csv(self, fichier, form):
-        """Traiter un fichier CSV"""
-        # Note: Cette fonction serait implémentée pour traiter un fichier CSV
-        # Nous la simulons ici pour l'exemple
-        return {
-            'success': 5,
-            'errors': 1,
-            'details': [
-                {'row': 1, 'status': 'success', 'message': 'Cotisation créée pour jean.dupont@example.com'},
-                {'row': 2, 'status': 'success', 'message': 'Cotisation créée pour marie.durand@example.com'},
-                {'row': 3, 'status': 'success', 'message': 'Cotisation créée pour pierre.martin@example.com'},
-                {'row': 4, 'status': 'error', 'message': 'Email inconnu: inconnu@example.com'},
-                {'row': 5, 'status': 'success', 'message': 'Cotisation créée pour sophie.leroy@example.com'},
-                {'row': 6, 'status': 'success', 'message': 'Cotisation créée pour paul.moreau@example.com'},
-            ]
         }
+        return render(request, self.template_name, context)
     
-    def _process_excel(self, fichier, form):
-        """Traiter un fichier Excel"""
-        # Note: Cette fonction serait implémentée pour traiter un fichier Excel
-        # Nous la simulons ici pour l'exemple
-        return {
-            'success': 4,
-            'errors': 0,
-            'details': [
-                {'row': 1, 'status': 'success', 'message': 'Cotisation créée pour jean.dupont@example.com'},
-                {'row': 2, 'status': 'success', 'message': 'Cotisation créée pour marie.durand@example.com'},
-                {'row': 3, 'status': 'success', 'message': 'Cotisation créée pour pierre.martin@example.com'},
-                {'row': 4, 'status': 'success', 'message': 'Cotisation créée pour sophie.leroy@example.com'},
-            ]
+    def post(self, request):
+        """Traite le formulaire d'importation selon l'étape demandée."""
+        # Récupérer l'étape actuelle
+        step = request.POST.get('step', 'upload')
+        
+        if step == 'upload':
+            # Étape 1: Traitement du fichier chargé
+            return self._handle_file_upload(request)
+        elif step == 'mapping':
+            # Étape intermédiaire: Mise à jour du mappage des colonnes
+            return self._handle_column_mapping(request)
+        elif step == 'import':
+            # Étape 2: Importation finale des données
+            return self._handle_import(request)
+        else:
+            # Étape inconnue, rediriger vers le début
+            messages.error(request, _("Étape inconnue. Veuillez recommencer."))
+            return redirect('cotisations:import')
+    
+    def _handle_file_upload(self, request):
+        """Traite le fichier chargé et prépare la prévisualisation."""
+        form = ImportCotisationsForm(request.POST, request.FILES)
+        
+        context = {
+            'form': form,
         }
+        
+        if not form.is_valid():
+            # Formulaire invalide, réafficher avec les erreurs
+            return render(request, self.template_name, context)
+        
+        temp_path = None  # Initialiser avant le bloc try pour pouvoir le nettoyer en cas d'erreur
+        
+        try:
+            # Récupérer le fichier
+            uploaded_file = request.FILES['fichier']
+            file_name = uploaded_file.name
+            
+            # Créer un fichier temporaire pour stocker les données
+            timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+            temp_path = f"temp_imports/{timestamp}_{file_name}"
+            file_path = default_storage.save(temp_path, ContentFile(uploaded_file.read()))
+            
+            # Analyser le fichier pour la prévisualisation
+            preview_data, total_rows, preview_headers, column_analysis, validation_issues, error = (
+                self._parse_file_for_preview(file_path)
+            )
+            
+            if error:
+                # Erreur lors du parsing du fichier
+                context['server_error'] = error
+                context['debug_info'] = self._get_debug_info(file_path)
+                
+                # Nettoyer le fichier temporaire
+                if default_storage.exists(file_path):
+                    default_storage.delete(file_path)
+                
+                return render(request, self.template_name, context)
+            
+            # Stocker le chemin du fichier en session pour l'étape suivante
+            request.session['import_file_path'] = file_path
+            request.session['import_file_name'] = file_name
+            
+            # Déterminer le format du fichier
+            file_format = "CSV" if file_name.lower().endswith('.csv') else "Excel"
+            
+            # Préparer les champs requis pour le mappage
+            required_fields = self._prepare_required_fields(preview_headers)
+            
+            # Vérifier si des colonnes obligatoires sont manquantes
+            column_missing = not column_analysis.get('email', False) or not column_analysis.get('montant', False)
+            
+            # Contexte pour le template de prévisualisation
+            preview_context = {
+                'preview_data': preview_data,
+                'total_rows': total_rows,
+                'preview_headers': preview_headers,
+                'file_name': file_name,
+                'file_format': file_format,
+                'column_count': len(preview_headers),
+                'file_id': file_path,
+                'validation_issues': validation_issues,
+                'detected_columns': preview_headers,
+                'required_fields': required_fields,
+                'column_analysis': column_analysis,
+                'column_missing': column_missing,
+            }
+            
+            # Ajouter le contexte de prévisualisation
+            context.update(preview_context)
+            
+            return render(request, self.template_name, context)
+            
+        except Exception as e:
+            # Erreur non prévue
+            error_message = str(e)
+            logger.error(f"Erreur lors de l'importation: {error_message}")
+            logger.error(traceback.format_exc())
+            
+            # Afficher l'erreur
+            context['server_error'] = _("Une erreur s'est produite lors du traitement du fichier: {}").format(error_message)
+            context['debug_info'] = traceback.format_exc()
+            
+            # Supprimer le fichier temporaire en cas d'erreur
+            if temp_path and default_storage.exists(temp_path):
+                default_storage.delete(temp_path)
+            
+            return render(request, self.template_name, context)
+    
+    def _prepare_required_fields(self, preview_headers):
+        """Prépare la liste des champs requis pour le mappage."""
+        required_fields = [
+            {'name': 'email', 'label': _('Email du membre'), 'required': True, 'mapped_to': 'email' if 'email' in preview_headers else ''},
+            {'name': 'montant', 'label': _('Montant'), 'required': True, 'mapped_to': 'montant' if 'montant' in preview_headers else ''},
+            {'name': 'date_emission', 'label': _('Date d\'émission'), 'required': False, 'mapped_to': 'date_emission' if 'date_emission' in preview_headers else ''},
+            {'name': 'date_echeance', 'label': _('Date d\'échéance'), 'required': False, 'mapped_to': 'date_echeance' if 'date_echeance' in preview_headers else ''},
+            {'name': 'type_membre', 'label': _('Type de membre'), 'required': False, 'mapped_to': 'type_membre' if 'type_membre' in preview_headers else ''},
+        ]
+        return required_fields
+    
+    def _handle_column_mapping(self, request):
+        """Gère la mise à jour du mappage des colonnes."""
+        file_path = request.POST.get('file_id') or request.session.get('import_file_path')
+        
+        if not file_path or not default_storage.exists(file_path):
+            messages.error(request, _("Le fichier n'est plus disponible. Veuillez le charger à nouveau."))
+            return redirect('cotisations:import')
+        
+        try:
+            # Récupérer les mappings mis à jour
+            mappings = {}
+            for key, value in request.POST.items():
+                if key.startswith('map_') and value:
+                    field_name = key[4:]  # Supprimer 'map_'
+                    mappings[field_name] = value
+            
+            # Stocker les mappings en session
+            request.session['import_column_mappings'] = mappings
+            
+            # Refaire la prévisualisation avec les mappings mis à jour
+            return self._refresh_preview(request, file_path, mappings)
+            
+        except Exception as e:
+            # Erreur non prévue
+            error_message = str(e)
+            logger.error(f"Erreur lors du mappage: {error_message}")
+            logger.error(traceback.format_exc())
+            
+            # Récupérer le contexte de base
+            form = ImportCotisationsForm()
+            context = {
+                'form': form,
+                'preview_error': _("Erreur lors du mappage des colonnes: {}").format(error_message),
+                'debug_info': traceback.format_exc(),
+            }
+            
+            return render(request, self.template_name, context)
+    
+    def _refresh_preview(self, request, file_path, mappings=None):
+        """Rafraîchit la prévisualisation après mise à jour du mappage."""
+        file_name = request.session.get('import_file_name', os.path.basename(file_path))
+        
+        try:
+            # Analyser à nouveau le fichier avec les mappings mis à jour
+            preview_data, total_rows, preview_headers, column_analysis, validation_issues, error = self._parse_file_for_preview(
+                file_path, 
+                mappings=mappings or request.session.get('import_column_mappings', {})
+            )
+            
+            if error:
+                # Erreur lors du parsing du fichier
+                form = ImportCotisationsForm()
+                context = {
+                    'form': form,
+                    'preview_error': error,
+                    'debug_info': self._get_debug_info(file_path),
+                }
+                return render(request, self.template_name, context)
+            
+            # Déterminer le format du fichier
+            file_format = "CSV" if file_name.lower().endswith('.csv') else "Excel"
+            
+            # Préparer les champs requis pour le mappage avec les mappings mis à jour
+            required_fields = self._prepare_mapped_fields(preview_headers, mappings)
+            
+            # Vérifier si des colonnes obligatoires sont manquantes après mappage
+            mapped_columns = [field['mapped_to'] for field in required_fields if field['required']]
+            column_missing = any(not col for col in mapped_columns)
+            
+            # Contexte pour le template de prévisualisation
+            form = ImportCotisationsForm()
+            context = {
+                'form': form,
+                'preview_data': preview_data,
+                'total_rows': total_rows,
+                'preview_headers': preview_headers,
+                'file_name': file_name,
+                'file_format': file_format,
+                'column_count': len(preview_headers),
+                'file_id': file_path,
+                'validation_issues': validation_issues,
+                'detected_columns': preview_headers,
+                'required_fields': required_fields,
+                'column_analysis': column_analysis,
+                'column_missing': column_missing,
+            }
+            
+            return render(request, self.template_name, context)
+            
+        except Exception as e:
+            # Erreur non prévue
+            error_message = str(e)
+            logger.error(f"Erreur lors du rafraîchissement de la prévisualisation: {error_message}")
+            logger.error(traceback.format_exc())
+            
+            # Récupérer le contexte de base
+            form = ImportCotisationsForm()
+            context = {
+                'form': form,
+                'preview_error': _("Erreur lors du rafraîchissement de la prévisualisation: {}").format(error_message),
+                'debug_info': traceback.format_exc(),
+            }
+            
+            return render(request, self.template_name, context)
+    
+    def _prepare_mapped_fields(self, preview_headers, mappings=None):
+        """Prépare les champs requis avec les mappings appliqués."""
+        required_fields = [
+            {'name': 'email', 'label': _('Email du membre'), 'required': True, 
+             'mapped_to': mappings.get('email', 'email') if mappings else ('email' if 'email' in preview_headers else '')},
+            {'name': 'montant', 'label': _('Montant'), 'required': True, 
+             'mapped_to': mappings.get('montant', 'montant') if mappings else ('montant' if 'montant' in preview_headers else '')},
+            {'name': 'date_emission', 'label': _('Date d\'émission'), 'required': False, 
+             'mapped_to': mappings.get('date_emission', 'date_emission') if mappings else ('date_emission' if 'date_emission' in preview_headers else '')},
+            {'name': 'date_echeance', 'label': _('Date d\'échéance'), 'required': False, 
+             'mapped_to': mappings.get('date_echeance', 'date_echeance') if mappings else ('date_echeance' if 'date_echeance' in preview_headers else '')},
+            {'name': 'type_membre', 'label': _('Type de membre'), 'required': False, 
+             'mapped_to': mappings.get('type_membre', 'type_membre') if mappings else ('type_membre' if 'type_membre' in preview_headers else '')},
+        ]
+        return required_fields
+    
+    def _handle_import(self, request):
+        """Importe les données du fichier dans la base de données."""
+        file_path = request.POST.get('file_id') or request.session.get('import_file_path')
+        force_import = request.POST.get('force_import') == '1'
+        
+        if not file_path or not default_storage.exists(file_path):
+            messages.error(request, _("Le fichier n'est plus disponible. Veuillez le charger à nouveau."))
+            return redirect('cotisations:import')
+        
+        try:
+            # Récupérer les mappings
+            mappings = request.session.get('import_column_mappings', {})
+            
+            # Importer les données
+            results = self._import_data(file_path, mappings, force_import)
+            
+            # Supprimer le fichier temporaire après importation
+            if default_storage.exists(file_path):
+                default_storage.delete(file_path)
+            
+            # Nettoyer la session
+            for key in ['import_file_path', 'import_file_name', 'import_column_mappings']:
+                if key in request.session:
+                    del request.session[key]
+            
+            # Préparer le contexte pour la page de résultats
+            form = ImportCotisationsForm()
+            context = {
+                'form': form,
+                'import_completed': True,
+                'results': results,
+            }
+            
+            return render(request, self.template_name, context)
+            
+        except Exception as e:
+            # Erreur non prévue
+            error_message = str(e)
+            logger.error(f"Erreur lors de l'importation finale: {error_message}")
+            logger.error(traceback.format_exc())
+            
+            # Récupérer le contexte de base
+            form = ImportCotisationsForm()
+            context = {
+                'form': form,
+                'import_completed': True,
+                'import_error': _("Une erreur s'est produite lors de l'importation: {}").format(error_message),
+                'debug_info': traceback.format_exc(),
+                'results': {
+                    'success': 0,
+                    'errors': 0,
+                    'total': 0,
+                    'details': [],
+                }
+            }
+            
+            # S'assurer que le fichier temporaire est supprimé
+            if file_path and default_storage.exists(file_path):
+                default_storage.delete(file_path)
+            
+            return render(request, self.template_name, context)
+    
+    def _parse_file_for_preview(self, file_path, max_rows=50, mappings=None):
+        """Parse le fichier pour la prévisualisation et la validation."""
+        try:
+            file_extension = os.path.splitext(file_path)[1].lower()
+            
+            if file_extension == '.csv':
+                return self._parse_csv_for_preview(file_path, max_rows, mappings)
+            elif file_extension in ['.xls', '.xlsx']:
+                if not PANDAS_AVAILABLE:
+                    return [], 0, [], {}, [], _("Le support des fichiers Excel nécessite pandas. Veuillez l'installer ou utiliser un fichier CSV.")
+                return self._parse_excel_for_preview(file_path, max_rows, mappings)
+            else:
+                return [], 0, [], {}, [], _("Format de fichier non pris en charge.")
+        except Exception as e:
+            logger.error(f"Erreur lors du parsing du fichier: {str(e)}")
+            logger.error(traceback.format_exc())
+            return [], 0, [], {}, [], _("Erreur lors de l'analyse du fichier: {}").format(str(e))
+    
+    def _parse_csv_for_preview(self, file_path, max_rows=50, mappings=None):
+        """Parse un fichier CSV pour la prévisualisation."""
+        preview_data = []
+        validation_issues = []
+        
+        try:
+            # Ouvrir le fichier en mode binaire puis le décoder manuellement
+            with default_storage.open(file_path, 'rb') as binary_file:
+                # Wrapper pour décoder avec l'encodage approprié
+                f = io.TextIOWrapper(binary_file, encoding='utf-8')
+                
+                # Essayer de détecter le délimiteur
+                sample = f.read(4096)
+                f.seek(0)
+                
+                # Compter les occurrences des délimiteurs courants
+                delimiter_counts = {
+                    ',': sample.count(','),
+                    ';': sample.count(';'),
+                    '\t': sample.count('\t'),
+                }
+                
+                # Choisir le délimiteur avec le plus d'occurrences
+                delimiter = max(delimiter_counts.items(), key=lambda x: x[1])[0]
+                
+                # Si aucun délimiteur n'a suffisamment d'occurrences, utiliser la virgule par défaut
+                if delimiter_counts[delimiter] < 3:
+                    delimiter = ','
+                
+                # Lire le CSV
+                reader = csv.reader(f, delimiter=delimiter)
+                headers = next(reader)  # Première ligne = en-têtes
+                
+                # Normaliser les en-têtes (supprimer espaces, minuscules)
+                headers = [h.strip().lower() for h in headers]
+                
+                # Analyser les colonnes
+                column_analysis = self._analyze_columns(headers)
+                
+                # Si des mappings sont fournis, remapper les en-têtes
+                headers_mapping = {}
+                if mappings:
+                    for field, column in mappings.items():
+                        if column in headers:
+                            headers_mapping[column] = field
+                
+                # Compteur de lignes et liste pour les données de prévisualisation
+                row_count = 0
+                
+                for i, row in enumerate(reader, start=2):  # Commencer à 2 car la ligne 1 est l'en-tête
+                    row_count += 1
+                    
+                    # S'assurer que la ligne a le bon nombre de colonnes
+                    if len(row) < len(headers):
+                        row.extend([''] * (len(headers) - len(row)))
+                    elif len(row) > len(headers):
+                        row = row[:len(headers)]
+                    
+                    # Préparer les données pour la validation
+                    row_data = dict(zip(headers, row))
+                    
+                    # Appliquer les mappings si présents
+                    if mappings:
+                        mapped_data = {}
+                        for field, column in mappings.items():
+                            if column in row_data:
+                                mapped_data[field] = row_data[column]
+                        row_data = mapped_data if mapped_data else row_data
+                    
+                    # Valider la ligne
+                    row_issues = self._validate_row(row_data, i)
+                    has_issue = len(row_issues) > 0
+                    
+                    # Ajouter les problèmes à la liste globale
+                    validation_issues.extend(row_issues)
+                    
+                    # Ajouter à la prévisualisation si dans la limite
+                    if i <= max_rows:
+                        preview_data.append({
+                            'row_num': i,
+                            'data': row,
+                            'has_issue': has_issue
+                        })
+                
+                return preview_data, row_count + 1, headers, column_analysis, validation_issues, None
+                
+        except Exception as e:
+            logger.error(f"Erreur lors du parsing CSV: {str(e)}")
+            logger.error(traceback.format_exc())
+            return [], 0, [], {}, [], _("Erreur lors de l'analyse du fichier CSV: {}").format(str(e))
+    
+    def _parse_excel_for_preview(self, file_path, max_rows=50, mappings=None):
+        """Parse un fichier Excel pour la prévisualisation."""
+        preview_data = []
+        validation_issues = []
+        
+        try:
+            # Ouvrir le fichier avec pandas
+            df = pd.read_excel(default_storage.path(file_path), nrows=max_rows + 1)
+            
+            # Obtenir les en-têtes
+            headers = [str(col).strip().lower() for col in df.columns]
+            
+            # Analyser les colonnes
+            column_analysis = self._analyze_columns(headers)
+            
+            # Prévisualisation des données (jusqu'à max_rows)
+            for i, (_, row) in enumerate(df.iterrows(), start=2):  # Commencer à 2 car la ligne 1 est l'en-tête
+                # Convertir la ligne en liste
+                row_data = [str(val) if not pd.isna(val) else '' for val in row]
+                
+                # Préparer les données pour la validation
+                row_dict = dict(zip(headers, row_data))
+                
+                # Appliquer les mappings si présents
+                if mappings:
+                    mapped_data = {}
+                    for field, column in mappings.items():
+                        if column in row_dict:
+                            mapped_data[field] = row_dict[column]
+                    row_dict = mapped_data if mapped_data else row_dict
+                
+                # Valider la ligne
+                row_issues = self._validate_row(row_dict, i)
+                has_issue = len(row_issues) > 0
+                
+                # Ajouter les problèmes à la liste globale
+                validation_issues.extend(row_issues)
+                
+                # Ajouter à la prévisualisation
+                preview_data.append({
+                    'row_num': i,
+                    'data': row_data,
+                    'has_issue': has_issue
+                })
+            
+            # Obtenir le nombre total de lignes (en incluant l'en-tête)
+            total_rows = len(df) + 1
+            
+            return preview_data, total_rows, headers, column_analysis, validation_issues, None
+            
+        except Exception as e:
+            logger.error(f"Erreur lors du parsing Excel: {str(e)}")
+            logger.error(traceback.format_exc())
+            return [], 0, [], {}, [], _("Erreur lors de l'analyse du fichier Excel: {}").format(str(e))
+    
+    def _analyze_columns(self, headers):
+        """Analyse les colonnes du fichier pour vérifier la présence des colonnes requises."""
+        columns = {
+            'email': False,
+            'montant': False,
+            'date_emission': False,
+            'date_echeance': False,
+            'type_membre': False,
+        }
+        
+        # Normaliser les en-têtes et vérifier la présence des colonnes requises
+        normalized_headers = [h.strip().lower() for h in headers]
+        
+        for col in columns.keys():
+            if col in normalized_headers:
+                columns[col] = True
+        
+        # Vérifier aussi des variantes courantes
+        if not columns['email'] and any(h in normalized_headers for h in ['mail', 'courriel', 'e-mail', 'e_mail']):
+            columns['email'] = True
+        
+        if not columns['montant'] and any(h in normalized_headers for h in ['amount', 'somme', 'prix', 'tarif']):
+            columns['montant'] = True
+        
+        if not columns['date_emission'] and any(h in normalized_headers for h in ['emission', 'émission', 'date_creation', 'created_at']):
+            columns['date_emission'] = True
+        
+        if not columns['date_echeance'] and any(h in normalized_headers for h in ['echeance', 'échéance', 'date_fin', 'expiration']):
+            columns['date_echeance'] = True
+        
+        if not columns['type_membre'] and any(h in normalized_headers for h in ['type', 'categorie', 'catégorie', 'membership_type']):
+            columns['type_membre'] = True
+        
+        return columns
+    
+    def _validate_row(self, row_data, row_num):
+        """Valide une ligne de données et retourne les problèmes trouvés."""
+        issues = []
+        
+        # Vérifier l'email
+        email = row_data.get('email', '')
+        if not email:
+            issues.append({
+                'row': row_num,
+                'type': _("Email manquant"),
+                'message': _("L'email est obligatoire.")
+            })
+        elif '@' not in email or '.' not in email:
+            issues.append({
+                'row': row_num,
+                'type': _("Email invalide"),
+                'message': _("L'email '{}' ne semble pas valide.").format(email)
+            })
+        else:
+            # Vérifier si le membre existe
+            try:
+                membre = Membre.objects.filter(email=email).first()
+                if not membre:
+                    issues.append({
+                        'row': row_num,
+                        'type': _("Membre introuvable"),
+                        'message': _("Aucun membre trouvé avec l'email '{}'.").format(email)
+                    })
+            except Exception:
+                # Ignorer les erreurs de base de données lors de la validation préliminaire
+                pass
+        
+        # Vérifier le montant
+        montant = row_data.get('montant', '')
+        if not montant:
+            issues.append({
+                'row': row_num,
+                'type': _("Montant manquant"),
+                'message': _("Le montant est obligatoire.")
+            })
+        else:
+            # Nettoyer le montant (remplacer la virgule par un point)
+            montant = str(montant).replace(',', '.')
+            try:
+                montant_decimal = Decimal(montant)
+                if montant_decimal <= 0:
+                    issues.append({
+                        'row': row_num,
+                        'type': _("Montant invalide"),
+                        'message': _("Le montant doit être supérieur à zéro.")
+                    })
+            except (InvalidOperation, ValueError, TypeError):
+                issues.append({
+                    'row': row_num,
+                    'type': _("Montant invalide"),
+                    'message': _("Le montant '{}' n'est pas un nombre valide.").format(montant)
+                })
+        
+        # Vérifier les dates si présentes
+        date_emission = row_data.get('date_emission', '')
+        if date_emission:
+            try:
+                self._parse_date(date_emission)
+            except ValueError:
+                issues.append({
+                    'row': row_num,
+                    'type': _("Date d'émission invalide"),
+                    'message': _("La date d'émission '{}' n'est pas au format valide (YYYY-MM-DD ou DD/MM/YYYY).").format(date_emission)
+                })
+        
+        date_echeance = row_data.get('date_echeance', '')
+        if date_echeance:
+            try:
+                self._parse_date(date_echeance)
+            except ValueError:
+                issues.append({
+                    'row': row_num,
+                    'type': _("Date d'échéance invalide"),
+                    'message': _("La date d'échéance '{}' n'est pas au format valide (YYYY-MM-DD ou DD/MM/YYYY).").format(date_echeance)
+                })
+        
+        # Vérifier le type de membre si présent
+        type_membre = row_data.get('type_membre', '')
+        if type_membre:
+            try:
+                type_membre_obj = TypeMembre.objects.filter(libelle__iexact=type_membre).first()
+                if not type_membre_obj:
+                    issues.append({
+                        'row': row_num,
+                        'type': _("Type de membre invalide"),
+                        'message': _("Le type de membre '{}' n'existe pas dans la base de données.").format(type_membre)
+                    })
+            except Exception:
+                # Ignorer les erreurs de base de données lors de la validation préliminaire
+                pass
+        
+        return issues
+		
+    def _import_data(self, file_path, mappings, force_import=False):
+            """Importe les données du fichier dans la base de données."""
+            results = {
+                'success': 0,
+                'errors': 0,
+                'total': 0,
+                'details': []
+            }
+            
+            try:
+                # Déterminer le type de fichier
+                file_extension = os.path.splitext(file_path)[1].lower()
+                
+                # Statut par défaut pour les nouvelles cotisations
+                default_status = Statut.objects.filter(nom__iexact='En attente').first()
+                if not default_status:
+                    default_status = Statut.objects.create(
+                        nom='En attente', 
+                        description='Statut par défaut pour les cotisations'
+                    )
+                
+                # Parser le fichier selon son type
+                if file_extension == '.csv':
+                    self._import_from_csv(file_path, mappings, results, default_status, force_import)
+                elif file_extension in ['.xls', '.xlsx']:
+                    if not PANDAS_AVAILABLE:
+                        raise ImportError(_("Le support des fichiers Excel nécessite pandas. Veuillez l'installer ou utiliser un fichier CSV."))
+                    self._import_from_excel(file_path, mappings, results, default_status, force_import)
+                else:
+                    raise ValueError(_("Format de fichier non pris en charge."))
+                
+                # Mettre à jour le total
+                results['total'] = results['success'] + results['errors']
+                
+                return results
+                
+            except Exception as e:
+                logger.error(f"Erreur lors de l'importation des données: {str(e)}")
+                logger.error(traceback.format_exc())
+                raise
+    
+    def _import_from_csv(self, file_path, mappings, results, default_status, force_import):
+        """Importe les données à partir d'un fichier CSV."""
+        try:
+            # Ouvrir le fichier en mode binaire puis le décoder manuellement
+            with default_storage.open(file_path, 'rb') as binary_file:
+                # Wrapper pour décoder avec l'encodage approprié
+                f = io.TextIOWrapper(binary_file, encoding='utf-8')
+                
+                # Essayer de détecter le délimiteur
+                sample = f.read(4096)
+                f.seek(0)
+                
+                # Compter les occurrences des délimiteurs courants
+                delimiter_counts = {
+                    ',': sample.count(','),
+                    ';': sample.count(';'),
+                    '\t': sample.count('\t'),
+                }
+                
+                # Choisir le délimiteur avec le plus d'occurrences
+                delimiter = max(delimiter_counts.items(), key=lambda x: x[1])[0]
+                
+                # Si aucun délimiteur n'a suffisamment d'occurrences, utiliser la virgule par défaut
+                if delimiter_counts[delimiter] < 3:
+                    delimiter = ','
+                
+                # Lire le CSV
+                reader = csv.reader(f, delimiter=delimiter)
+                headers = next(reader)  # Première ligne = en-têtes
+                
+                # Normaliser les en-têtes (supprimer espaces, minuscules)
+                headers = [h.strip().lower() for h in headers]
+                
+                # Traiter chaque ligne
+                for i, row in enumerate(reader, start=2):  # Commencer à 2 car la ligne 1 est l'en-tête
+                    # S'assurer que la ligne a le bon nombre de colonnes
+                    if len(row) < len(headers):
+                        row.extend([''] * (len(headers) - len(row)))
+                    elif len(row) > len(headers):
+                        row = row[:len(headers)]
+                    
+                    # Créer un dictionnaire pour la ligne
+                    row_data = dict(zip(headers, row))
+                    
+                    # Appliquer les mappings
+                    if mappings:
+                        mapped_data = {}
+                        for field, column in mappings.items():
+                            if column in row_data:
+                                mapped_data[field] = row_data[column]
+                        
+                        if mapped_data:
+                            row_data = mapped_data
+                    
+                    # Traiter la ligne
+                    self._process_row(row_data, i, results, default_status, force_import)
+    
+        except Exception as e:
+            logger.error(f"Erreur lors de l'importation CSV: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
+    
+    def _import_from_excel(self, file_path, mappings, results, default_status, force_import):
+        """Importe les données à partir d'un fichier Excel."""
+        try:
+            # Ouvrir le fichier avec pandas
+            df = pd.read_excel(default_storage.path(file_path))
+            
+            # Obtenir les en-têtes
+            headers = [str(col).strip().lower() for col in df.columns]
+            
+            # Traiter chaque ligne
+            for i, (_, row) in enumerate(df.iterrows(), start=2):  # Commencer à 2 car la ligne 1 est l'en-tête
+                # Convertir les valeurs nan en chaînes vides
+                row_data = {headers[j]: ('' if pd.isna(val) else str(val)) for j, val in enumerate(row)}
+                
+                # Appliquer les mappings
+                if mappings:
+                    mapped_data = {}
+                    for field, column in mappings.items():
+                        if column in row_data:
+                            mapped_data[field] = row_data[column]
+                    
+                    if mapped_data:
+                        row_data = mapped_data
+                
+                # Traiter la ligne
+                self._process_row(row_data, i, results, default_status, force_import)
+        
+        except Exception as e:
+            logger.error(f"Erreur lors de l'importation Excel: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
+    
+    def _process_row(self, row_data, row_num, results, default_status, force_import):
+        """Traite une ligne pour l'importation."""
+        try:
+            # Vérifier si toutes les données nécessaires sont présentes
+            email = row_data.get('email', '').strip()
+            montant_str = str(row_data.get('montant', '')).strip().replace(',', '.')
+            
+            # Vérifier les données obligatoires
+            if not email:
+                self._add_error_detail(results, row_num, _("Email manquant"))
+                return
+            
+            if not montant_str:
+                self._add_error_detail(results, row_num, _("Montant manquant"))
+                return
+            
+            # Convertir le montant
+            try:
+                montant = Decimal(montant_str)
+                if montant <= 0:
+                    self._add_error_detail(results, row_num, _("Le montant doit être supérieur à zéro"))
+                    return
+            except (InvalidOperation, ValueError, TypeError):
+                self._add_error_detail(results, row_num, _("Montant invalide: {}").format(montant_str))
+                return
+            
+            # Trouver le membre
+            membre = Membre.objects.filter(email=email).first()
+            
+            # Si le membre n'existe pas, essayer de le créer
+            if not membre and force_import:
+                membre = self._create_membre_from_row(row_data, email)
+                if not membre:
+                    self._add_error_detail(
+                        results, row_num, 
+                        _("Impossible de créer le membre avec l'email '{}'").format(email),
+                        email=email, montant=montant
+                    )
+                    return
+            
+            # Si le membre n'existe toujours pas
+            if not membre:
+                self._add_error_detail(
+                    results, row_num,
+                    _("Membre introuvable avec l'email '{}'").format(email),
+                    email=email, montant=montant
+                )
+                return
+            
+            # Traiter les dates
+            date_emission, date_echeance = self._get_dates_from_row(row_data, force_import)
+            if date_emission is None and not force_import:
+                self._add_error_detail(
+                    results, row_num,
+                    _("Date d'émission invalide: {}").format(row_data.get('date_emission', '')),
+                    membre=membre, montant=montant
+                )
+                return
+            
+            if date_echeance is None and 'date_echeance' in row_data and row_data['date_echeance'] and not force_import:
+                self._add_error_detail(
+                    results, row_num,
+                    _("Date d'échéance invalide: {}").format(row_data['date_echeance']),
+                    membre=membre, montant=montant
+                )
+                return
+            
+            # Trouver le type de membre
+            type_membre = self._get_type_membre(row_data, membre, force_import)
+            if type_membre is None and 'type_membre' in row_data and row_data['type_membre'] and not force_import:
+                self._add_error_detail(
+                    results, row_num,
+                    _("Type de membre non trouvé: {}").format(row_data['type_membre']),
+                    membre=membre, montant=montant
+                )
+                return
+            
+            # Récupérer le montant restant et déterminer le statut de paiement
+            montant_restant, statut_paiement = self._get_payment_details(row_data, montant)
+            
+            # Créer la cotisation
+            try:
+                cotisation = self._create_cotisation(
+                    membre, montant, montant_restant, statut_paiement,
+                    default_status, date_emission, date_echeance, type_membre
+                )
+                
+                # Succès !
+                membre_info = f"{membre.prenom} {membre.nom} ({membre.email})"
+                results['success'] += 1
+                results['details'].append({
+                    'row': row_num,
+                    'status': 'success',
+                    'membre': membre_info,
+                    'montant': float(montant),
+                    'message': _("Cotisation créée avec succès")
+                })
+                
+            except Exception as e:
+                logger.error(f"Erreur lors de la création de la cotisation: {str(e)}")
+                logger.error(traceback.format_exc())
+                
+                membre_info = f"{membre.prenom} {membre.nom} ({membre.email})" if membre else email
+                self._add_error_detail(
+                    results, row_num,
+                    _("Erreur lors de la création: {}").format(str(e)),
+                    membre=membre_info, montant=montant
+                )
+        
+        except Exception as e:
+            logger.error(f"Erreur lors du traitement de la ligne {row_num}: {str(e)}")
+            logger.error(traceback.format_exc())
+            
+            self._add_error_detail(results, row_num, _("Erreur inattendue: {}").format(str(e)))
+    
+    def _add_error_detail(self, results, row_num, message, **kwargs):
+        """Ajoute une erreur détaillée aux résultats."""
+        results['errors'] += 1
+        
+        # Créer un dictionnaire de détails
+        detail = {
+            'row': row_num,
+            'status': 'error',
+            'message': message
+        }
+        
+        # Ajouter les kwargs comme informations supplémentaires
+        for key, value in kwargs.items():
+            if isinstance(value, Decimal):
+                detail[key] = float(value)
+            else:
+                detail[key] = value
+        
+        results['details'].append(detail)
+    
+    def _create_membre_from_row(self, row_data, email):
+        """Crée un nouveau membre à partir des données de la ligne."""
+        try:
+            # Extraire les informations du membre
+            nom_prenom = row_data.get('membre', '').strip()
+            
+            # Diviser le nom complet en nom et prénom
+            if nom_prenom:
+                parts = nom_prenom.split(' ', 1)
+                if len(parts) > 1:
+                    prenom, nom = parts
+                else:
+                    nom = parts[0]
+                    prenom = ""
+            else:
+                # Si le nom n'est pas fourni, utiliser l'email comme base
+                nom = email.split('@')[0]
+                prenom = ""
+            
+            # Créer le statut par défaut pour les membres si nécessaire
+            membre_statut = Statut.objects.filter(nom__iexact='Actif').first()
+            if not membre_statut:
+                membre_statut = Statut.objects.create(
+                    nom='Actif', 
+                    description='Statut par défaut pour les membres'
+                )
+            
+            # Créer le nouveau membre
+            membre = Membre.objects.create(
+                nom=nom.upper() if nom else "NOM",
+                prenom=prenom.capitalize() if prenom else "Prénom",
+                email=email,
+                statut=membre_statut,
+                date_adhesion=datetime.datetime.now().date()
+            )
+            
+            # Récupérer et assigner le type de membre si disponible
+            type_membre_nom = row_data.get('type_membre', '').strip()
+            if type_membre_nom:
+                type_membre = TypeMembre.objects.filter(libelle__iexact=type_membre_nom).first()
+                if type_membre:
+                    # Créer une association entre le membre et le type de membre
+                    # Note: ceci dépend de la structure du modèle MembreTypeMembre
+                    MembreTypeMembre.objects.create(
+                        membre=membre,
+                        type_membre=type_membre,
+                        date_debut=datetime.datetime.now().date()
+                    )
+            
+            logger.info(f"Membre créé automatiquement: {email}")
+            return membre
+            
+        except Exception as e:
+            # En cas d'erreur lors de la création du membre
+            logger.error(f"Erreur lors de la création automatique du membre: {str(e)}")
+            logger.error(traceback.format_exc())
+            return None
+    
+    def _get_dates_from_row(self, row_data, force_import):
+        """Extrait et valide les dates d'une ligne."""
+        date_emission = None
+        date_echeance = None
+        
+        # Traiter la date d'émission
+        if 'date_emission' in row_data and row_data['date_emission']:
+            try:
+                date_emission = self._parse_date(row_data['date_emission'])
+            except ValueError:
+                if force_import:
+                    # Utiliser la date actuelle si force_import est activé
+                    date_emission = datetime.datetime.now().date()
+                else:
+                    return None, None
+        else:
+            # Par défaut, utiliser la date actuelle
+            date_emission = datetime.datetime.now().date()
+        
+        # Traiter la date d'échéance
+        if 'date_echeance' in row_data and row_data['date_echeance']:
+            try:
+                date_echeance = self._parse_date(row_data['date_echeance'])
+            except ValueError:
+                if force_import:
+                    # Par défaut, la date d'échéance est à 1 an de la date d'émission
+                    date_echeance = date_emission.replace(year=date_emission.year + 1)
+                else:
+                    return date_emission, None
+        else:
+            # Par défaut, la date d'échéance est à 1 an de la date d'émission
+            date_echeance = date_emission.replace(year=date_emission.year + 1)
+        
+        return date_emission, date_echeance
+    
+    def _get_type_membre(self, row_data, membre, force_import):
+        """Récupère le type de membre à partir des données de la ligne ou du membre."""
+        # Essayer d'abord à partir des données de la ligne
+        if 'type_membre' in row_data and row_data['type_membre']:
+            type_membre = TypeMembre.objects.filter(libelle__iexact=row_data['type_membre'].strip()).first()
+            if type_membre:
+                return type_membre
+        
+        # Si pas dans les données ou pas trouvé, essayer à partir du membre
+        if membre:
+            # Approche 1: Relations type active via MembreTypeMembre
+            membre_types = MembreTypeMembre.objects.filter(
+                membre=membre,
+                date_fin__isnull=True
+            ).select_related('type_membre').first()
+            
+            if membre_types:
+                return membre_types.type_membre
+            
+            # Approche 2: Types actifs via une méthode du modèle
+            if hasattr(membre, 'get_types_actifs') and callable(membre.get_types_actifs):
+                types_actifs = membre.get_types_actifs()
+                if types_actifs.exists():
+                    return types_actifs.first()
+        
+        # Si force_import est activé, utiliser le type de membre par défaut
+        if force_import:
+            # Trouver ou créer un type par défaut
+            default_type = TypeMembre.objects.filter(libelle__iexact='Standard').first()
+            if not default_type:
+                default_type = TypeMembre.objects.first()  # Prendre le premier type disponible
+            
+            return default_type
+        
+        return None
+    
+    def _get_payment_details(self, row_data, montant):
+        """Récupère les détails de paiement à partir des données de la ligne."""
+        # Montant restant par défaut = montant total
+        montant_restant = montant
+        
+        # Récupérer le montant restant s'il est spécifié
+        if 'montant_restant' in row_data and row_data['montant_restant']:
+            try:
+                montant_restant_str = str(row_data['montant_restant']).strip().replace(',', '.')
+                montant_restant = Decimal(montant_restant_str)
+                # Valider le montant restant
+                if montant_restant < 0:
+                    montant_restant = Decimal('0.00')
+                elif montant_restant > montant:
+                    montant_restant = montant
+            except (InvalidOperation, ValueError, TypeError):
+                # En cas d'erreur dans le format, utiliser le montant total
+                pass
+        
+        # Déterminer le statut de paiement
+        statut_paiement = 'non_payee'  # Par défaut
+        
+        if 'statut_paiement' in row_data and row_data['statut_paiement']:
+            statut_str = row_data['statut_paiement'].strip().lower()
+            
+            if 'payée' in statut_str or 'payee' in statut_str or 'pay' in statut_str:
+                if 'partiel' in statut_str or 'partial' in statut_str:
+                    statut_paiement = 'partiellement_payee'
+                    # Si le montant restant n'a pas été explicitement défini
+                    if montant_restant == montant:
+                        montant_restant = montant * Decimal('0.5')  # 50% par défaut
+                else:
+                    statut_paiement = 'payee'
+                    montant_restant = Decimal('0')
+        
+        # Si le montant restant est 0, la cotisation est payée
+        if montant_restant == 0:
+            statut_paiement = 'payee'
+        # Si le montant restant est entre 0 et le montant total, partiellement payée
+        elif montant_restant < montant:
+            statut_paiement = 'partiellement_payee'
+        
+        return montant_restant, statut_paiement
+    
+    def _create_cotisation(self, membre, montant, montant_restant, statut_paiement, 
+                         statut, date_emission, date_echeance, type_membre):
+        """Crée une nouvelle cotisation avec les données fournies."""
+        # Préparer les données pour la cotisation
+        cotisation_data = {
+            'membre': membre,
+            'montant': montant,
+            'montant_restant': montant_restant,
+            'statut': statut,
+            'statut_paiement': statut_paiement,
+        }
+        
+        # Ajouter les champs optionnels si présents
+        if date_emission:
+            cotisation_data['date_emission'] = date_emission
+        
+        if date_echeance:
+            cotisation_data['date_echeance'] = date_echeance
+        
+        # Ajouter les périodes
+        if date_emission:
+            cotisation_data['periode_debut'] = date_emission
+            cotisation_data['mois'] = date_emission.month
+            cotisation_data['annee'] = date_emission.year
+        
+        if date_echeance:
+            cotisation_data['periode_fin'] = date_echeance
+        
+        # Ajouter le type de membre si présent
+        if type_membre:
+            cotisation_data['type_membre'] = type_membre
+        
+        # Créer la cotisation
+        cotisation = Cotisation.objects.create(**cotisation_data)
+        return cotisation
+    
+    def _parse_date(self, date_str):
+        """Parse une date à partir d'une chaîne de caractères."""
+        date_str = str(date_str).strip()
+        
+        # Essayer différents formats de date
+        formats = [
+            '%Y-%m-%d',       # YYYY-MM-DD
+            '%d/%m/%Y',       # DD/MM/YYYY
+            '%d-%m-%Y',       # DD-MM-YYYY
+            '%m/%d/%Y',       # MM/DD/YYYY (format US)
+            '%d.%m.%Y',       # DD.MM.YYYY
+        ]
+        
+        for fmt in formats:
+            try:
+                return datetime.datetime.strptime(date_str, fmt).date()
+            except ValueError:
+                continue
+        
+        # Si on arrive ici, aucun format n'a fonctionné
+        raise ValueError(f"Format de date non reconnu: {date_str}")
+    
+    def _get_debug_info(self, file_path):
+        """Récupère des informations de débogage sur le fichier."""
+        try:
+            info = []
+            
+            # Informations sur le fichier
+            file_exists = default_storage.exists(file_path)
+            info.append(f"Fichier existe: {file_exists}")
+            
+            if file_exists:
+                file_size = default_storage.size(file_path)
+                info.append(f"Taille du fichier: {file_size} octets")
+                
+                # Extension du fichier
+                file_extension = os.path.splitext(file_path)[1].lower()
+                info.append(f"Extension du fichier: {file_extension}")
+                
+                # Pour les fichiers CSV, essayer de lire les premières lignes
+                if file_extension == '.csv':
+                    try:
+                        with default_storage.open(file_path, 'rb') as binary_file:
+                            # Décoder le fichier
+                            f = io.TextIOWrapper(binary_file, encoding='utf-8')
+                            lines = [f.readline() for _ in range(5)]
+                            info.append("Premières lignes du fichier:")
+                            for i, line in enumerate(lines):
+                                if line:
+                                    info.append(f"Ligne {i+1}: {line.strip()}")
+                    except Exception as e:
+                        info.append(f"Erreur lors de la lecture des premières lignes: {str(e)}")
+                
+                # Pour les fichiers Excel, essayer de lire avec pandas
+                elif file_extension in ['.xls', '.xlsx'] and PANDAS_AVAILABLE:
+                    try:
+                        df = pd.read_excel(default_storage.path(file_path), nrows=5)
+                        info.append(f"En-têtes du fichier: {', '.join(map(str, df.columns))}")
+                        info.append(f"Nombre de lignes lues: {len(df)}")
+                    except Exception as e:
+                        info.append(f"Erreur lors de la lecture avec pandas: {str(e)}")
+            
+            return "\n".join(info)
+        
+        except Exception as e:
+            return f"Erreur lors de la récupération des informations de débogage: {str(e)}"
 
 
-from . import export_utils
-
+#
+# Vues pour l'exportation des cotisations et paiements
+#
 class ExportCotisationsView(StaffRequiredMixin, View):
     """
     Vue pour exporter la liste des cotisations au format CSV ou Excel.
@@ -1187,56 +2655,7 @@ class ExportCotisationsView(StaffRequiredMixin, View):
         
         if form.is_valid():
             # Appliquer les mêmes filtres que pour la vue liste
-            if membre := form.cleaned_data.get('membre'):
-                queryset = queryset.filter(membre=membre)
-            
-            if type_membre := form.cleaned_data.get('type_membre'):
-                queryset = queryset.filter(type_membre=type_membre)
-            
-            if statut_paiement := form.cleaned_data.get('statut_paiement'):
-                queryset = queryset.filter(statut_paiement=statut_paiement)
-            
-            if date_emission_debut := form.cleaned_data.get('date_emission_debut'):
-                queryset = queryset.filter(date_emission__gte=date_emission_debut)
-            
-            if date_emission_fin := form.cleaned_data.get('date_emission_fin'):
-                queryset = queryset.filter(date_emission__lte=date_emission_fin)
-            
-            if date_echeance_debut := form.cleaned_data.get('date_echeance_debut'):
-                queryset = queryset.filter(date_echeance__gte=date_echeance_debut)
-            
-            if date_echeance_fin := form.cleaned_data.get('date_echeance_fin'):
-                queryset = queryset.filter(date_echeance__lte=date_echeance_fin)
-            
-            if montant_min := form.cleaned_data.get('montant_min'):
-                queryset = queryset.filter(montant__gte=montant_min)
-            
-            if montant_max := form.cleaned_data.get('montant_max'):
-                queryset = queryset.filter(montant__lte=montant_max)
-            
-            if annee := form.cleaned_data.get('annee'):
-                queryset = queryset.filter(annee=annee)
-            
-            if mois := form.cleaned_data.get('mois'):
-                queryset = queryset.filter(mois=int(mois))
-            
-            if reference := form.cleaned_data.get('reference'):
-                queryset = queryset.filter(reference__icontains=reference)
-            
-            if en_retard := form.cleaned_data.get('en_retard'):
-                queryset = queryset.filter(
-                    date_echeance__lt=timezone.now().date(),
-                    statut_paiement__in=['non_payee', 'partiellement_payee']
-                )
-            
-            if terme := form.cleaned_data.get('terme'):
-                queryset = queryset.filter(
-                    Q(reference__icontains=terme) |
-                    Q(commentaire__icontains=terme) |
-                    Q(membre__nom__icontains=terme) |
-                    Q(membre__prenom__icontains=terme) |
-                    Q(membre__email__icontains=terme)
-                )
+            queryset = self._apply_search_filters(form, queryset)
         
         # Charger les relations pour optimiser les performances
         queryset = queryset.select_related('membre', 'type_membre')
@@ -1249,473 +2668,68 @@ class ExportCotisationsView(StaffRequiredMixin, View):
         else:
             return HttpResponse(_("Format non supporté"), status=400)
     
-    def _export_csv(self, queryset):
-        return export_utils.export_cotisations_csv(queryset)
-    
-    def _export_excel(self, queryset):
-        """
-        Exporte les cotisations au format Excel.
+    def _apply_search_filters(self, form, queryset):
+        """Applique les filtres de recherche au queryset."""
+        if membre := form.cleaned_data.get('membre'):
+            queryset = queryset.filter(membre=membre)
         
-        Args:
-            queryset: QuerySet de cotisations à exporter
-            
-        Returns:
-            HttpResponse: Fichier Excel à télécharger
-        """
-        from .export_utils import export_cotisations_excel
-        return export_cotisations_excel(queryset)
-
-
-class PaiementListView(StaffRequiredMixin, ListView):
-    """
-    Vue pour afficher la liste des paiements avec filtres.
-    """
-    model = Paiement
-    template_name = 'cotisations/paiement_liste.html'
-    context_object_name = 'paiements'
-    paginate_by = 20
-    
-    def get_queryset(self):
-        queryset = Paiement.objects.all().select_related(
-            'cotisation', 'cotisation__membre', 'mode_paiement', 'statut'
-        )
+        if type_membre := form.cleaned_data.get('type_membre'):
+            queryset = queryset.filter(type_membre=type_membre)
         
-        # Filtres par cotisation
-        cotisation_id = self.request.GET.get('cotisation')
-        if cotisation_id:
-            queryset = queryset.filter(cotisation_id=cotisation_id)
+        if statut_paiement := form.cleaned_data.get('statut_paiement'):
+            queryset = queryset.filter(statut_paiement=statut_paiement)
         
-        # Filtre par mode de paiement
-        mode_paiement_id = self.request.GET.get('mode_paiement')
-        if mode_paiement_id:
-            queryset = queryset.filter(mode_paiement_id=mode_paiement_id)
+        if date_emission_debut := form.cleaned_data.get('date_emission_debut'):
+            queryset = queryset.filter(date_emission__gte=date_emission_debut)
         
-        # Filtre par type de transaction
-        type_transaction = self.request.GET.get('type_transaction')
-        if type_transaction:
-            queryset = queryset.filter(type_transaction=type_transaction)
+        if date_emission_fin := form.cleaned_data.get('date_emission_fin'):
+            queryset = queryset.filter(date_emission__lte=date_emission_fin)
         
-        # Recherche textuelle
-        recherche = self.request.GET.get('recherche')
-        if recherche:
+        if date_echeance_debut := form.cleaned_data.get('date_echeance_debut'):
+            queryset = queryset.filter(date_echeance__gte=date_echeance_debut)
+        
+        if date_echeance_fin := form.cleaned_data.get('date_echeance_fin'):
+            queryset = queryset.filter(date_echeance__lte=date_echeance_fin)
+        
+        if montant_min := form.cleaned_data.get('montant_min'):
+            queryset = queryset.filter(montant__gte=montant_min)
+        
+        if montant_max := form.cleaned_data.get('montant_max'):
+            queryset = queryset.filter(montant__lte=montant_max)
+        
+        if annee := form.cleaned_data.get('annee'):
+            queryset = queryset.filter(annee=annee)
+        
+        if mois := form.cleaned_data.get('mois'):
+            queryset = queryset.filter(mois=int(mois))
+        
+        if reference := form.cleaned_data.get('reference'):
+            queryset = queryset.filter(reference__icontains=reference)
+        
+        if en_retard := form.cleaned_data.get('en_retard'):
             queryset = queryset.filter(
-                Q(reference_paiement__icontains=recherche) |
-                Q(commentaire__icontains=recherche) |
-                Q(cotisation__reference__icontains=recherche) |
-                Q(cotisation__membre__nom__icontains=recherche) |
-                Q(cotisation__membre__prenom__icontains=recherche)
+                date_echeance__lt=timezone.now().date(),
+                statut_paiement__in=['non_payee', 'partiellement_payee']
             )
         
-        # Filtre par date
-        date_debut = self.request.GET.get('date_debut')
-        if date_debut:
-            queryset = queryset.filter(date_paiement__gte=date_debut)
-        
-        date_fin = self.request.GET.get('date_fin')
-        if date_fin:
-            # Ajouter un jour pour inclure toute la journée de fin
-            from datetime import datetime, timedelta
-            try:
-                date_fin_dt = datetime.strptime(date_fin, '%Y-%m-%d')
-                date_fin_next = (date_fin_dt + timedelta(days=1)).strftime('%Y-%m-%d')
-                queryset = queryset.filter(date_paiement__lt=date_fin_next)
-            except ValueError:
-                pass  # Si la date est mal formatée, ignorer ce filtre
+        if terme := form.cleaned_data.get('terme'):
+            queryset = queryset.filter(
+                Q(reference__icontains=terme) |
+                Q(commentaire__icontains=terme) |
+                Q(membre__nom__icontains=terme) |
+                Q(membre__prenom__icontains=terme) |
+                Q(membre__email__icontains=terme)
+            )
         
         return queryset
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Liste des cotisations pour le filtre
-        context['cotisations_list'] = Cotisation.objects.all().order_by('-date_emission')[:100]
-        
-        # Liste des modes de paiement pour le filtre
-        context['modes_paiement'] = ModePaiement.objects.filter(actif=True)
-        
-        # Calculer les statistiques
-        paiements = Paiement.objects.all()
-        
-        # Total des paiements
-        context['total_paiements'] = paiements.count()
-        
-        # Montant total des paiements (entrées d'argent)
-        montant_paiements = paiements.filter(
-            type_transaction='paiement'
-        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
-        
-        context['montant_total'] = montant_paiements
-        
-        # Montant des remboursements
-        montant_remboursements = paiements.filter(
-            type_transaction='remboursement'
-        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
-        
-        context['montant_remboursements'] = montant_remboursements
-        
-        # Montant des rejets
-        montant_rejets = paiements.filter(
-            type_transaction='rejet'
-        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
-        
-        context['montant_rejets'] = montant_rejets
-        
-        # Total des déductions (remboursements + rejets)
-        context['total_deductions'] = montant_remboursements + montant_rejets
-        
-        # Solde net
-        context['solde_net'] = montant_paiements - (montant_remboursements + montant_rejets)
-        
-        return context
-
-# Dans le fichier views.py, ajoutez ce code avant la définition de PaiementDetailView
-# pour gérer le cas où la classe HistoriqueTransaction n'existerait pas
-
-# Import conditionnel pour historique des transactions
-try:
-    from .models import HistoriqueTransaction
-except ImportError:
-    # Fallback - utiliser la table historique_transactions directement si le modèle n'existe pas
-    class HistoriqueTransaction:
-        objects = None
-        
-        @staticmethod
-        def get_empty_queryset():
-            from django.db.models.query import EmptyQuerySet
-            return EmptyQuerySet(model=None)
-
-# Puis modifier la méthode get_context_data de PaiementDetailView:
-
-def get_context_data(self, **kwargs):
-    context = super().get_context_data(**kwargs)
-    paiement = self.object
+    def _export_csv(self, queryset):
+        """Exporte les cotisations au format CSV."""
+        return export_utils.export_cotisations_csv(queryset)
     
-    # Récupérer l'historique des actions liées à ce paiement
-    if hasattr(HistoriqueTransaction, 'objects') and HistoriqueTransaction.objects:
-        context['historique'] = HistoriqueTransaction.objects.filter(
-            type='paiement',
-            reference_id=paiement.id
-        ).order_by('-date_creation')
-    else:
-        # Vérifier s'il existe une table directe historique_transactions
-        try:
-            from django.db import connection
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT * FROM historique_transactions 
-                    WHERE type = 'paiement' AND reference_id = %s
-                    ORDER BY date_creation DESC
-                """, [paiement.id])
-                columns = [col[0] for col in cursor.description]
-                context['historique'] = [
-                    dict(zip(columns, row)) for row in cursor.fetchall()
-                ]
-        except Exception:
-            # Si rien ne fonctionne, initialiser avec une liste vide
-            context['historique'] = []
-    
-    return context
-
-class PaiementDetailView(StaffRequiredMixin, DetailView):
-    """
-    Vue détaillée d'un paiement avec son historique.
-    """
-    model = Paiement
-    template_name = 'cotisations/paiement_detail.html'
-    context_object_name = 'paiement'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        paiement = self.object
-        
-        # Récupérer l'historique des actions liées à ce paiement
-        if hasattr(HistoriqueTransaction, 'objects') and HistoriqueTransaction.objects:
-            context['historique'] = HistoriqueTransaction.objects.filter(
-                type='paiement',
-                reference_id=paiement.id
-            ).order_by('-date_creation')
-        else:
-            # Utiliser une liste vide si la classe n'existe pas
-            context['historique'] = []
-
-        # NOUVEAU CODE: Calculer le montant payé sans utiliser le filtre sub
-        if hasattr(paiement.cotisation, 'montant') and hasattr(paiement.cotisation, 'montant_restant'):
-            context['montant_paye'] = paiement.cotisation.montant - paiement.cotisation.montant_restant
-        else:
-            context['montant_paye'] = 0
-        
-        return context
-
-class BaremeDetailView(StaffRequiredMixin, DetailView):
-    """
-    Vue détaillée d'un barème de cotisation.
-    """
-    model = BaremeCotisation
-    template_name = 'cotisations/bareme_detail.html'
-    context_object_name = 'bareme'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        bareme = self.object
-        
-        # Récupérer les cotisations utilisant ce barème
-        context['cotisations'] = Cotisation.objects.filter(bareme=bareme).order_by('-date_emission')
-        
-        # Calculer des statistiques
-        nb_cotisations = context['cotisations'].count()
-        montant_total = context['cotisations'].aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
-        
-        context.update({
-            'nb_cotisations': nb_cotisations,
-            'montant_total': montant_total,
-            'est_actif': bareme.est_actif(),
-            'type_membre': bareme.type_membre
-        })
-        
-        return context
-
-
-class RappelListView(StaffRequiredMixin, ListView):
-    """
-    Vue pour afficher la liste des rappels avec filtres.
-    """
-    model = Rappel
-    template_name = 'cotisations/rappel_liste.html'
-    context_object_name = 'rappels'
-    paginate_by = 20
-    
-    def get_queryset(self):
-        queryset = Rappel.objects.all()
-        
-        # Filtres disponibles
-        type_rappel = self.request.GET.get('type_rappel')
-        etat = self.request.GET.get('etat')
-        date_debut = self.request.GET.get('date_debut')
-        date_fin = self.request.GET.get('date_fin')
-        membre_id = self.request.GET.get('membre_id')
-        
-        # Appliquer les filtres
-        if type_rappel:
-            queryset = queryset.filter(type_rappel=type_rappel)
-            
-        if etat:
-            queryset = queryset.filter(etat=etat)
-            
-        if date_debut:
-            try:
-                date_debut = datetime.datetime.strptime(date_debut, '%Y-%m-%d').date()
-                queryset = queryset.filter(date_envoi__gte=date_debut)
-            except ValueError:
-                pass
-                
-        if date_fin:
-            try:
-                date_fin = datetime.datetime.strptime(date_fin, '%Y-%m-%d').date()
-                queryset = queryset.filter(date_envoi__lte=date_fin)
-            except ValueError:
-                pass
-                
-        if membre_id:
-            queryset = queryset.filter(membre_id=membre_id)
-        
-        return queryset.select_related('membre', 'cotisation')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Statistiques pour le tableau de bord
-        rappels_par_etat = Rappel.objects.values('etat').annotate(count=Count('id'))
-        rappels_par_type = Rappel.objects.values('type_rappel').annotate(count=Count('id'))
-        
-        context.update({
-            'rappels_par_etat': rappels_par_etat,
-            'rappels_par_type': rappels_par_type,
-            'filtres': {
-                'type_rappel': self.request.GET.get('type_rappel', ''),
-                'etat': self.request.GET.get('etat', ''),
-                'date_debut': self.request.GET.get('date_debut', ''),
-                'date_fin': self.request.GET.get('date_fin', ''),
-                'membre_id': self.request.GET.get('membre_id', '')
-            }
-        })
-        
-        return context
-
-
-class RappelDetailView(LoginRequiredMixin, DetailView):
-    model = Rappel
-    template_name = 'cotisations/rappel_detail.html'
-    context_object_name = 'rappel'
-    
-    def post(self, request, *args, **kwargs):
-        rappel = self.get_object()
-        action = request.POST.get('action')
-        
-        if action == 'envoyer':
-            # Logique pour envoyer le rappel
-            rappel.etat = 'envoye'
-            rappel.date_envoi = timezone.now()
-            rappel.save()
-            messages.success(request, _("Le rappel a été envoyé avec succès."))
-            
-        elif action == 'reenvoyer':
-            # Logique pour réessayer l'envoi d'un rappel échoué
-            rappel.etat = 'envoye'
-            rappel.date_envoi = timezone.now()
-            rappel.save()
-            messages.success(request, _("Le rappel a été renvoyé avec succès."))
-        
-        return redirect('cotisations:rappel_detail', pk=rappel.pk)
-
-class RappelEnvoyerView(LoginRequiredMixin, View):
-    def get(self, request, pk):
-        rappel = get_object_or_404(Rappel, pk=pk)
-        # Logique pour envoyer le rappel
-        messages.success(request, "Rappel envoyé avec succès")
-        return redirect('cotisations:rappel_detail', pk=pk)
-
-
-class RappelUpdateView(StaffRequiredMixin, UpdateView):
-    """
-    Vue pour modifier un rappel existant.
-    """
-    model = Rappel
-    form_class = RappelForm
-    template_name = 'cotisations/rappel_form.html'
-    
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        
-        # S'assurer que self.object (le rappel) est chargé
-        if not hasattr(self, 'object'):
-            self.object = self.get_object()
-        
-        # Vérifier que la cotisation et le membre existent avant de les ajouter
-        if self.object.cotisation:
-            kwargs['cotisation'] = self.object.cotisation
-        if self.object.membre:
-            kwargs['membre'] = self.object.membre
-        
-        return kwargs
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        # Ajouter explicitement la cotisation au contexte
-        if self.object and self.object.cotisation:
-            context['cotisation'] = self.object.cotisation
-        return context
-    
-    def form_valid(self, form):
-        # Vérifier que la date planifiée est dans le futur
-        if form.cleaned_data.get('etat') == 'planifie':
-            date_envoi = form.cleaned_data.get('date_envoi')
-            if date_envoi and date_envoi <= timezone.now():
-                form.add_error('date_envoi', _("La date d'envoi planifiée doit être dans le futur"))
-                return self.form_invalid(form)
-        
-        return super().form_valid(form)
-    
-    def get_success_url(self):
-        return reverse('cotisations:rappel_detail', kwargs={'pk': self.object.pk})
-
-class StatistiquesView(StaffRequiredMixin, TemplateView):
-    """
-    Vue pour afficher les statistiques financières des cotisations et paiements.
-    """
-    template_name = 'cotisations/statistiques.html'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Récupérer les paramètres de filtre
-        annee = self.request.GET.get('annee', timezone.now().date().year)
-        try:
-            annee = int(annee)
-        except (ValueError, TypeError):
-            annee = timezone.now().date().year
-        
-        # Statistiques générales
-        total_cotisations = Cotisation.objects.filter(annee=annee).count()
-        montant_total = Cotisation.objects.filter(annee=annee).aggregate(
-            total=Sum('montant')
-        ).get('total') or Decimal('0.00')
-        
-        montant_paye = Paiement.objects.filter(
-            cotisation__annee=annee,
-            type_transaction='paiement'
-        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
-        
-        montant_remboursement = Paiement.objects.filter(
-            cotisation__annee=annee,
-            type_transaction='remboursement'
-        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
-        
-        # Calcul du taux de recouvrement
-        taux_recouvrement = 0
-        if montant_total > 0:
-            taux_recouvrement = (montant_paye / montant_total * 100).quantize(Decimal('0.01'))
-        
-        # Statistiques par mois
-        stats_par_mois = []
-        for mois in range(1, 13):
-            cotisations_mois = Cotisation.objects.filter(annee=annee, mois=mois)
-            paiements_mois = Paiement.objects.filter(
-                cotisation__annee=annee,
-                cotisation__mois=mois,
-                type_transaction='paiement'
-            )
-            
-            montant_cotisations = cotisations_mois.aggregate(
-                total=Sum('montant')
-            ).get('total') or Decimal('0.00')
-            
-            montant_paiements = paiements_mois.aggregate(
-                total=Sum('montant')
-            ).get('total') or Decimal('0.00')
-            
-            stats_par_mois.append({
-                'mois': mois,
-                'mois_nom': datetime.date(2000, mois, 1).strftime('%B'),
-                'montant_cotisations': montant_cotisations,
-                'montant_paiements': montant_paiements,
-                'difference': montant_paiements - montant_cotisations,
-            })
-        
-        # Statistiques par type de membre
-        stats_par_type = Cotisation.objects.filter(annee=annee).values(
-            'type_membre__libelle'
-        ).annotate(
-            nb_cotisations=Count('id'),
-            montant_total=Sum('montant'),
-            montant_paye=Sum(F('montant') - F('montant_restant')),
-        ).order_by('type_membre__libelle')
-        
-        # Statistiques par mode de paiement
-        stats_par_mode = Paiement.objects.filter(
-            cotisation__annee=annee,
-            type_transaction='paiement'
-        ).values(
-            'mode_paiement__libelle'
-        ).annotate(
-            nb_paiements=Count('id'),
-            montant_total=Sum('montant')
-        ).order_by('-montant_total')
-        
-        context.update({
-            'annee': annee,
-            'annees_disponibles': range(datetime.date.today().year - 5, datetime.date.today().year + 1),
-            'total_cotisations': total_cotisations,
-            'montant_total': montant_total,
-            'montant_paye': montant_paye,
-            'montant_remboursement': montant_remboursement,
-            'taux_recouvrement': taux_recouvrement,
-            'stats_par_mois': stats_par_mois,
-            'stats_par_type': stats_par_type,
-            'stats_par_mode': stats_par_mode,
-        })
-        
-        return context
+    def _export_excel(self, queryset):
+        """Exporte les cotisations au format Excel."""
+        return export_utils.export_cotisations_excel(queryset)
 
 
 @login_required
@@ -1730,11 +2744,12 @@ def export_cotisations_pdf(request):
     form = CotisationSearchForm(request.GET)
     queryset = Cotisation.objects.all()
     
+    # Appliquer les filtres comme dans ExportCotisationsView._apply_search_filters
     if form.is_valid():
-        # Appliquer les filtres (mêmes filtres que dans CotisationListView.get_queryset)
+        # Appliquer les filtres correspondants
         if membre := form.cleaned_data.get('membre'):
             queryset = queryset.filter(membre=membre)
-        # Autres filtres...
+        # Continuer avec les autres filtres...
     
     # Préparer les filtres pour le rapport
     filtres = {}
@@ -1770,28 +2785,10 @@ def export_paiements(request):
     mode_paiement_id = request.GET.get('mode_paiement')
     membre_id = request.GET.get('membre_id')
     
-    if type_transaction:
-        queryset = queryset.filter(type_transaction=type_transaction)
-    
-    if date_debut:
-        try:
-            date_debut = datetime.datetime.strptime(date_debut, '%Y-%m-%d').date()
-            queryset = queryset.filter(date_paiement__gte=date_debut)
-        except ValueError:
-            pass
-    
-    if date_fin:
-        try:
-            date_fin = datetime.datetime.strptime(date_fin, '%Y-%m-%d').date()
-            queryset = queryset.filter(date_paiement__lte=date_fin)
-        except ValueError:
-            pass
-    
-    if mode_paiement_id:
-        queryset = queryset.filter(mode_paiement_id=mode_paiement_id)
-    
-    if membre_id:
-        queryset = queryset.filter(cotisation__membre_id=membre_id)
+    # Appliquer les filtres de recherche au queryset
+    queryset = _apply_paiement_filters(
+        queryset, type_transaction, date_debut, date_fin, mode_paiement_id, membre_id
+    )
     
     # Exporter selon le format demandé
     if format_export == 'csv':
@@ -1800,6 +2797,37 @@ def export_paiements(request):
         return export_utils.export_paiements_excel(queryset)
     else:
         return HttpResponse(_("Format non supporté"), status=400)
+
+
+def _apply_paiement_filters(queryset, type_transaction, date_debut, date_fin, mode_paiement_id, membre_id):
+    """
+    Applique les filtres de recherche au queryset des paiements.
+    Fonction utilitaire utilisée par plusieurs vues.
+    """
+    if type_transaction:
+        queryset = queryset.filter(type_transaction=type_transaction)
+    
+    if date_debut:
+        try:
+            date_debut = datetime.datetime.strptime(date_debut, '%Y-%m-%d').date()
+            queryset = queryset.filter(date_paiement__gte=date_debut)
+        except ValueError:
+            logger.warning(f"Format de date invalide pour date_debut: {date_debut}")
+    
+    if date_fin:
+        try:
+            date_fin = datetime.datetime.strptime(date_fin, '%Y-%m-%d').date()
+            queryset = queryset.filter(date_paiement__lte=date_fin)
+        except ValueError:
+            logger.warning(f"Format de date invalide pour date_fin: {date_fin}")
+    
+    if mode_paiement_id:
+        queryset = queryset.filter(mode_paiement_id=mode_paiement_id)
+    
+    if membre_id:
+        queryset = queryset.filter(cotisation__membre_id=membre_id)
+    
+    return queryset
 
 
 @login_required
@@ -1823,6 +2851,22 @@ def export_rappels(request):
     membre_id = request.GET.get('membre_id')
     
     # Appliquer les filtres
+    queryset = _apply_rappel_filters(queryset, type_rappel, etat, date_debut, date_fin, membre_id)
+    
+    # Exporter selon le format demandé
+    if format_export == 'csv':
+        return export_utils.export_rappels_csv(queryset)
+    elif format_export == 'excel':
+        return export_utils.export_rappels_excel(queryset)
+    else:
+        return HttpResponse(_("Format non supporté"), status=400)
+
+
+def _apply_rappel_filters(queryset, type_rappel, etat, date_debut, date_fin, membre_id):
+    """
+    Applique les filtres de recherche au queryset des rappels.
+    Fonction utilitaire utilisée par plusieurs vues.
+    """
     if type_rappel:
         queryset = queryset.filter(type_rappel=type_rappel)
     
@@ -1834,27 +2878,23 @@ def export_rappels(request):
             date_debut = datetime.datetime.strptime(date_debut, '%Y-%m-%d').date()
             queryset = queryset.filter(date_envoi__gte=date_debut)
         except ValueError:
-            pass
+            logger.warning(f"Format de date invalide pour date_debut: {date_debut}")
     
     if date_fin:
         try:
             date_fin = datetime.datetime.strptime(date_fin, '%Y-%m-%d').date()
             queryset = queryset.filter(date_envoi__lte=date_fin)
         except ValueError:
-            pass
+            logger.warning(f"Format de date invalide pour date_fin: {date_fin}")
     
     if membre_id:
         queryset = queryset.filter(membre_id=membre_id)
     
-    # Exporter selon le format demandé
-    if format_export == 'csv':
-        return export_utils.export_rappels_csv(queryset)
-    elif format_export == 'excel':
-        return export_utils.export_rappels_excel(queryset)
-    else:
-        return HttpResponse(_("Format non supporté"), status=400)
-
-
+    return queryset
+	
+	#
+# API et fonctions pour les calculs de cotisations
+#
 @login_required
 def api_calculer_montant(request):
     """
@@ -1946,9 +2986,10 @@ def api_calculer_montant(request):
     except BaremeCotisation.DoesNotExist:
         return JsonResponse({'success': False, 'message': str(_("Barème non trouvé"))})
     except Exception as e:
+        logger.error(f"Erreur lors du calcul du montant: {str(e)}")
         return JsonResponse({'success': False, 'message': str(e)})
 
-# Pour api_baremes_par_type
+
 @login_required
 def api_baremes_par_type(request):
     """
@@ -1973,8 +3014,10 @@ def api_baremes_par_type(request):
         # Formater les données pour l'API
         baremes_data = []
         for bareme in baremes:
-            est_actif = (bareme.date_debut_validite <= today and 
-                         (bareme.date_fin_validite is None or bareme.date_fin_validite >= today))
+            est_actif = (
+                bareme.date_debut_validite <= today and 
+                (bareme.date_fin_validite is None or bareme.date_fin_validite >= today)
+            )
             est_futur = bareme.date_debut_validite > today
             
             baremes_data.append({
@@ -1993,6 +3036,7 @@ def api_baremes_par_type(request):
             'baremes': baremes_data
         })
     except Exception as e:
+        logger.error(f"Erreur lors de la récupération des barèmes: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': str(e)
@@ -2056,58 +3100,26 @@ def api_verifier_bareme(request):
                 'exists': False
             })
     except Exception as e:
+        logger.error(f"Erreur lors de la vérification du barème: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': str(e)
         }, status=500)
 
-@login_required
-@require_POST
-def bareme_reactive(request):
-    """
-    Vue pour réactiver un barème inactif.
-    """
-    bareme_id = request.POST.get('bareme_id')
-    date_fin_validite = request.POST.get('date_fin_validite') or None
-    
-    if not bareme_id:
-        messages.error(request, _("Barème non spécifié"))
-        return redirect('cotisations:bareme_liste')
-    
-    try:
-        bareme = BaremeCotisation.objects.get(pk=bareme_id)
-        
-        # Convertir la date de fin si elle est fournie
-        if date_fin_validite:
-            date_fin_validite = datetime.datetime.strptime(date_fin_validite, '%Y-%m-%d').date()
-        
-        # Mettre à jour la date de fin
-        bareme.date_fin_validite = date_fin_validite
-        bareme.save()
-        
-        messages.success(
-            request, 
-            _("Le barème pour %(type)s a été réactivé avec succès.") % {
-                'type': bareme.type_membre.libelle
-            }
-        )
-    except BaremeCotisation.DoesNotExist:
-        messages.error(request, _("Barème introuvable"))
-    except Exception as e:
-        messages.error(request, _("Erreur lors de la réactivation du barème: %(error)s") % {'error': str(e)})
-    
-    return redirect('cotisations:bareme_liste')
 
+#
+# API pour les paiements et reçus
+#
 @login_required
 def api_generer_recu(request, paiement_id):
     """
     API pour générer un reçu PDF pour un paiement.
     """
-    paiement = get_object_or_404(Paiement, pk=paiement_id)
-    
     # Vérifier les permissions
     if not request.user.is_staff:
         return HttpResponseForbidden(_("Vous n'avez pas les permissions pour générer ce reçu"))
+    
+    paiement = get_object_or_404(Paiement, pk=paiement_id)
     
     try:
         # Créer un objet HttpResponse avec l'en-tête PDF approprié
@@ -2209,6 +3221,7 @@ def api_generer_recu(request, paiement_id):
     
     except Exception as e:
         # En cas d'erreur, renvoyer une réponse JSON avec l'erreur
+        logger.error(f"Erreur lors de la génération du reçu: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': str(e)
@@ -2238,6 +3251,107 @@ def api_marquer_paiement_recu(request, paiement_id):
     }, encoder=ExtendedJSONEncoder)
 
 
+class StatistiquesView(StaffRequiredMixin, TemplateView):
+    """
+    Vue pour afficher les statistiques financières des cotisations et paiements.
+    """
+    template_name = 'cotisations/statistiques.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Récupérer les paramètres de filtre
+        annee = self.request.GET.get('annee', timezone.now().date().year)
+        try:
+            annee = int(annee)
+        except (ValueError, TypeError):
+            annee = timezone.now().date().year
+        
+        # Statistiques générales
+        total_cotisations = Cotisation.objects.filter(annee=annee).count()
+        montant_total = Cotisation.objects.filter(annee=annee).aggregate(
+            total=Sum('montant')
+        ).get('total') or Decimal('0.00')
+        
+        montant_paye = Paiement.objects.filter(
+            cotisation__annee=annee,
+            type_transaction='paiement'
+        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        
+        montant_remboursement = Paiement.objects.filter(
+            cotisation__annee=annee,
+            type_transaction='remboursement'
+        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        
+        # Calcul du taux de recouvrement
+        taux_recouvrement = 0
+        if montant_total > 0:
+            taux_recouvrement = (montant_paye / montant_total * 100).quantize(Decimal('0.01'))
+        
+        # Statistiques par mois
+        stats_par_mois = []
+        for mois in range(1, 13):
+            cotisations_mois = Cotisation.objects.filter(annee=annee, mois=mois)
+            paiements_mois = Paiement.objects.filter(
+                cotisation__annee=annee,
+                cotisation__mois=mois,
+                type_transaction='paiement'
+            )
+            
+            montant_cotisations = cotisations_mois.aggregate(
+                total=Sum('montant')
+            ).get('total') or Decimal('0.00')
+            
+            montant_paiements = paiements_mois.aggregate(
+                total=Sum('montant')
+            ).get('total') or Decimal('0.00')
+            
+            stats_par_mois.append({
+                'mois': mois,
+                'mois_nom': datetime.date(2000, mois, 1).strftime('%B'),
+                'montant_cotisations': montant_cotisations,
+                'montant_paiements': montant_paiements,
+                'difference': montant_paiements - montant_cotisations,
+            })
+        
+        # Statistiques par type de membre
+        stats_par_type = Cotisation.objects.filter(annee=annee).values(
+            'type_membre__libelle'
+        ).annotate(
+            nb_cotisations=Count('id'),
+            montant_total=Sum('montant'),
+            montant_paye=Sum(F('montant') - F('montant_restant')),
+        ).order_by('type_membre__libelle')
+        
+        # Statistiques par mode de paiement
+        stats_par_mode = Paiement.objects.filter(
+            cotisation__annee=annee,
+            type_transaction='paiement'
+        ).values(
+            'mode_paiement__libelle'
+        ).annotate(
+            nb_paiements=Count('id'),
+            montant_total=Sum('montant')
+        ).order_by('-montant_total')
+        
+        context.update({
+            'annee': annee,
+            'annees_disponibles': range(datetime.date.today().year - 5, datetime.date.today().year + 1),
+            'total_cotisations': total_cotisations,
+            'montant_total': montant_total,
+            'montant_paye': montant_paye,
+            'montant_remboursement': montant_remboursement,
+            'taux_recouvrement': taux_recouvrement,
+            'stats_par_mois': stats_par_mois,
+            'stats_par_type': stats_par_type,
+            'stats_par_mode': stats_par_mode,
+        })
+        
+        return context
+
+#
+# API pour les statistiques et rapports
+#
 @login_required
 def api_stats_cotisations(request):
     """
@@ -2482,6 +3596,7 @@ def api_envoyer_rappels_automatiques(request):
             })
             
         except Exception as e:
+            logger.error(f"Erreur lors de la création du rappel: {str(e)}")
             stats['erreurs'] += 1
             stats['details'].append({
                 'reference': cotisation.reference,
@@ -2495,6 +3610,9 @@ def api_envoyer_rappels_automatiques(request):
     }, encoder=ExtendedJSONEncoder)
 
 
+#
+# API pour les rappels
+#
 @login_required
 def rappel_contenu_ajax(request, rappel_id):
     """
@@ -2560,6 +3678,8 @@ def rappel_envoi_ajax(request, rappel_id):
             }
         }, encoder=ExtendedJSONEncoder)
     except Exception as e:
+        logger.error(f"Erreur lors de l'envoi du rappel: {str(e)}")
+        
         # En cas d'erreur, marquer comme échoué
         rappel.etat = 'echoue'
         rappel.resultat = str(e)
@@ -2594,84 +3714,12 @@ def rappel_supprimer_ajax(request, rappel_id):
             'message': _("Le rappel a été supprimé avec succès.")
         }, encoder=ExtendedJSONEncoder)
     except Exception as e:
+        logger.error(f"Erreur lors de la suppression du rappel: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': _("Erreur lors de la suppression du rappel: {0}").format(str(e))
         }, encoder=ExtendedJSONEncoder)
 
-# Filtrage dynamique des barèmes par type de membre
-@login_required
-def api_baremes_par_type(request):
-    """API pour récupérer les barèmes associés à un type de membre"""
-    type_membre_id = request.GET.get('type_membre')
-    
-    if not type_membre_id:
-        return JsonResponse({'success': False, 'message': "Type de membre non spécifié"})
-    
-    try:
-        # Récupérer le type de membre
-        type_membre = TypeMembre.objects.get(pk=type_membre_id)
-        
-        # Logs de débogage
-        print(f"Recherche des barèmes pour le type_membre_id={type_membre_id} ({type_membre.libelle})")
-        
-        # Requête de base - sans filtrage par date pour débloquer
-        baremes = BaremeCotisation.objects.filter(type_membre=type_membre)
-        
-        # Log du nombre de barèmes avant filtrage
-        print(f"Nombre de barèmes avant filtrage: {baremes.count()}")
-        
-        # Pour déboguer, lister tous les barèmes trouvés
-        for b in baremes:
-            print(f"Barème {b.id}: {b.montant}€ ({b.get_periodicite_display()}), "
-                  f"Validité: {b.date_debut_validite} à {b.date_fin_validite}")
-        
-        # Date actuelle pour déterminer si actif/futur
-        today = timezone.now().date()
-        
-        # Préparer les données pour l'API
-        baremes_list = []
-        for bareme in baremes:
-            est_actif = (bareme.date_debut_validite <= today and 
-                         (bareme.date_fin_validite is None or bareme.date_fin_validite >= today))
-            est_futur = bareme.date_debut_validite > today
-            
-            baremes_list.append({
-                'id': bareme.id,
-                'montant': float(bareme.montant),
-                'periodicite': bareme.periodicite,
-                'periodicite_display': bareme.get_periodicite_display(),
-                'est_actif': est_actif,
-                'est_futur': est_futur
-            })
-        
-        return JsonResponse({
-            'success': True,
-            'baremes': baremes_list,
-            'type_membre_id': type_membre.id,
-            'type_membre_libelle': type_membre.libelle
-        })
-        
-    except TypeMembre.DoesNotExist:
-        return JsonResponse({'success': False, 'message': f"Type de membre {type_membre_id} non trouvé"})
-    except Exception as e:
-        import traceback
-        print(f"Erreur dans api_baremes_par_type: {str(e)}")
-        print(traceback.format_exc())
-        return JsonResponse({'success': False, 'message': f"Erreur: {str(e)}"})
-
-def get_duree_jours_par_periodicite(periodicite):
-    """Helper function to get the standard duration in days for a periodicity"""
-    if periodicite == 'mensuelle':
-        return 30
-    elif periodicite == 'trimestrielle':
-        return 91
-    elif periodicite == 'semestrielle':
-        return 182
-    elif periodicite == 'annuelle':
-        return 365
-    else:
-        return 365  # Default to annual
 
 @login_required
 def api_types_membre_par_membre(request):
@@ -2686,28 +3734,18 @@ def api_types_membre_par_membre(request):
     try:
         membre = Membre.objects.get(pk=membre_id)
         
-        # Imports en haut de la fonction pour clarté
-        from django.db.models import Q
-        import datetime
+        today = timezone.now().date()
         
-        today = datetime.date.today()
-        
-        # CORRECTION: Utiliser la relation correcte selon votre modèle
-        # Nous utilisons la relation 'membres' qui existe dans le modèle TypeMembre
+        # Récupérer les types actifs via l'association MembreTypeMembre
         types_actifs = TypeMembre.objects.filter(
-            membres=membre
+            membretypemembre__membre=membre,
+            membretypemembre__date_debut__lte=today,
+            membretypemembre__date_fin__isnull=True
         ).distinct()
         
-        # Si vous avez des dates de début/fin dans la relation, ajoutez le filtrage ici
-        # Par exemple, si vous avez un champ through dans votre relation ManyToMany:
-        # types_actifs = types_actifs.filter(
-        #    membre_types__date_debut__lte=today,
-        #    Q(membre_types__date_fin__isnull=True) | Q(membre_types__date_fin__gte=today)
-        # )
-        
-        # Log pour débogage
-        print(f"Membre: {membre.id} - {membre.prenom} {membre.nom}")
-        print(f"Nombre de types actifs trouvés: {types_actifs.count()}")
+        # Si aucun type actif, essayer une autre méthode si disponible
+        if not types_actifs.exists() and hasattr(membre, 'get_types_actifs'):
+            types_actifs = membre.get_types_actifs()
         
         # Préparer les données
         types_membre = []
@@ -2737,13 +3775,30 @@ def api_types_membre_par_membre(request):
     except Membre.DoesNotExist:
         return JsonResponse({'success': False, 'message': _("Membre non trouvé")})
     except Exception as e:
-        # Capture toutes les autres erreurs possibles
-        import traceback
-        print(f"Erreur dans api_types_membre_par_membre: {str(e)}")
-        print(traceback.format_exc())
+        logger.error(f"Erreur dans api_types_membre_par_membre: {str(e)}")
+        logger.error(traceback.format_exc())
         return JsonResponse({'success': False, 'message': _("Une erreur est survenue lors de la récupération des types de membre")})
-    
-# Vue de base pour maintenir la compatibilité avec urls.py
+
+
+def get_duree_jours_par_periodicite(periodicite):
+    """
+    Fonction utilitaire pour obtenir la durée standard en jours pour une périodicité.
+    """
+    if periodicite == 'mensuelle':
+        return 30
+    elif periodicite == 'trimestrielle':
+        return 91
+    elif periodicite == 'semestrielle':
+        return 182
+    elif periodicite == 'annuelle':
+        return 365
+    else:
+        return 365  # Par défaut
+
+
+#
+# Aliases de vues pour l'intégration avec urls.py
+#
 dashboard = DashboardView.as_view()
 cotisation_list = CotisationListView.as_view()
 cotisation_detail = CotisationDetailView.as_view()
