@@ -3,6 +3,11 @@
 
 {% block title %}Tableau de bord - Gestion d'Association{% endblock %}
 
+{% block extra_css %}
+<!-- Inclure DataTables CSS pour les fonctionnalités de tri -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Tableau de bord</h1>
@@ -105,7 +110,7 @@
             <div class="card-body">
                 {% if activites_recentes %}
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
+                    <table id="activities-table" class="table table-striped table-hover">
                         <thead>
                             <tr>
                                 <th>Date</th>
@@ -117,7 +122,7 @@
                         <tbody>
                             {% for activite in activites_recentes %}
                             <tr>
-                                <td>
+                                <td data-sort="{{ activite.date_timestamp|default:0 }}">
                                     {% if activite.date.time|default:None %}
                                         {{ activite.date|date:"d/m/Y H:i" }}
                                     {% else %}
@@ -186,13 +191,35 @@
     </div>
 </div>
 
+<!-- Ajouter de l'espace en bas de la page avant le footer -->
+<div class="mb-5 pb-4"></div>
+
 {% endblock %}
 
 {% block extra_js %}
 <!-- Inclusion de Chart.js pour les graphiques -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- Inclusion de DataTables pour le tri des tableaux -->
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Initialisation de DataTables pour le tableau d'activités
+        $("#activities-table").DataTable({
+            "order": [[0, "desc"]], // Tri par défaut sur la date (décroissant)
+            "language": {
+                "url": "https://cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json"
+            },
+            "pageLength": 5, // Nombre de lignes par page
+            "lengthMenu": [[5, 10, 25, -1], [5, 10, 25, "Tous"]],
+            "columnDefs": [
+                { "orderable": true, "targets": [0, 1, 2] }, // Colonnes triables
+                { "orderable": false, "targets": [3] } // Colonne Actions non triable
+            ]
+        });
+
         // Graphique d'adhésions par mois
         const adhesionsChartEl = document.getElementById('adhesions-chart');
         const adhesionsData = {{ adhesions_par_mois_json|safe }};
