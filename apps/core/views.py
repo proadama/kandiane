@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.db.models import Count, Sum, Q
 from decimal import Decimal
 import datetime
+import json
 
 class HomeView(TemplateView):
     """
@@ -34,6 +35,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             'evenements_venir': 0,
             'inscriptions_attente': 0,
             'activites_recentes': [],
+            # Données pour les graphiques (vides par défaut)
+            'adhesions_par_mois_json': json.dumps([]),
+            'cotisations_par_statut_json': json.dumps([]),
         })
         
         # Date actuelle pour éviter de la récupérer plusieurs fois
@@ -53,6 +57,23 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 'membres_total': membres_total,
                 'membres_nouveaux': membres_nouveaux,
             })
+            
+            # Préparer les données pour le graphique des adhésions par mois
+            adhesions_par_mois = []
+            month_names = [
+                'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+            ]
+            
+            for i in range(1, 13):
+                # Compter les membres ayant adhéré ce mois (quel que soit l'année)
+                count = Membre.objects.filter(date_adhesion__month=i).count()
+                adhesions_par_mois.append({
+                    'label': month_names[i-1],
+                    'value': count
+                })
+            
+            context['adhesions_par_mois_json'] = json.dumps(adhesions_par_mois)
             
             # Récupérer également quelques membres récents pour les activités
             membres_recents = Membre.objects.order_by('-date_adhesion')[:5]
@@ -123,12 +144,34 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 logger.error(f"Erreur lors du calcul des membres avec cotisations à jour: {str(e)}")
                 membres_cotisations_jour = 0
             
+            # Préparer les données pour le graphique des cotisations par statut
+            cotisations_par_statut = []
+            status_counts = Cotisation.objects.values('statut_paiement').annotate(
+                count=Count('id')
+            ).order_by('statut_paiement')
+            
+            # Dictionnaire de mapping pour les noms conviviaux des statuts
+            status_labels = {
+                'non_payee': 'Non payée',
+                'partiellement_payee': 'Partiellement payée',
+                'payee': 'Payée'
+            }
+            
+            for status in status_counts:
+                status_code = status['statut_paiement']
+                status_name = status_labels.get(status_code, status_code)
+                cotisations_par_statut.append({
+                    'label': status_name,
+                    'value': status['count']
+                })
+            
             # Mettre à jour le contexte avec les données des cotisations
             context.update({
                 'cotisations_total': montant_total,
                 'cotisations_mois': cotisations_mois,
                 'cotisations_attente': cotisations_attente,
                 'membres_cotisations_jour': membres_cotisations_jour,
+                'cotisations_par_statut_json': json.dumps(cotisations_par_statut),
             })
             
             # Récupérer également quelques paiements récents pour les activités

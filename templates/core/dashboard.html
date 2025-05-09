@@ -154,7 +154,7 @@
     </div>
 </div>
 
-<!-- Graphiques (optionnel - à activer si vous utilisez une bibliothèque de graphiques) -->
+<!-- Graphiques -->
 <div class="row mt-4">
     <div class="col-md-6">
         <div class="card">
@@ -162,8 +162,11 @@
                 <h5><i class="fas fa-chart-bar me-2"></i> Adhésions par mois</h5>
             </div>
             <div class="card-body">
-                <!-- Conteneur pour le graphique d'adhésions -->
-                <div id="adhesions-chart" style="height: 300px;"></div>
+                <!-- Utiliser canvas au lieu de div pour Chart.js -->
+                <canvas id="adhesions-chart" style="height: 300px; width: 100%;"></canvas>
+                <div id="adhesions-chart-fallback" class="text-center text-muted py-5" style="display: none;">
+                    Aucune donnée disponible
+                </div>
             </div>
         </div>
     </div>
@@ -173,8 +176,11 @@
                 <h5><i class="fas fa-chart-pie me-2"></i> Cotisations par statut</h5>
             </div>
             <div class="card-body">
-                <!-- Conteneur pour le graphique de cotisations -->
-                <div id="cotisations-chart" style="height: 300px;"></div>
+                <!-- Utiliser canvas au lieu de div pour Chart.js -->
+                <canvas id="cotisations-chart" style="height: 300px; width: 100%;"></canvas>
+                <div id="cotisations-chart-fallback" class="text-center text-muted py-5" style="display: none;">
+                    Aucune donnée disponible
+                </div>
             </div>
         </div>
     </div>
@@ -183,13 +189,91 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- Si vous souhaitez ajouter des graphiques, décommenter le code ci-dessous et ajouter la bibliothèque appropriée (comme Chart.js) -->
-<!--
+<!-- Inclusion de Chart.js pour les graphiques -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // Exemple de code pour créer des graphiques avec Chart.js
     document.addEventListener('DOMContentLoaded', function() {
-        // Code pour les graphiques
+        // Graphique d'adhésions par mois
+        const adhesionsChartEl = document.getElementById('adhesions-chart');
+        const adhesionsData = {{ adhesions_par_mois_json|safe }};
+        
+        if (adhesionsData && adhesionsData.length > 0) {
+            const adhesionsChartCtx = adhesionsChartEl.getContext('2d');
+            new Chart(adhesionsChartCtx, {
+                type: 'bar',
+                data: {
+                    labels: adhesionsData.map(item => item.label),
+                    datasets: [{
+                        label: 'Nombre de membres',
+                        data: adhesionsData.map(item => item.value),
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        } else {
+            // Aucune donnée à afficher
+            adhesionsChartEl.style.display = 'none';
+            document.getElementById('adhesions-chart-fallback').style.display = 'block';
+        }
+        
+        // Graphique des cotisations par statut
+        const cotisationsChartEl = document.getElementById('cotisations-chart');
+        const cotisationsData = {{ cotisations_par_statut_json|safe }};
+        
+        if (cotisationsData && cotisationsData.length > 0) {
+            const cotisationsChartCtx = cotisationsChartEl.getContext('2d');
+            new Chart(cotisationsChartCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: cotisationsData.map(item => item.label),
+                    datasets: [{
+                        data: cotisationsData.map(item => item.value),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.7)',
+                            'rgba(54, 162, 235, 0.7)',
+                            'rgba(255, 206, 86, 0.7)',
+                            'rgba(75, 192, 192, 0.7)',
+                            'rgba(153, 102, 255, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        }
+                    }
+                }
+            });
+        } else {
+            // Aucune donnée à afficher
+            cotisationsChartEl.style.display = 'none';
+            document.getElementById('cotisations-chart-fallback').style.display = 'block';
+        }
     });
 </script>
--->
 {% endblock %}
