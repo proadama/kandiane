@@ -8,6 +8,7 @@ from decimal import Decimal
 import datetime
 import json
 import logging
+from django.urls import reverse
 
 logger = logging.getLogger(__name__)
 
@@ -227,12 +228,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             # Créer un timestamp pour le tri
                             date_timestamp = date_paiement.timestamp() if isinstance(date_paiement, datetime.datetime) else 0
                             
+                            # Utiliser reverse() pour générer l'URL correcte
+                            paiement_url = reverse('cotisations:paiement_detail', kwargs={'pk': paiement.id})
+                            
                             context['activites_recentes'].append({
                                 'type': 'paiement',
                                 'date': date_paiement,
                                 'date_timestamp': date_timestamp,  # Pour le tri
                                 'description': f"Paiement de {paiement.montant}€ par {membre.prenom} {membre.nom}",
-                                'lien': f"/cotisations/paiement/{paiement.id}/"
+                                'lien': paiement_url
                             })
                 except Exception as e:
                     # Ignorer les paiements avec des données incorrectes
