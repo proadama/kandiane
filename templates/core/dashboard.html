@@ -8,61 +8,88 @@
     <h1 class="h2">Tableau de bord</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <div class="btn-group me-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary">Exporter</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary">Imprimer</button>
+            <a href="#" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-file-export me-1"></i> Exporter
+            </a>
+            <a href="#" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-print me-1"></i> Imprimer
+            </a>
         </div>
         <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle">
-            <i class="fas fa-calendar"></i> Cette semaine
+            <i class="fas fa-calendar me-1"></i> Cette semaine
         </button>
     </div>
 </div>
 
 <div class="row">
-    <!-- Statistiques générales -->
+    <!-- Statistiques des membres -->
     <div class="col-md-4">
         <div class="card mb-4 box-shadow">
             <div class="card-header bg-primary text-white">
-                <h4 class="my-0 font-weight-normal">Membres</h4>
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="my-0 font-weight-normal">Membres</h4>
+                    <i class="fas fa-users fa-2x"></i>
+                </div>
             </div>
             <div class="card-body">
-                <h1 class="card-title">0</h1>
+                <h1 class="card-title">{{ membres_total }}</h1>
                 <ul class="list-unstyled mt-3 mb-4">
-                    <li>0 nouveaux ce mois-ci</li>
-                    <li>0 avec cotisations à jour</li>
+                    <li><i class="fas fa-user-plus me-2"></i> {{ membres_nouveaux }} nouveaux ce mois-ci</li>
+                    <li><i class="fas fa-check-circle me-2"></i> {{ membres_cotisations_jour }} avec cotisations à jour</li>
                 </ul>
-                <button type="button" class="btn btn-lg btn-block btn-outline-primary">Voir les membres</button>
+                <a href="{% url 'membres:membre_liste' %}" class="btn btn-lg btn-block btn-outline-primary w-100">
+                    Voir les membres
+                </a>
             </div>
         </div>
     </div>
     
+    <!-- Statistiques des cotisations -->
     <div class="col-md-4">
         <div class="card mb-4 box-shadow">
             <div class="card-header bg-success text-white">
-                <h4 class="my-0 font-weight-normal">Cotisations</h4>
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="my-0 font-weight-normal">Cotisations</h4>
+                    <i class="fas fa-euro-sign fa-2x"></i>
+                </div>
             </div>
             <div class="card-body">
-                <h1 class="card-title">0€</h1>
+                <h1 class="card-title">{{ cotisations_total|floatformat:2 }}€</h1>
                 <ul class="list-unstyled mt-3 mb-4">
-                    <li>0€ perçus ce mois-ci</li>
-                    <li>0 cotisations en attente</li>
+                    <li><i class="fas fa-calendar-check me-2"></i> {{ cotisations_mois|floatformat:2 }}€ perçus ce mois-ci</li>
+                    <li><i class="fas fa-hourglass-half me-2"></i> {{ cotisations_attente }} cotisations en attente</li>
                 </ul>
-                <button type="button" class="btn btn-lg btn-block btn-outline-success">Voir les cotisations</button>
+                <a href="{% url 'cotisations:cotisation_liste' %}" class="btn btn-lg btn-block btn-outline-success w-100">
+                    Voir les cotisations
+                </a>
             </div>
         </div>
     </div>
     
+    <!-- Statistiques des événements -->
     <div class="col-md-4">
         <div class="card mb-4 box-shadow">
             <div class="card-header bg-info text-white">
-                <h4 class="my-0 font-weight-normal">Événements</h4>
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="my-0 font-weight-normal">Événements</h4>
+                    <i class="fas fa-calendar-alt fa-2x"></i>
+                </div>
             </div>
             <div class="card-body">
-                <h1 class="card-title">0</h1>
+                <h1 class="card-title">{{ evenements_total }}</h1>
                 <ul class="list-unstyled mt-3 mb-4">
-                    <li>0 événements à venir</li>
-                    <li>0 inscriptions en attente</li>
+                    <li><i class="fas fa-calendar-day me-2"></i> {{ evenements_venir }} événements à venir</li>
+                    <li><i class="fas fa-user-clock me-2"></i> {{ inscriptions_attente }} inscriptions en attente</li>
                 </ul>
-                <button type="button" class="btn btn-lg btn-block btn-outline-info">Voir les événements</button>
+                {% if evenements_total > 0 %}
+                <a href="#" class="btn btn-lg btn-block btn-outline-info w-100">
+                    Voir les événements
+                </a>
+                {% else %}
+                <button type="button" class="btn btn-lg btn-block btn-outline-info w-100" disabled>
+                    Aucun événement
+                </button>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -73,12 +100,96 @@
     <div class="col-md-12">
         <div class="card">
             <div class="card-header">
-                <h5>Activités récentes</h5>
+                <h5><i class="fas fa-history me-2"></i> Activités récentes</h5>
             </div>
             <div class="card-body">
+                {% if activites_recentes %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for activite in activites_recentes %}
+                            <tr>
+                                <td>
+                                    {% if activite.date.time|default:None %}
+                                        {{ activite.date|date:"d/m/Y H:i" }}
+                                    {% else %}
+                                        {{ activite.date|date:"d/m/Y" }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if activite.type == 'membre' %}
+                                    <span class="badge bg-primary">Membre</span>
+                                    {% elif activite.type == 'paiement' %}
+                                    <span class="badge bg-success">Paiement</span>
+                                    {% elif activite.type == 'evenement' %}
+                                    <span class="badge bg-info">Événement</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Autre</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ activite.description }}</td>
+                                <td>
+                                    <a href="{{ activite.lien }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i> Voir
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
                 <p class="text-center text-muted">Aucune activité récente à afficher.</p>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
+
+<!-- Graphiques (optionnel - à activer si vous utilisez une bibliothèque de graphiques) -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-bar me-2"></i> Adhésions par mois</h5>
+            </div>
+            <div class="card-body">
+                <!-- Conteneur pour le graphique d'adhésions -->
+                <div id="adhesions-chart" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-pie me-2"></i> Cotisations par statut</h5>
+            </div>
+            <div class="card-body">
+                <!-- Conteneur pour le graphique de cotisations -->
+                <div id="cotisations-chart" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<!-- Si vous souhaitez ajouter des graphiques, décommenter le code ci-dessous et ajouter la bibliothèque appropriée (comme Chart.js) -->
+<!--
+<script>
+    // Exemple de code pour créer des graphiques avec Chart.js
+    document.addEventListener('DOMContentLoaded', function() {
+        // Code pour les graphiques
+    });
+</script>
+-->
 {% endblock %}
