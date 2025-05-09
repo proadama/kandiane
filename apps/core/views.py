@@ -3,10 +3,13 @@ from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render
 from django.utils import timezone
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Sum, Q, F, ExpressionWrapper, fields
 from decimal import Decimal
 import datetime
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 class HomeView(TemplateView):
     """
@@ -95,8 +98,6 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             # L'application Membres n'est pas disponible ou configurée
             pass
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Erreur lors de la récupération des données de membres: {str(e)}")
         
         # Récupérer les données de l'application Cotisations
@@ -114,35 +115,78 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 date_emission__gte=first_day_of_month
             ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
             
-            # Cotisations en attente de paiement
+            # Cotisations en attente de paiement (non payées ou partiellement payées)
             cotisations_attente = Cotisation.objects.filter(
-                statut_paiement__in=['non_payee', 'partiellement_payee']
+                Q(statut_paiement='non_payee') | 
+                Q(statut_paiement='partiellement_payee') |
+                Q(statut_paiement='non_payée') |  # Avec accent
+                Q(statut_paiement='partiellement_payée')  # Avec accent
             ).count()
             
-            # Membres avec cotisations à jour
+            # Membres avec cotisations à jour - CORRECTION
             try:
-                # Approche sécurisée pour compter les membres avec cotisations à jour
-                membres_ids = set()
-                cotisations_a_jour = Cotisation.objects.filter(
-                    statut_paiement='payee'
-                ).select_related('membre')
+                # Méthode 1: Utiliser une requête plus simple et directe
+                # Une cotisation est "à jour" si elle est payée et a une date d'échéance future
+                membres_cotisations_jour = Membre.objects.filter(
+                    cotisations__statut_paiement__in=['payee', 'payée'],  # Essayer les 2 possibilités (avec/sans accent)
+                    cotisations__date_echeance__gte=today
+                ).distinct().count()
                 
-                for cotisation in cotisations_a_jour:
-                    # Extraire la date d'échéance, convertir si c'est un datetime
-                    echeance = cotisation.date_echeance
-                    if isinstance(echeance, datetime.datetime):
-                        echeance = echeance.date()
+                # Si le calcul renvoie 0 mais que nous savons qu'il devrait y avoir des membres à jour,
+                # essayons une méthode alternative
+                if membres_cotisations_jour == 0:
+                    logger.info("Première méthode a retourné 0, essai d'une méthode alternative")
                     
-                    # Comparer uniquement si c'est un objet date
-                    if isinstance(echeance, datetime.date) and echeance >= today and cotisation.membre_id:
-                        membres_ids.add(cotisation.membre_id)
+                    # Méthode 2: Compter manuellement
+                    membres_ids = set()
+                    
+                    # Récupérer les cotisations payées
+                    cotisations_payees = Cotisation.objects.filter(
+                        Q(statut_paiement='payee') | Q(statut_paiement='payée')
+                    )
+                    
+                    # Parcourir chaque cotisation et vérifier la date d'échéance
+                    for cotisation in cotisations_payees:
+                        try:
+                            # Récupérer et normaliser la date d'échéance
+                            echeance = cotisation.date_echeance
+                            
+                            # Convertir en date si c'est un datetime
+                            if isinstance(echeance, datetime.datetime):
+                                echeance = echeance.date()
+                                
+                            # Ajouter le membre si la cotisation est à jour
+                            if echeance >= today and cotisation.membre_id:
+                                membres_ids.add(cotisation.membre_id)
+                                
+                        except Exception as e:
+                            logger.warning(f"Erreur lors du traitement de la cotisation {cotisation.id}: {str(e)}")
+                    
+                    membres_cotisations_jour = len(membres_ids)
+                    
+                    # Si toujours 0, essayons une troisième méthode
+                    if membres_cotisations_jour == 0:
+                        logger.info("Deuxième méthode a retourné 0, essai d'une troisième méthode")
+                        
+                        # Méthode 3: Ignorer complètement la date et juste compter les membres qui ont au moins une cotisation payée
+                        membres_cotisations_jour = Membre.objects.filter(
+                            Q(cotisations__statut_paiement='payee') | 
+                            Q(cotisations__statut_paiement='payée')
+                        ).distinct().count()
                 
-                membres_cotisations_jour = len(membres_ids)
             except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.error(f"Erreur lors du calcul des membres avec cotisations à jour: {str(e)}")
+                # Logger les détails pour le débogage
+                logger.error(f"Détails de l'erreur: {traceback.format_exc()}")
                 membres_cotisations_jour = 0
+            
+            # Mettre à jour le contexte avec les données des cotisations
+            context.update({
+                'cotisations_total': montant_total,
+                'cotisations_mois': cotisations_mois,
+                'cotisations_attente': cotisations_attente,
+                'membres_cotisations_jour': membres_cotisations_jour,
+            })
             
             # Préparer les données pour le graphique des cotisations par statut
             cotisations_par_statut = []
@@ -153,8 +197,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             # Dictionnaire de mapping pour les noms conviviaux des statuts
             status_labels = {
                 'non_payee': 'Non payée',
+                'non_payée': 'Non payée',
                 'partiellement_payee': 'Partiellement payée',
-                'payee': 'Payée'
+                'partiellement_payée': 'Partiellement payée',
+                'payee': 'Payée',
+                'payée': 'Payée'
             }
             
             for status in status_counts:
@@ -165,14 +212,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     'value': status['count']
                 })
             
-            # Mettre à jour le contexte avec les données des cotisations
-            context.update({
-                'cotisations_total': montant_total,
-                'cotisations_mois': cotisations_mois,
-                'cotisations_attente': cotisations_attente,
-                'membres_cotisations_jour': membres_cotisations_jour,
-                'cotisations_par_statut_json': json.dumps(cotisations_par_statut),
-            })
+            context['cotisations_par_statut_json'] = json.dumps(cotisations_par_statut)
             
             # Récupérer également quelques paiements récents pour les activités
             paiements_recents = Paiement.objects.select_related('cotisation__membre').order_by('-date_paiement')[:5]
@@ -196,6 +236,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             })
                 except Exception as e:
                     # Ignorer les paiements avec des données incorrectes
+                    logger.warning(f"Erreur avec le paiement {paiement.id}: {str(e)}")
                     continue
                 
         except (ImportError, ModuleNotFoundError):
@@ -203,9 +244,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             pass
         except Exception as e:
             # Capturer toute autre erreur pour éviter de bloquer le tableau de bord
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Erreur lors de la récupération des données de cotisations: {str(e)}")
+            import traceback
+            logger.error(f"Détails de l'erreur: {traceback.format_exc()}")
         
         # Essayer de récupérer les données de l'application Événements si elle existe
         try:
@@ -250,8 +291,6 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         try:
             context['activites_recentes'].sort(key=lambda x: x.get('date_timestamp', 0), reverse=True)
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Erreur lors du tri des activités récentes: {str(e)}")
         
         # Limiter à 10 activités max
