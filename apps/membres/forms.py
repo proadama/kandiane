@@ -136,8 +136,17 @@ class MembreForm(forms.ModelForm):
     def clean_date_naissance(self):
         """Valider la date de naissance"""
         date_naissance = self.cleaned_data.get('date_naissance')
-        if date_naissance and date_naissance > timezone.now().date():
-            raise ValidationError(_("La date de naissance ne peut pas être dans le futur."))
+        if date_naissance:
+            # Vérifier que la date n'est pas dans le futur
+            if date_naissance > timezone.now().date():
+                raise ValidationError(_("La date de naissance ne peut pas être dans le futur."))
+                
+            # Vérifier que la date n'est pas trop ancienne
+            # Limite à 120 ans dans le passé, ce qui est généralement l'âge maximum atteignable
+            limite_minimale = timezone.now().date().replace(year=timezone.now().date().year - 120)
+            if date_naissance < limite_minimale:
+                raise ValidationError(_("La date de naissance ne peut pas être antérieure à {0}.").format(limite_minimale.year))
+                
         return date_naissance
     
     def clean_date_adhesion(self):
