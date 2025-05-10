@@ -71,10 +71,10 @@ class DashboardView(TemplateView):
         month=ExtractMonth('date_adhesion', output_field=IntegerField())
         ).values('month').annotate(count=Count('id')).order_by('month')
         
-        # Membres par statut
+        # Membres par statut - Inclure l'ID du statut dans les valeurs retournées
         membres_par_statut = Membre.objects.filter(
             statut__isnull=False
-        ).values('statut__nom').annotate(
+        ).values('statut__nom', 'statut_id').annotate(
             count=Count('id')
         ).order_by('-count')
         
@@ -84,7 +84,7 @@ class DashboardView(TemplateView):
         
         # Construire les données pour les graphiques
         chart_types = [
-            {'name': t.libelle, 'value': t.count} for t in types_membres
+            {'id': t.id, 'name': t.libelle, 'value': t.count} for t in types_membres
         ]
         
         chart_monthly = []
@@ -93,8 +93,9 @@ class DashboardView(TemplateView):
             count = next((item['count'] for item in membres_par_mois if item['month'] == i), 0)
             chart_monthly.append({'month': month_name, 'count': count})
         
+        # Corriger l'accès aux données du statut (utiliser la syntaxe dictionnaire)
         chart_statuts = [
-            {'name': s['statut__nom'] or 'Sans statut', 'value': s['count']} 
+            {'id': s['statut_id'], 'name': s['statut__nom'] or 'Sans statut', 'value': s['count']} 
             for s in membres_par_statut
         ]
         
@@ -115,7 +116,6 @@ class DashboardView(TemplateView):
         })
         
         return context
-
 
 class MembreListView(ListView):
     """

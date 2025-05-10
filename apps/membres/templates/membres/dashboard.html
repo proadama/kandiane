@@ -9,6 +9,10 @@
     .chart-container {
         height: 300px;
         position: relative;
+        cursor: pointer; /* Indiquer que le graphique est cliquable */
+    }
+    .chart-container:hover {
+        opacity: 0.9; /* Effet de survol */
     }
     
     /* Style pour les en-têtes de colonnes triables */
@@ -97,11 +101,12 @@
     <div class="row mb-4">
         <div class="col-md-6">
             <div class="card h-100">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">{% trans "Répartition par types de membres" %}</h5>
+                    <small class="text-muted">{% trans "Cliquez pour voir les détails" %}</small>
                 </div>
                 <div class="card-body">
-                    <div class="chart-container">
+                    <div class="chart-container" id="typesChartContainer">
                         <canvas id="chartTypes"></canvas>
                     </div>
                 </div>
@@ -110,11 +115,12 @@
         
         <div class="col-md-6">
             <div class="card h-100">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">{% trans "Adhésions par mois" %}</h5>
+                    <small class="text-muted">{% trans "Cliquez pour voir les détails" %}</small>
                 </div>
                 <div class="card-body">
-                    <div class="chart-container">
+                    <div class="chart-container" id="monthlyChartContainer">
                         <canvas id="chartMonthly"></canvas>
                     </div>
                 </div>
@@ -125,11 +131,12 @@
     <div class="row mb-4">
         <div class="col-md-6">
             <div class="card h-100">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">{% trans "Répartition par statut" %}</h5>
+                    <small class="text-muted">{% trans "Cliquez pour voir les détails" %}</small>
                 </div>
                 <div class="card-body">
-                    <div class="chart-container">
+                    <div class="chart-container" id="statutsChartContainer">
                         <canvas id="chartStatuts"></canvas>
                     </div>
                 </div>
@@ -138,11 +145,12 @@
         
         <div class="col-md-6">
             <div class="card h-100">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">{% trans "Membres avec compte utilisateur" %}</h5>
+                    <small class="text-muted">{% trans "Cliquez pour voir les détails" %}</small>
                 </div>
                 <div class="card-body">
-                    <div class="chart-container">
+                    <div class="chart-container" id="comptesChartContainer">
                         <canvas id="chartComptes"></canvas>
                     </div>
                 </div>
@@ -220,6 +228,14 @@
         </div>
     </div>
 </div>
+
+<!-- Formulaire caché pour soumettre les filtres -->
+<form id="filterForm" action="{% url 'membres:membre_liste' %}" method="GET" style="display:none;">
+    <input type="hidden" id="filter_type_membre" name="type_membre">
+    <input type="hidden" id="filter_statut" name="statut">
+    <input type="hidden" id="filter_mois_adhesion" name="date_adhesion_min">
+    <input type="hidden" id="filter_avec_compte" name="avec_compte">
+</form>
 {% endblock %}
 
 {% block extra_js %}
@@ -228,6 +244,75 @@
 <script>
     // Définir les traductions utilisées dans les graphiques
     var nombreAdhesionsLabel = "{% trans 'Nombre adhésions' %}";
+    
+    // Traduction des mois en français
+    const moisFrancais = {
+        'January': 'Janvier',
+        'February': 'Février',
+        'March': 'Mars',
+        'April': 'Avril',
+        'May': 'Mai',
+        'June': 'Juin',
+        'July': 'Juillet',
+        'August': 'Août',
+        'September': 'Septembre',
+        'October': 'Octobre',
+        'November': 'Novembre',
+        'December': 'Décembre'
+    };
+    
+    // Table de correspondance mois français -> numéro de mois
+    const moisNumero = {
+        'Janvier': 1,
+        'Février': 2,
+        'Mars': 3,
+        'Avril': 4,
+        'Mai': 5,
+        'Juin': 6,
+        'Juillet': 7,
+        'Août': 8,
+        'Septembre': 9,
+        'Octobre': 10,
+        'Novembre': 11,
+        'Décembre': 12
+    };
+    
+    // Fonction pour traduire les mois en français
+    function traduireMois(mois) {
+        return moisFrancais[mois] || mois;
+    }
+    
+    // Fonction pour filtrer la liste des membres
+    function filtrerMembres(params) {
+        // Récupérer le formulaire de filtre
+        const form = document.getElementById('filterForm');
+        
+        // Réinitialiser tous les champs
+        form.reset();
+        
+        // Remplir les champs avec les paramètres
+        if (params.typeMembre !== undefined) {
+            document.getElementById('filter_type_membre').value = params.typeMembre;
+        }
+        
+        if (params.statut !== undefined) {
+            document.getElementById('filter_statut').value = params.statut;
+        }
+        
+        if (params.moisAdhesion !== undefined) {
+            // Construire une date pour le début du mois (format YYYY-MM-DD)
+            const currentYear = new Date().getFullYear();
+            const month = params.moisAdhesion;
+            document.getElementById('filter_mois_adhesion').value = `${currentYear}-${month.toString().padStart(2, '0')}-01`;
+        }
+        
+        if (params.avecCompte !== undefined) {
+            document.getElementById('filter_avec_compte').value = params.avecCompte;
+        }
+        
+        // Soumettre le formulaire
+        form.submit();
+    }
     
     // Fonction pour vérifier si les données sont vides
     function hasData(data) {
@@ -249,7 +334,8 @@
                 options: {
                     ...options,
                     maintainAspectRatio: false,  // Important pour une taille uniforme
-                    responsive: true
+                    responsive: true,
+                    onClick: options.onClick || null
                 }
             });
         } catch (error) {
@@ -349,9 +435,15 @@
                 comptes: comptesData
             });
             
+            // Traduire les mois en français
+            monthlyData.forEach(item => {
+                item.month = traduireMois(item.month);
+            });
+            
             // Graphique des types de membres
+            let typesChart = null;
             if (hasData(typesData)) {
-                createChartIfData('chartTypes', 'pie', {
+                typesChart = createChartIfData('chartTypes', 'pie', {
                     labels: typesData.map(d => d.name),
                     datasets: [{
                         data: typesData.map(d => d.value),
@@ -362,7 +454,38 @@
                     plugins: {
                         legend: {
                             position: 'right',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(tooltipItem) {
+                                    const label = tooltipItem.label || '';
+                                    const value = tooltipItem.formattedValue;
+                                    return `${label}: ${value} membres`;
+                                }
+                            }
                         }
+                    },
+                    onClick: function(event, elements) {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const typeId = typesData[index].id;
+                            if (typeId) {
+                                // Filtrer par ID du type de membre
+                                filtrerMembres({ typeMembre: typeId });
+                            } else {
+                                // Si l'ID n'est pas disponible, essayer avec le nom
+                                console.log("ID du type non disponible, filtrage par nom peut ne pas fonctionner correctement");
+                                filtrerMembres({ typeMembre: typesData[index].name });
+                            }
+                        }
+                    }
+                });
+                
+                // Ajouter le gestionnaire d'événements de clic sur le conteneur
+                document.getElementById('typesChartContainer').addEventListener('click', function(event) {
+                    // Si on clique sur le conteneur mais pas sur un élément précis du graphique
+                    if (event.target === this) {
+                        window.location.href = "{% url 'membres:type_membre_liste' %}";
                     }
                 });
             } else {
@@ -370,8 +493,9 @@
             }
             
             // Graphique des adhésions par mois
+            let monthlyChart = null;
             if (hasData(monthlyData)) {
-                createChartIfData('chartMonthly', 'bar', {
+                monthlyChart = createChartIfData('chartMonthly', 'bar', {
                     labels: monthlyData.map(d => d.month),
                     datasets: [{
                         label: nombreAdhesionsLabel,
@@ -385,6 +509,24 @@
                         y: {
                             beginAtZero: true
                         }
+                    },
+                    onClick: function(event, elements) {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const month = monthlyData[index].month;
+                            const monthNumber = moisNumero[month];
+                            
+                            // Filtrer par mois d'adhésion
+                            filtrerMembres({ moisAdhesion: monthNumber });
+                        }
+                    }
+                });
+                
+                // Ajouter le gestionnaire d'événements de clic sur le conteneur
+                document.getElementById('monthlyChartContainer').addEventListener('click', function(event) {
+                    // Si on clique sur le conteneur mais pas sur un élément précis du graphique
+                    if (event.target === this) {
+                        window.location.href = "{% url 'membres:membre_liste' %}";
                     }
                 });
             } else {
@@ -392,8 +534,9 @@
             }
             
             // Graphique des statuts
+            let statutsChart = null;
             if (hasData(statutsData)) {
-                createChartIfData('chartStatuts', 'doughnut', {
+                statutsChart = createChartIfData('chartStatuts', 'doughnut', {
                     labels: statutsData.map(d => d.name),
                     datasets: [{
                         data: statutsData.map(d => d.value),
@@ -404,7 +547,38 @@
                     plugins: {
                         legend: {
                             position: 'right',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(tooltipItem) {
+                                    const label = tooltipItem.label || '';
+                                    const value = tooltipItem.formattedValue;
+                                    return `${label}: ${value} membres`;
+                                }
+                            }
                         }
+                    },
+                    onClick: function(event, elements) {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const statutId = statutsData[index].id;
+                            if (statutId) {
+                                // Filtrer par ID du statut
+                                filtrerMembres({ statut: statutId });
+                            } else {
+                                // Si l'ID n'est pas disponible, essayer avec le nom
+                                console.log("ID du statut non disponible, filtrage par nom peut ne pas fonctionner correctement");
+                                filtrerMembres({ statut: statutsData[index].name });
+                            }
+                        }
+                    }
+                });
+                
+                // Ajouter le gestionnaire d'événements de clic sur le conteneur
+                document.getElementById('statutsChartContainer').addEventListener('click', function(event) {
+                    // Si on clique sur le conteneur mais pas sur un élément précis du graphique
+                    if (event.target === this) {
+                        window.location.href = "{% url 'membres:membre_liste' %}";
                     }
                 });
             } else {
@@ -412,8 +586,9 @@
             }
             
             // Graphique des comptes utilisateurs
+            let comptesChart = null;
             if (hasData(comptesData)) {
-                createChartIfData('chartComptes', 'pie', {
+                comptesChart = createChartIfData('chartComptes', 'pie', {
                     labels: comptesData.map(d => d.name),
                     datasets: [{
                         data: comptesData.map(d => d.value),
@@ -427,7 +602,33 @@
                     plugins: {
                         legend: {
                             position: 'right',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(tooltipItem) {
+                                    const label = tooltipItem.label || '';
+                                    const value = tooltipItem.formattedValue;
+                                    return `${label}: ${value} membres`;
+                                }
+                            }
                         }
+                    },
+                    onClick: function(event, elements) {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const isWithAccount = comptesData[index].name === "{% trans 'Avec compte' %}";
+                            
+                            // Filtrer par présence ou absence de compte utilisateur
+                            filtrerMembres({ avecCompte: isWithAccount ? 'avec' : 'sans' });
+                        }
+                    }
+                });
+                
+                // Ajouter le gestionnaire d'événements de clic sur le conteneur
+                document.getElementById('comptesChartContainer').addEventListener('click', function(event) {
+                    // Si on clique sur le conteneur mais pas sur un élément précis du graphique
+                    if (event.target === this) {
+                        window.location.href = "{% url 'membres:membre_liste' %}";
                     }
                 });
             } else {
