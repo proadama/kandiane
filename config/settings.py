@@ -122,3 +122,26 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Email Configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'cotisation.sada@gmail.com'
+EMAIL_HOST_PASSWORD = 'lqysc lizp ldsp sxry '
+DEFAULT_FROM_EMAIL = 'ne_pas_repondre@gmail.com'
+
+# Configuration des mots de passe temporaires
+PASSWORD_RESET_TIMEOUT = 7200  # 2 heures en secondes
+
+# Pour le développement, vous pouvez utiliser le backend de console qui affiche
+# les emails dans la console au lieu de les envoyer réellement
+#if DEBUG:
+#    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Middleware pour le mot de passe temporaire
+MIDDLEWARE += [
+    'apps.accounts.middleware.TemporaryPasswordMiddleware',
+]

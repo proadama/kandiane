@@ -31,6 +31,8 @@ from .middleware import RolePermissionMiddleware
 import logging
 from django.urls import reverse
 from apps.core.services import EmailService
+from django.views.generic import FormView
+
 
 logger = logging.getLogger(__name__)
 
@@ -415,3 +417,93 @@ class EmailVerificationRequiredView(TemplateView):
                 messages.success(request, _("Si cette adresse est associée à un compte, un email de vérification sera envoyé."))
         
         return self.render_to_response(self.get_context_data())
+
+class ChangePasswordView(LoginRequiredMixin, FormView):
+    """Vue pour changer son mot de passe"""
+    template_name = 'accounts/change_password.html'
+    form_class = PasswordChangeForm
+    success_url = reverse_lazy('dashboard')  # Rediriger vers le tableau de bord après changement
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        user = form.save()
+        # Important : mettre à jour le hash de session pour éviter la déconnexion
+        update_session_auth_hash(self.request, user)
+        
+        # Afficher un message de succès
+        messages.success(
+            self.request,
+            _(f"""
+            <div class="d-flex align-items-center">
+                <i class="fas fa-check-circle text-success me-3 fa-2x"></i>
+                <div>
+                    <h5 class="mb-1">Mot de passe modifié !</h5>
+                    <p class="mb-0">Votre mot de passe a été changé avec succès.</p>
+                </div>
+            </div>
+            """)
+        )
+        
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        # Afficher des messages d'erreur
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f"{error}")
+        
+        return super().form_invalid(form)
+    
+def change_password(request, initial_change=False):
+    """
+    Vue pour changer le mot de passe d'un utilisateur
+    Si initial_change=True, cela signifie qu'il s'agit du premier changement après un mot de passe temporaire
+    """
+    if request.method == 'POST':
+        form = PasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            user = form.save()
+            # Mise à jour du hash de session pour éviter la déconnexion
+            update_session_auth_hash(request, user)
+            
+            # Message de succès formaté avec l'icône et le style
+            success_message = f"""
+            <div class="d-flex align-items-center">
+                <i class="fas fa-check-circle text-success me-3 fa-2x"></i>
+                <div>
+                    <h5 class="mb-1">{_('Mot de passe modifié!')}</h5>
+                    <p class="mb-0">{_('Votre mot de passe a été modifié avec succès.')}</p>
+                </div>
+            </div>
+            """
+            
+            messages.success(request, success_message)
+            
+            # Redirection adaptée selon le contexte
+            if initial_change:
+                return redirect('dashboard')  # Rediriger vers le tableau de bord après le premier changement
+            return redirect('accounts:profile')
+    else:
+        form = PasswordChangeForm(request.user)
+        
+        # Message supplémentaire pour un mot de passe temporaire
+        if initial_change or getattr(request.user, 'password_temporary', False):
+            info_message = f"""
+            <div class="d-flex align-items-center">
+                <i class="fas fa-info-circle text-info me-3 fa-2x"></i>
+                <div>
+                    <h5 class="mb-1">{_('Action requise')}</h5>
+                    <p class="mb-0">{_('Veuillez changer votre mot de passe temporaire.')}</p>
+                </div>
+            </div>
+            """
+            messages.info(request, info_message)
+    
+    return render(request, 'accounts/change_password.html', {
+        'form': form,
+        'initial_change': initial_change
+    })

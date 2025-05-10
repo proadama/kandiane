@@ -99,6 +99,13 @@ class CustomUser(AbstractUser):
     """
     Modèle utilisateur personnalisé avec email comme identifiant.
     """
+    
+    # Champ pour marquer un mot de passe comme temporaire
+    password_temporary = models.BooleanField(
+        default=False,
+        verbose_name=_("Mot de passe temporaire"),
+        help_text=_("Indique si le mot de passe est temporaire et doit être changé")
+    )
     email = models.EmailField(_("Adresse email"), unique=True)
     role = models.ForeignKey(
         Role, 

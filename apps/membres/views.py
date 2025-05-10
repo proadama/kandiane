@@ -4,9 +4,6 @@ import io
 import json
 import logging
 from datetime import datetime
-import traceback
-import sys
-from django.http import HttpResponseRedirect
 from django.conf import settings
 from django.db.models.functions import ExtractMonth
 from django.contrib import messages
@@ -33,7 +30,6 @@ from apps.membres.forms import (
 )
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, HistoriqueMembre
 from django.db.models import F, IntegerField
-from django.db.models.functions import ExtractMonth
 from django.utils.crypto import get_random_string
 from apps.accounts.models import CustomUser
 
@@ -276,7 +272,6 @@ class MembreDetailView(DetailView):
         
         return context
 
-
 class MembreCreateView(StaffRequiredMixin, CreateView):
     """
     Vue pour créer un nouveau membre
@@ -290,8 +285,15 @@ class MembreCreateView(StaffRequiredMixin, CreateView):
         kwargs['user'] = self.request.user
         return kwargs
     
-    # Modifier dans apps/membres/views.py - classe MembreCreateView, méthode form_valid
-
+    def form_invalid(self, form):
+        """Affichage détaillé des erreurs de validation pour l'utilisateur"""
+        for field, errors in form.errors.items():
+            for error in errors:
+                field_name = field if field == '__all__' else form[field].label or field
+                messages.error(self.request, f"Erreur dans {field_name}: {error}")
+        
+        return super().form_invalid(form)
+    
     def form_valid(self, form):
         try:
             # Enregistrer le membre
@@ -299,8 +301,7 @@ class MembreCreateView(StaffRequiredMixin, CreateView):
             
             # Créer un compte utilisateur si demandé
             if form.cleaned_data.get('creer_compte'):
-                username = f"{membre.prenom.lower()}.{membre.nom.lower()}"
-                username = username.replace(' ', '_')
+                username = f"{membre.prenom.lower()}.{membre.nom.lower()}".replace(' ', '_')
                 base_username = username
                 counter = 1
                 
@@ -320,51 +321,86 @@ class MembreCreateView(StaffRequiredMixin, CreateView):
                     email=membre.email,
                     password=password,
                     first_name=membre.prenom,
-                    last_name=membre.nom
+                    last_name=membre.nom,
+                    password_temporary=True
                 )
                 
                 # Lier à ce membre
                 membre.utilisateur = user
                 membre.save(update_fields=['utilisateur'])
                 
-                # Message amélioré avec HTML pour une meilleure présentation
-                message_html = f"""
-                <h5><i class="fas fa-check-circle text-success me-2"></i>{_("Membre créé avec succès!")}</h5>
-                <p>{_("Le membre")} <strong>{membre.nom_complet}</strong> {_("a été créé et un compte utilisateur a été généré.")}</p>
-                <div class="alert alert-info p-2 mt-2 mb-0">
-                    <strong>{_("Identifiants de connexion")}:</strong><br>
-                    <span class="badge bg-secondary me-1">{_("Nom d'utilisateur")}:</span> {username}<br>
-                    <span class="badge bg-secondary me-1">{_("Mot de passe")}:</span> {password}
-                </div>
-                """
-                messages.success(self.request, message_html)
-
-                # Envoyer un email de bienvenue
-                subject = _("Bienvenue à l'association")
-                message = _(f"Bonjour {membre.prenom},\n\n"
-                        f"Votre compte a été créé avec succès.\n"
-                        f"Nom d'utilisateur: {username}\n"
-                        f"Mot de passe: {password}\n\n"
-                        f"Nous vous invitons à consulter le guide d'intégration: {self.request.build_absolute_uri(reverse('membres:guide_integration'))}\n\n"
-                        f"Cordialement,\n"
-                        f"L'équipe")
+                # Vérification d'email si nécessaire
+                if hasattr(settings, 'ACCOUNT_EMAIL_VERIFICATION_REQUIRED') and settings.ACCOUNT_EMAIL_VERIFICATION_REQUIRED:
+                    try:
+                        # Générer et envoyer le token de vérification
+                        token = user.generate_email_verification_token()
+                        verification_url = self.request.build_absolute_uri(
+                            reverse('email_verify', kwargs={'token': token})
+                        )
+                        
+                        from apps.core.services import EmailService
+                        EmailService.send_template_email(
+                            'emails/email_verification',
+                            {'user': user, 'verification_url': verification_url},
+                            _("Vérification de votre adresse email"),
+                            user.email
+                        )
+                        
+                        messages.info(
+                            self.request,
+                            _("Un email de vérification a été envoyé à %(email)s.") % {'email': user.email}
+                        )
+                    except Exception as email_error:
+                        logger.error(f"Erreur lors de l'envoi de l'email de vérification: {str(email_error)}")
+                        messages.warning(
+                            self.request,
+                            _("L'email de vérification n'a pas pu être envoyé.")
+                        )
+                else:
+                    # Envoyer un email de bienvenue avec les informations de connexion
+                    try:
+                        from django.core.mail import EmailMultiAlternatives
+                        from django.template.loader import render_to_string
+                        
+                        # Contexte pour le template d'email
+                        context = {
+                            'membre': membre,
+                            'username': username,
+                            'password': password,
+                            'login_url': self.request.build_absolute_uri(reverse('accounts:login')),
+                        }
+                        
+                        # Rendre les templates HTML et texte
+                        html_message = render_to_string('emails/nouveau_compte.html', context)
+                        text_message = render_to_string('emails/nouveau_compte.txt', context)
+                        
+                        # Envoyer l'email
+                        email = EmailMultiAlternatives(
+                            _("Bienvenue à l'association - Vos identifiants de connexion"),
+                            text_message,
+                            settings.DEFAULT_FROM_EMAIL,
+                            [membre.email]
+                        )
+                        email.attach_alternative(html_message, "text/html")
+                        email.send()
+                        
+                        logger.info(f"Email d'identifiants envoyé à {membre.email}")
+                    except Exception as e:
+                        logger.error(f"Erreur lors de l'envoi de l'email de bienvenue: {str(e)}")
+                        messages.warning(
+                            self.request,
+                            _("Le membre a été créé, mais l'envoi de l'email avec les identifiants a échoué.")
+                        )
                 
-                from django.core.mail import send_mail
-                try:
-                    send_mail(
-                        subject,
-                        message,
-                        'noreply@association.org',  # Remplacer par votre email
-                        [membre.email],
-                        fail_silently=True,
-                    )
-                except Exception as e:
-                    logger.error(f"Erreur lors de l'envoi de l'email de bienvenue: {str(e)}")
+                messages.success(
+                    self.request,
+                    _("Le membre %(nom)s a été créé avec succès avec un compte utilisateur (%(username)s).") % 
+                    {'nom': membre.nom_complet, 'username': username}
+                )
             else:
                 messages.success(
-                    self.request, 
-                    f"<h5><i class='fas fa-check-circle text-success me-2'></i>{_('Membre créé!')}</h5>"
-                    f"<p>{_('Le membre')} <strong>{membre.nom_complet}</strong> {_('a été créé avec succès.')}</p>"
+                    self.request,
+                    _("Le membre %(nom)s a été créé avec succès.") % {'nom': membre.nom_complet}
                 )
             
             # Ajouter un enregistrement dans l'historique
@@ -375,155 +411,15 @@ class MembreCreateView(StaffRequiredMixin, CreateView):
                 description=_("Création du membre"),
                 donnees_apres={
                     field: str(value) for field, value in form.cleaned_data.items() 
-                    if field not in ['types_membre', 'photo', 'creer_compte', 'password']
+                    if field not in ['types_membre', 'photo', 'creer_compte', 'password', 'password_confirm']
                 }
             )
             
             return redirect(membre.get_absolute_url())
         except Exception as e:
-            # Journaliser l'erreur
-            logger.error(f"Erreur lors de la création d'un membre: {str(e)}")
-            # Afficher un message d'erreur à l'utilisateur
-            messages.error(self.request, f"<h5><i class='fas fa-exclamation-triangle text-danger me-2'></i>{_('Erreur')}</h5><p>{str(e)}</p>")
-            # Re-afficher le formulaire avec les données
+            logger.error(f"Erreur lors de la création d'un membre: {str(e)}", exc_info=True)
+            messages.error(self.request, _("Erreur lors de la création du membre: %(error)s") % {'error': str(e)})
             return self.form_invalid(form)
-
-class MembreCreateView(StaffRequiredMixin, CreateView):
-    """
-    Vue pour créer un nouveau membre
-    """
-    model = Membre
-    form_class = MembreForm
-    template_name = 'membres/form.html'
-    
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        return kwargs
-    
-    def post(self, request, *args, **kwargs):
-        """Surcharge pour diagnostiquer les problèmes"""
-        print("*** POST reçu dans MembreCreateView ***")
-        print(f"Données du formulaire: {request.POST}")
-        return super().post(request, *args, **kwargs)
-    
-    def form_invalid(self, form):
-        """Surcharge pour mieux détecter les erreurs de validation"""
-        print("*** FORM INVALID appelé ***")
-        print(f"Erreurs du formulaire: {form.errors}")
-        print(f"Non-field errors: {form.non_field_errors()}")
-        
-        # Affichage détaillé des erreurs pour l'utilisateur
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f"Erreur dans {field}: {error}")
-        
-        return super().form_invalid(form)
-    
-    def form_valid(self, form):
-        """Surcharge pour diagnostiquer les problèmes de traitement"""
-        print("*** FORM VALID appelé ***")
-        print(f"Données validées: {form.cleaned_data}")
-        
-        try:
-            # Enregistrer le membre avec la méthode la plus simple possible
-            membre = form.save()
-            print(f"Membre créé avec ID: {membre.id}")
-            
-            # Essayer de créer un utilisateur séparément pour éviter les problèmes
-            if form.cleaned_data.get('creer_compte'):
-                print("Tentative de création de compte utilisateur")
-                username = f"{membre.prenom.lower()}.{membre.nom.lower()}".replace(' ', '_')
-                base_username = username
-                counter = 1
-                
-                # Éviter les doublons
-                while CustomUser.objects.filter(username=username).exists():
-                    username = f"{base_username}{counter}"
-                    counter += 1
-                
-                # Mot de passe
-                password = form.cleaned_data.get('password')
-                if not password:
-                    password = get_random_string(length=12)
-                
-                # Créer l'utilisateur manuellement
-                user = CustomUser.objects.create_user(
-                    username=username,
-                    email=membre.email,
-                    password=password,
-                    first_name=membre.prenom,
-                    last_name=membre.nom
-                )
-                print(f"Utilisateur créé avec ID: {user.id}")
-
-                # Lier à ce membre
-                membre.utilisateur = user
-                membre.save(update_fields=['utilisateur'])
-                print("Membre mis à jour avec utilisateur")
-
-                # Vérification d'email si la fonctionnalité est activée
-                if hasattr(settings, 'ACCOUNT_EMAIL_VERIFICATION_REQUIRED') and settings.ACCOUNT_EMAIL_VERIFICATION_REQUIRED:
-                    try:
-                        # Générer un token de vérification
-                        token = user.generate_email_verification_token()
-                        
-                        # Préparer le lien de vérification
-                        verification_url = self.request.build_absolute_uri(
-                            reverse('email_verify', kwargs={'token': token})
-                        )
-                        
-                        # Envoyer l'email de vérification
-                        context = {
-                            'user': user,
-                            'verification_url': verification_url
-                        }
-                        
-                        from apps.core.services import EmailService
-                        EmailService.send_template_email(
-                            'emails/email_verification',
-                            context,
-                            _("Vérification de votre adresse email"),
-                            user.email
-                        )
-                        
-                        # Adapter le message de succès
-                        messages.info(
-                            self.request,
-                            _("Un email de vérification a été envoyé à %(email)s. "
-                            "Veuillez cliquer sur le lien dans cet email pour activer votre compte.") % {'email': user.email}
-                        )
-                    except Exception as email_error:
-                        # Loguer l'erreur mais ne pas interrompre le processus
-                        print(f"Erreur lors de l'envoi de l'email de vérification: {str(email_error)}")
-                        logger.error(f"Erreur lors de l'envoi de l'email de vérification: {str(email_error)}")
-
-                # Message avec identifiants
-                messages.success(
-                    self.request,
-                    _(f"Le membre {membre.nom_complet} a été créé avec succès. Un compte utilisateur a été créé avec les identifiants:\nNom d'utilisateur: {username}\nMot de passe: {password}")
-                )
-            else:
-                messages.success(
-                    self.request, 
-                    _(f"Le membre {membre.nom_complet} a été créé avec succès.")
-                )
-            
-            # Redirection explicite sans passer par les méthodes standards
-            print("Redirection vers le détail du membre")
-            return HttpResponseRedirect(reverse('membres:membre_detail', kwargs={'pk': membre.pk}))
-            
-        except Exception as e:
-            # Capturer et afficher les erreurs en détail
-            print("*** EXCEPTION dans form_valid ***")
-            print(f"Erreur: {str(e)}")
-            print("Traceback:")
-            traceback.print_exc(file=sys.stdout)
-            
-            # Informer l'utilisateur
-            messages.error(self.request, f"Erreur lors de la création du membre: {str(e)}")
-            return self.form_invalid(form)
-
 
 class MembreDeleteView(StaffRequiredMixin, DeleteView):
     """
@@ -788,71 +684,92 @@ class MembreImportView(StaffRequiredMixin, FormView):
         io_string = io.StringIO(decoded_file)
         
         reader = csv.reader(io_string, delimiter=delimiter)
+        rows = list(reader)  # Convertir en liste pour pouvoir l'analyser avant transaction
         
         # Ignorer la première ligne si c'est un en-tête
-        if has_header:
-            next(reader)
+        start_idx = 1 if has_header else 0
         
-        with transaction.atomic():
-            for i, row in enumerate(reader, start=1):
-                try:
-                    # Vérifier que les données sont valides
-                    if len(row) < 3:  # Au minimum: nom, prénom, email
-                        resultats['messages'].append(_("Ligne %(line)d: Données insuffisantes") % {'line': i})
+        # Vérification préliminaire des données avant de commencer la transaction
+        fatal_error = False
+        for i, row in enumerate(rows[start_idx:], start=start_idx+1):
+            if len(row) < 3:  # Minimum: nom, prénom, email
+                resultats['messages'].append(_("Ligne %(line)d: Données insuffisantes (minimum 3 colonnes requis)") % {'line': i})
+                fatal_error = True
+        
+        if fatal_error:
+            resultats['erreurs'] += 1
+            raise ValueError(_("Le fichier CSV contient des erreurs structurelles. Veuillez corriger le format avant d'importer."))
+        
+        # Si tout est structurellement correct, commencer la transaction
+        try:
+            with transaction.atomic():
+                for i, row in enumerate(rows[start_idx:], start=start_idx+1):
+                    try:
+                        # Récupérer les données de base
+                        nom = row[0].strip() if row[0] else ""
+                        prenom = row[1].strip() if row[1] else ""
+                        email = row[2].strip() if row[2] else ""
+                        
+                        if not nom or not prenom or not email:
+                            resultats['messages'].append(_("Ligne %(line)d: Données incomplètes (nom, prénom ou email manquant)") % {'line': i})
+                            resultats['erreurs'] += 1
+                            continue
+                        
+                        # Vérifier si le membre existe déjà
+                        membre_existant = Membre.objects.filter(email=email).first()
+                        
+                        if membre_existant:
+                            # Mettre à jour le membre existant si nécessaire
+                            if membre_existant.nom != nom or membre_existant.prenom != prenom:
+                                membre_existant.nom = nom
+                                membre_existant.prenom = prenom
+                                membre_existant.save(update_fields=['nom', 'prenom'])
+                                resultats['maj'] += 1
+                            
+                            # Ajouter le type de membre s'il n'existe pas déjà
+                            if type_membre and not membre_existant.est_type_actif(type_membre):
+                                membre_existant.ajouter_type(type_membre)
+                        else:
+                            # Créer un nouveau membre
+                            date_adhesion = timezone.now().date()
+                            
+                            # Données optionnelles (si disponibles)
+                            telephone = row[3].strip() if len(row) > 3 and row[3] else None
+                            adresse = row[4].strip() if len(row) > 4 and row[4] else None
+                            
+                            # Créer le membre
+                            membre = Membre.objects.create(
+                                nom=nom,
+                                prenom=prenom,
+                                email=email,
+                                telephone=telephone,
+                                adresse=adresse,
+                                date_adhesion=date_adhesion,
+                                statut=statut
+                            )
+                            
+                            # Ajouter le type de membre si spécifié
+                            if type_membre:
+                                membre.ajouter_type(type_membre)
+                            
+                            resultats['importes'] += 1
+                    
+                    except Exception as e:
+                        logger.error(f"Erreur ligne {i}: {str(e)}", exc_info=True)
+                        resultats['messages'].append(_("Ligne %(line)d: %(error)s") % {'line': i, 'error': str(e)})
                         resultats['erreurs'] += 1
-                        continue
+                        # Ne pas lever l'exception ici pour continuer à traiter les autres lignes
                     
-                    # Récupérer les données de base
-                    nom = row[0].strip()
-                    prenom = row[1].strip()
-                    email = row[2].strip()
+                # Vérifier si le taux d'erreur est acceptable (par exemple, < 50%)
+                if resultats['erreurs'] > 0 and resultats['erreurs'] / (resultats['importes'] + resultats['erreurs'] + resultats['maj']) > 0.5:
+                    raise ValueError(_("Trop d'erreurs détectées lors de l'importation. L'opération a été annulée."))
                     
-                    if not nom or not prenom or not email:
-                        resultats['messages'].append(_("Ligne %(line)d: Données incomplètes") % {'line': i})
-                        resultats['erreurs'] += 1
-                        continue
-                    
-                    # Vérifier si le membre existe déjà
-                    membre_existant = Membre.objects.filter(email=email).first()
-                    
-                    if membre_existant:
-                        # Mettre à jour le membre existant si nécessaire
-                        if membre_existant.nom != nom or membre_existant.prenom != prenom:
-                            membre_existant.nom = nom
-                            membre_existant.prenom = prenom
-                            membre_existant.save(update_fields=['nom', 'prenom'])
-                            resultats['maj'] += 1
-                        
-                        # Ajouter le type de membre s'il n'existe pas déjà
-                        if not membre_existant.est_type_actif(type_membre):
-                            membre_existant.ajouter_type(type_membre)
-                    else:
-                        # Créer un nouveau membre
-                        date_adhesion = timezone.now().date()
-                        
-                        # Données optionnelles (si disponibles)
-                        telephone = row[3].strip() if len(row) > 3 else None
-                        adresse = row[4].strip() if len(row) > 4 else None
-                        
-                        # Créer le membre
-                        membre = Membre.objects.create(
-                            nom=nom,
-                            prenom=prenom,
-                            email=email,
-                            telephone=telephone,
-                            adresse=adresse,
-                            date_adhesion=date_adhesion,
-                            statut=statut
-                        )
-                        
-                        # Ajouter le type de membre
-                        membre.ajouter_type(type_membre)
-                        
-                        resultats['importes'] += 1
-                    
-                except Exception as e:
-                    resultats['messages'].append(_("Ligne %(line)d: %(error)s") % {'line': i, 'error': str(e)})
-                    resultats['erreurs'] += 1
+        except Exception as e:
+            # Capture toute exception non gérée ou levée intentionnellement
+            logger.error(f"Erreur lors de l'importation CSV: {str(e)}", exc_info=True)
+            resultats['messages'].append(_("Erreur critique: %(error)s") % {'error': str(e)})
+            resultats['erreurs'] += 1
+            raise
     
     def _process_excel(self, fichier, type_membre, statut, resultats):
         """Traiter un fichier Excel"""
@@ -1202,17 +1119,24 @@ class TypeMembreDetailView(StaffRequiredMixin, DetailView):
         context['membres_actifs'] = self.object.get_membres_actifs()
         return context
     
-class MembreCorbeillePage(StaffRequiredMixin, ListView):
+class MembreCorbeillePage(StaffRequiredMixin, TrashViewMixin, ListView):
     """
     Vue pour afficher les membres supprimés logiquement
     """
     model = Membre
     template_name = 'membres/corbeille.html'
     context_object_name = 'membres'
+    paginate_by = 20
     
     def get_queryset(self):
         # N'afficher que les membres supprimés
         return Membre.objects.only_deleted()
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['title'] = _("Corbeille - Membres supprimés")
+        context['total_supprimes'] = Membre.objects.only_deleted().count()
+        return context
     
 class MembreRestaurerView(StaffRequiredMixin, View):
     """
@@ -1326,29 +1250,64 @@ class MembreUpdateView(StaffRequiredMixin, UpdateView):
         )
         return super().form_valid(form)
     
-class GuideIntegrationView(StaffRequiredMixin, TemplateView):
+class GuideIntegrationView(TemplateView):
     """
     Vue pour afficher le guide d'intégration pour les nouveaux membres
     """
     template_name = 'membres/guide_integration.html'
     
+    def dispatch(self, request, *args, **kwargs):
+        """
+        Vérification d'accès avant l'exécution de la vue :
+        - Les administrateurs peuvent accéder à tous les guides
+        - Les membres connectés peuvent seulement voir leur propre guide
+        """
+        # Vérifier si un pk est fourni
+        membre_pk = kwargs.get('pk')
+        
+        # Si un pk est spécifié, on vérifie les permissions
+        if membre_pk:
+            # Récupérer l'objet membre concerné
+            membre_cible = get_object_or_404(Membre, pk=membre_pk)
+            
+            # Si l'utilisateur n'est pas staff, vérifier qu'il est le propriétaire
+            if not request.user.is_staff:
+                try:
+                    # Récupérer le membre associé à l'utilisateur connecté
+                    membre_utilisateur = Membre.objects.get(utilisateur=request.user)
+                    
+                    # Si l'utilisateur essaie d'accéder à un guide qui n'est pas le sien
+                    if membre_utilisateur.pk != membre_cible.pk:
+                        messages.error(request, _("Vous n'avez pas l'autorisation d'accéder à cette page."))
+                        return redirect('accueil')
+                        
+                except Membre.DoesNotExist:
+                    messages.error(request, _("Vous n'avez pas l'autorisation d'accéder à cette page."))
+                    return redirect('accueil')
+        
+        # Si aucun pk n'est spécifié, seul le staff peut accéder
+        elif not request.user.is_staff:
+            # Pour les non-staff, rediriger vers leur propre guide s'ils ont un profil
+            try:
+                membre_utilisateur = Membre.objects.get(utilisateur=request.user)
+                return redirect('membres:guide_integration', pk=membre_utilisateur.pk)
+            except Membre.DoesNotExist:
+                messages.error(request, _("Vous n'avez pas l'autorisation d'accéder à cette page."))
+                return redirect('accueil')
+                
+        return super().dispatch(request, *args, **kwargs)
+    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Récupérer le membre associé à l'utilisateur connecté
-        try:
-            context['membre'] = Membre.objects.get(utilisateur=self.request.user)
-        except Membre.DoesNotExist:
-            context['membre'] = None
-            
-        # Informations supplémentaires pour personnaliser le guide
-        if 'pk' in kwargs:
+        # Si pk est fourni, récupérer ce membre spécifique
+        if 'pk' in self.kwargs:
+            context['membre'] = get_object_or_404(Membre, pk=self.kwargs['pk'])
+        # Sinon, essayer de récupérer le membre de l'utilisateur connecté
+        elif not self.request.user.is_anonymous:
             try:
-                membre = Membre.objects.get(pk=kwargs['pk'])
-                # Vérifier que l'utilisateur est administrateur ou le propriétaire du profil
-                if self.request.user.is_staff or (context['membre'] and context['membre'].pk == membre.pk):
-                    context['membre'] = membre
+                context['membre'] = Membre.objects.get(utilisateur=self.request.user)
             except Membre.DoesNotExist:
-                pass
-        
+                context['membre'] = None
+                
         return context

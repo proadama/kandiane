@@ -1,0 +1,24 @@
+Bienvenue à l'Association
+
+Bonjour {{ membre.prenom }},
+
+Nous avons le plaisir de vous confirmer la création de votre compte membre. 
+Vous pouvez dès à présent vous connecter à notre plateforme en ligne en utilisant 
+les identifiants suivants :
+
+Nom d'utilisateur : {{ username }}
+Mot de passe temporaire : {{ password }}
+
+IMPORTANT : Ce mot de passe est temporaire et expire dans 2 heures. 
+Veuillez vous connecter et le changer au plus vite.
+
+Pour vous connecter, rendez-vous sur : {{ login_url }}
+
+Si vous avez des questions ou besoin d'aide, n'hésitez pas à nous contacter.
+
+Cordialement,
+L'équipe de l'Association
+
+---
+Ce message a été envoyé automatiquement, merci de ne pas y répondre.
+© {% now "Y" %} Association - Tous droits réservés

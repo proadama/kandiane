@@ -3,6 +3,9 @@ import os
 import uuid
 from django.utils.text import slugify
 from django.utils import timezone
+from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
+from django.conf import settings
+
 
 def get_file_path(instance, filename):
     """
@@ -49,3 +52,35 @@ def get_unique_slug(instance, field_name, slug_field='slug', max_length=100):
         slug = f"{slug}-{counter}"
         
     return slug
+
+# Pour implémenter la solution de mot de passe temporaire.
+def generate_temp_password_token(user_id, password):
+    """Génère un token contenant l'ID utilisateur et le mot de passe temporaire
+    
+    Le token expire après PASSWORD_RESET_TIMEOUT (2 heures par défaut)
+    """
+    signer = TimestampSigner()
+    token_data = f"{user_id}:{password}"
+    return signer.sign(token_data)
+
+def verify_temp_password_token(token):
+    """Vérifie la validité du token et extrait les données
+    
+    Retourne un tuple (user_id, password) si le token est valide
+    Retourne None si le token est invalide ou expiré
+    """
+    signer = TimestampSigner()
+    try:
+        # max_age est en secondes (2 heures par défaut)
+        max_age = getattr(settings, 'PASSWORD_RESET_TIMEOUT', 7200)
+        token_data = signer.unsign(token, max_age=max_age)
+        
+        # Décomposer le token pour obtenir l'ID utilisateur et le mot de passe
+        parts = token_data.split(':')
+        if len(parts) != 2:
+            return None
+        
+        user_id, password = parts
+        return (int(user_id), password)
+    except (BadSignature, SignatureExpired, ValueError):
+        return None
