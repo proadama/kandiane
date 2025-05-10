@@ -3,6 +3,53 @@
 
 {% block title %}{% trans "Tableau de bord des membres" %}{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Uniformiser la taille des conteneurs de graphiques */
+    .chart-container {
+        height: 300px;
+        position: relative;
+    }
+    
+    /* Style pour les en-têtes de colonnes triables */
+    .sortable {
+        cursor: pointer;
+    }
+    .sortable:hover {
+        background-color: #f5f5f5;
+    }
+    .sortable::after {
+        content: "↕";
+        margin-left: 5px;
+        opacity: 0.5;
+    }
+    .sortable.asc::after {
+        content: "↑";
+        opacity: 1;
+    }
+    .sortable.desc::after {
+        content: "↓";
+        opacity: 1;
+    }
+    
+    /* Style pour le lien "Voir plus" */
+    .show-more {
+        display: block;
+        text-align: center;
+        padding: 10px;
+        background-color: #f8f9fa;
+        cursor: pointer;
+        border-top: 1px solid #dee2e6;
+    }
+    .show-more:hover {
+        background-color: #e9ecef;
+    }
+    .hidden-row {
+        display: none;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid py-4">
     <h1 class="mb-4">{% trans "Tableau de bord des membres" %}</h1>
@@ -49,23 +96,27 @@
     <!-- Graphiques -->
     <div class="row mb-4">
         <div class="col-md-6">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5 class="card-title mb-0">{% trans "Répartition par types de membres" %}</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="chartTypes" width="400" height="300"></canvas>
+                    <div class="chart-container">
+                        <canvas id="chartTypes"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
         
         <div class="col-md-6">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5 class="card-title mb-0">{% trans "Adhésions par mois" %}</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="chartMonthly" width="400" height="300"></canvas>
+                    <div class="chart-container">
+                        <canvas id="chartMonthly"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -73,23 +124,27 @@
     
     <div class="row mb-4">
         <div class="col-md-6">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5 class="card-title mb-0">{% trans "Répartition par statut" %}</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="chartStatuts" width="400" height="300"></canvas>
+                    <div class="chart-container">
+                        <canvas id="chartStatuts"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
         
         <div class="col-md-6">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5 class="card-title mb-0">{% trans "Membres avec compte utilisateur" %}</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="chartComptes" width="400" height="300"></canvas>
+                    <div class="chart-container">
+                        <canvas id="chartComptes"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -99,28 +154,36 @@
     <div class="row">
         <div class="col-md-12">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">{% trans "Dernières adhésions" %}</h5>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="showAllRows">
+                            {% trans "Tout afficher" %}
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="showTop5">
+                            {% trans "Top 5" %}
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table table-hover" id="adhesionsTable">
                             <thead>
                                 <tr>
-                                    <th>{% trans "Nom" %}</th>
-                                    <th>{% trans "Email" %}</th>
-                                    <th>{% trans "Date d'adhésion" %}</th>
-                                    <th>{% trans "Types" %}</th>
+                                    <th class="sortable" data-sort="nom">{% trans "Nom" %}</th>
+                                    <th class="sortable" data-sort="email">{% trans "Email" %}</th>
+                                    <th class="sortable" data-sort="date">{% trans "Date d'adhésion" %}</th>
+                                    <th class="sortable" data-sort="types">{% trans "Types" %}</th>
                                     <th>{% trans "Actions" %}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for membre in adhesions_recentes %}
-                                <tr>
-                                    <td>{{ membre.prenom }} {{ membre.nom }}</td>
-                                    <td>{{ membre.email }}</td>
-                                    <td>{{ membre.date_adhesion }}</td>
-                                    <td>
+                                <tr class="{% if forloop.counter > 5 %}hidden-row{% endif %}">
+                                    <td data-value="{{ membre.nom }} {{ membre.prenom }}">{{ membre.prenom }} {{ membre.nom }}</td>
+                                    <td data-value="{{ membre.email }}">{{ membre.email }}</td>
+                                    <td data-value="{{ membre.date_adhesion|date:'Y-m-d' }}">{{ membre.date_adhesion }}</td>
+                                    <td data-value="{% for type in membre.get_types_actifs %}{{ type.libelle }}{% if not forloop.last %}, {% endif %}{% endfor %}">
                                         {% for type in membre.get_types_actifs %}
                                         <span class="badge bg-primary">{{ type.libelle }}</span>
                                         {% empty %}
@@ -141,6 +204,12 @@
                             </tbody>
                         </table>
                     </div>
+                    
+                    {% if adhesions_recentes.count > 5 %}
+                    <div class="show-more" id="showMoreBtn">
+                        <i class="fas fa-chevron-down"></i> {% trans "Voir plus" %}
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="card-footer text-end">
                     <a href="{% url 'membres:membre_liste' %}" class="btn btn-primary">
@@ -177,11 +246,78 @@
             return new Chart(ctx, {
                 type: type,
                 data: data,
-                options: options || {}
+                options: {
+                    ...options,
+                    maintainAspectRatio: false,  // Important pour une taille uniforme
+                    responsive: true
+                }
             });
         } catch (error) {
             console.error(`Error creating chart ${id}:`, error);
             return null;
+        }
+    }
+    
+    // Fonction pour trier le tableau
+    function sortTable(table, column, asc = true) {
+        const rows = Array.from(table.querySelectorAll('tbody tr'));
+        const sortedRows = rows.sort((a, b) => {
+            const aValue = a.querySelectorAll('td')[column].getAttribute('data-value');
+            const bValue = b.querySelectorAll('td')[column].getAttribute('data-value');
+            
+            // Détecter si la valeur est une date, un nombre ou une chaîne
+            if (!isNaN(Date.parse(aValue)) && !isNaN(Date.parse(bValue))) {
+                // Tri des dates
+                return asc ? new Date(aValue) - new Date(bValue) : new Date(bValue) - new Date(aValue);
+            } else if (!isNaN(aValue) && !isNaN(bValue)) {
+                // Tri des nombres
+                return asc ? aValue - bValue : bValue - aValue;
+            } else {
+                // Tri des chaînes (insensible à la casse)
+                return asc ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+            }
+        });
+        
+        // Réinsérer les lignes triées dans le tableau
+        const tbody = table.querySelector('tbody');
+        while (tbody.firstChild) {
+            tbody.removeChild(tbody.firstChild);
+        }
+        sortedRows.forEach(row => tbody.appendChild(row));
+        
+        // Préserver la visibilité des lignes en fonction du filtre actuel
+        if (document.getElementById('showTop5').classList.contains('active')) {
+            limitRows(5);
+        }
+    }
+    
+    // Fonction pour limiter le nombre de lignes affichées
+    function limitRows(limit) {
+        const rows = document.querySelectorAll('#adhesionsTable tbody tr');
+        rows.forEach((row, index) => {
+            if (index < limit) {
+                row.classList.remove('hidden-row');
+            } else {
+                row.classList.add('hidden-row');
+            }
+        });
+        
+        // Afficher ou masquer le bouton "Voir plus"
+        const showMoreBtn = document.getElementById('showMoreBtn');
+        if (showMoreBtn) {
+            showMoreBtn.style.display = (rows.length > limit) ? 'block' : 'none';
+        }
+    }
+    
+    // Fonction pour afficher toutes les lignes
+    function showAllRows() {
+        const rows = document.querySelectorAll('#adhesionsTable tbody tr');
+        rows.forEach(row => row.classList.remove('hidden-row'));
+        
+        // Masquer le bouton "Voir plus"
+        const showMoreBtn = document.getElementById('showMoreBtn');
+        if (showMoreBtn) {
+            showMoreBtn.style.display = 'none';
         }
     }
     
@@ -223,7 +359,6 @@
                         borderWidth: 1
                     }]
                 }, {
-                    responsive: true,
                     plugins: {
                         legend: {
                             position: 'right',
@@ -246,7 +381,6 @@
                         borderWidth: 1
                     }]
                 }, {
-                    responsive: true,
                     scales: {
                         y: {
                             beginAtZero: true
@@ -267,7 +401,6 @@
                         borderWidth: 1
                     }]
                 }, {
-                    responsive: true,
                     plugins: {
                         legend: {
                             position: 'right',
@@ -291,7 +424,6 @@
                         borderWidth: 1
                     }]
                 }, {
-                    responsive: true,
                     plugins: {
                         legend: {
                             position: 'right',
@@ -301,15 +433,79 @@
             } else {
                 console.warn("Aucune donnée pour le graphique des comptes utilisateurs");
             }
+            
+            // Configurer le tri des tableaux
+            const table = document.getElementById('adhesionsTable');
+            const sortableHeaders = table.querySelectorAll('th.sortable');
+            let lastSortedColumn = null;
+            let sortAscending = true;
+            
+            sortableHeaders.forEach((header, columnIndex) => {
+                header.addEventListener('click', () => {
+                    // Enlever les classes de tri des autres en-têtes
+                    sortableHeaders.forEach(h => {
+                        h.classList.remove('asc', 'desc');
+                    });
+                    
+                    // Déterminer la direction du tri
+                    if (lastSortedColumn === columnIndex) {
+                        sortAscending = !sortAscending;
+                    } else {
+                        sortAscending = true;
+                    }
+                    
+                    // Appliquer la classe de tri appropriée
+                    header.classList.add(sortAscending ? 'asc' : 'desc');
+                    
+                    // Trier le tableau
+                    sortTable(table, columnIndex, sortAscending);
+                    
+                    // Mettre à jour la dernière colonne triée
+                    lastSortedColumn = columnIndex;
+                });
+            });
+            
+            // Configuration du bouton "Voir plus"
+            const showMoreBtn = document.getElementById('showMoreBtn');
+            if (showMoreBtn) {
+                showMoreBtn.addEventListener('click', showAllRows);
+            }
+            
+            // Configuration des boutons de filtrage
+            const showAllRowsBtn = document.getElementById('showAllRows');
+            const showTop5Btn = document.getElementById('showTop5');
+            
+            if (showAllRowsBtn) {
+                showAllRowsBtn.addEventListener('click', function() {
+                    showAllRows();
+                    showAllRowsBtn.classList.add('active');
+                    showTop5Btn.classList.remove('active');
+                });
+            }
+            
+            if (showTop5Btn) {
+                showTop5Btn.addEventListener('click', function() {
+                    limitRows(5);
+                    showTop5Btn.classList.add('active');
+                    showAllRowsBtn.classList.remove('active');
+                });
+                
+                // Activer le bouton "Top 5" par défaut
+                showTop5Btn.classList.add('active');
+            }
+            
+            // Limiter l'affichage à 5 lignes par défaut
+            limitRows(5);
+            
         } catch (error) {
             console.error("Erreur lors de l'initialisation des graphiques:", error);
             // Afficher un message d'erreur visible à l'utilisateur
-            const charts = document.querySelectorAll('.card-body canvas');
-            charts.forEach(canvas => {
+            const charts = document.querySelectorAll('.chart-container');
+            charts.forEach(container => {
                 const errorMsg = document.createElement('div');
                 errorMsg.className = 'alert alert-danger';
                 errorMsg.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Erreur de chargement du graphique: ${error.message}`;
-                canvas.replaceWith(errorMsg);
+                container.replaceWith(errorMsg);
             });
         }
     });
