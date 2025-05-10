@@ -786,7 +786,36 @@ class HistoriqueCotisation(BaseModel):
     def __str__(self):
         return f"{self.action} - {self.cotisation} - {self.date_action}"
 
-
+class HistoriqueTransaction(models.Model):
+    """
+    Modèle pour enregistrer l'historique des transactions (cotisations et paiements)
+    """
+    TYPE_CHOICES = (
+        ('cotisation', 'Cotisation'),
+        ('paiement', 'Paiement'),
+    )
+    
+    ACTION_CHOICES = (
+        ('creation', 'Création'),
+        ('modification', 'Modification'),
+        ('suppression', 'Suppression'),
+    )
+    
+    type = models.CharField(max_length=10, choices=TYPE_CHOICES)
+    reference_id = models.IntegerField()
+    action = models.CharField(max_length=12, choices=ACTION_CHOICES)
+    details = models.JSONField(null=True, blank=True)
+    utilisateur_id = models.IntegerField(null=True, blank=True)
+    date_creation = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'historique_transactions'  # Nom exact de la table dans la base de données
+        verbose_name = "Historique de transaction"
+        verbose_name_plural = "Historique des transactions"
+        
+    def __str__(self):
+        return f"{self.get_type_display()} - {self.get_action_display()} - {self.date_creation}"
+    
 class ConfigurationCotisation(BaseModel):
     """
     Modèle pour les configurations générales des cotisations.

@@ -154,115 +154,163 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Assurons-nous que Chart.js est bien chargé -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
-    // Données pour les graphiques
-    const typesData = {{ chart_types|safe }};
-    const monthlyData = {{ chart_monthly|safe }};
-    const statutsData = {{ chart_statuts|safe }};
-    const comptesData = {{ chart_comptes|safe }};
+    // Définir les traductions utilisées dans les graphiques
+    var nombreAdhesionsLabel = "{% trans 'Nombre adhésions' %}";
     
-    // Configuration des couleurs
-    const bgColors = [
-        'rgba(54, 162, 235, 0.6)',
-        'rgba(255, 99, 132, 0.6)',
-        'rgba(75, 192, 192, 0.6)',
-        'rgba(255, 206, 86, 0.6)',
-        'rgba(153, 102, 255, 0.6)',
-        'rgba(255, 159, 64, 0.6)',
-        'rgba(199, 199, 199, 0.6)'
-    ];
+    // Fonction pour vérifier si les données sont vides
+    function hasData(data) {
+        return data && data.length > 0;
+    }
     
-    // Graphique des types de membres
-    const ctxTypes = document.getElementById('chartTypes').getContext('2d');
-    new Chart(ctxTypes, {
-        type: 'pie',
-        data: {
-            labels: typesData.map(d => d.name),
-            datasets: [{
-                data: typesData.map(d => d.value),
-                backgroundColor: bgColors,
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'right',
-                }
-            }
+    // Fonction pour créer un graphique seulement si les données existent
+    function createChartIfData(id, type, data, options) {
+        const ctx = document.getElementById(id);
+        if (!ctx) {
+            console.error(`Canvas with id ${id} not found`);
+            return null;
         }
-    });
-    
-    // Graphique des adhésions par mois
-    const ctxMonthly = document.getElementById('chartMonthly').getContext('2d');
-    new Chart(ctxMonthly, {
-        type: 'bar',
-        data: {
-            labels: monthlyData.map(d => d.month),
-            datasets: [{
-                label: '{% trans "Nombre d\'adhésions" %}',
-                data: monthlyData.map(d => d.count),
-                backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
+        
+        try {
+            return new Chart(ctx, {
+                type: type,
+                data: data,
+                options: options || {}
+            });
+        } catch (error) {
+            console.error(`Error creating chart ${id}:`, error);
+            return null;
         }
-    });
+    }
     
-    // Graphique des statuts
-    const ctxStatuts = document.getElementById('chartStatuts').getContext('2d');
-    new Chart(ctxStatuts, {
-        type: 'doughnut',
-        data: {
-            labels: statutsData.map(d => d.name),
-            datasets: [{
-                data: statutsData.map(d => d.value),
-                backgroundColor: bgColors,
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'right',
-                }
+    // Attendre que le DOM soit complètement chargé
+    document.addEventListener('DOMContentLoaded', function() {
+        // Configuration des couleurs
+        const bgColors = [
+            'rgba(54, 162, 235, 0.6)',
+            'rgba(255, 99, 132, 0.6)',
+            'rgba(75, 192, 192, 0.6)',
+            'rgba(255, 206, 86, 0.6)',
+            'rgba(153, 102, 255, 0.6)',
+            'rgba(255, 159, 64, 0.6)',
+            'rgba(199, 199, 199, 0.6)'
+        ];
+        
+        // Récupérer les données JSON avec gestion d'erreurs
+        try {
+            // Données pour les graphiques (avec parse intégré pour éviter les erreurs)
+            const typesData = JSON.parse('{{ chart_types|escapejs }}');
+            const monthlyData = JSON.parse('{{ chart_monthly|escapejs }}');
+            const statutsData = JSON.parse('{{ chart_statuts|escapejs }}');
+            const comptesData = JSON.parse('{{ chart_comptes|escapejs }}');
+            
+            console.log("Données chargées:", {
+                types: typesData,
+                monthly: monthlyData,
+                statuts: statutsData,
+                comptes: comptesData
+            });
+            
+            // Graphique des types de membres
+            if (hasData(typesData)) {
+                createChartIfData('chartTypes', 'pie', {
+                    labels: typesData.map(d => d.name),
+                    datasets: [{
+                        data: typesData.map(d => d.value),
+                        backgroundColor: bgColors,
+                        borderWidth: 1
+                    }]
+                }, {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                        }
+                    }
+                });
+            } else {
+                console.warn("Aucune donnée pour le graphique des types");
             }
-        }
-    });
-    
-    // Graphique des comptes utilisateurs
-    const ctxComptes = document.getElementById('chartComptes').getContext('2d');
-    new Chart(ctxComptes, {
-        type: 'pie',
-        data: {
-            labels: comptesData.map(d => d.name),
-            datasets: [{
-                data: comptesData.map(d => d.value),
-                backgroundColor: [
-                    'rgba(75, 192, 192, 0.6)',
-                    'rgba(255, 99, 132, 0.6)'
-                ],
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'right',
-                }
+            
+            // Graphique des adhésions par mois
+            if (hasData(monthlyData)) {
+                createChartIfData('chartMonthly', 'bar', {
+                    labels: monthlyData.map(d => d.month),
+                    datasets: [{
+                        label: nombreAdhesionsLabel,
+                        data: monthlyData.map(d => d.count),
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                }, {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                });
+            } else {
+                console.warn("Aucune donnée pour le graphique des adhésions mensuelles");
             }
+            
+            // Graphique des statuts
+            if (hasData(statutsData)) {
+                createChartIfData('chartStatuts', 'doughnut', {
+                    labels: statutsData.map(d => d.name),
+                    datasets: [{
+                        data: statutsData.map(d => d.value),
+                        backgroundColor: bgColors,
+                        borderWidth: 1
+                    }]
+                }, {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                        }
+                    }
+                });
+            } else {
+                console.warn("Aucune donnée pour le graphique des statuts");
+            }
+            
+            // Graphique des comptes utilisateurs
+            if (hasData(comptesData)) {
+                createChartIfData('chartComptes', 'pie', {
+                    labels: comptesData.map(d => d.name),
+                    datasets: [{
+                        data: comptesData.map(d => d.value),
+                        backgroundColor: [
+                            'rgba(75, 192, 192, 0.6)',
+                            'rgba(255, 99, 132, 0.6)'
+                        ],
+                        borderWidth: 1
+                    }]
+                }, {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                        }
+                    }
+                });
+            } else {
+                console.warn("Aucune donnée pour le graphique des comptes utilisateurs");
+            }
+        } catch (error) {
+            console.error("Erreur lors de l'initialisation des graphiques:", error);
+            // Afficher un message d'erreur visible à l'utilisateur
+            const charts = document.querySelectorAll('.card-body canvas');
+            charts.forEach(canvas => {
+                const errorMsg = document.createElement('div');
+                errorMsg.className = 'alert alert-danger';
+                errorMsg.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Erreur de chargement du graphique: ${error.message}`;
+                canvas.replaceWith(errorMsg);
+            });
         }
     });
 </script>
