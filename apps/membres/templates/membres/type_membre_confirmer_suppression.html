@@ -134,7 +134,7 @@
                             {% trans "Mettez fin manuellement aux associations avec les membres actifs pour ce type." %}
                         </li>
                     </ul>
-                    <a href="{% url 'membres:type_membre_modifier' type_membre.id %}" class="btn btn-outline-primary">
+                    <a href="{% url 'membres:type_membre_modifier' object_id %}" class="btn btn-outline-primary">
                         <i class="fas fa-edit"></i> {% trans "Modifier ce type de membre" %}
                     </a>
                 </div>

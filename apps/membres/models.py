@@ -57,8 +57,11 @@ class TypeMembre(BaseModel):
     
     def nb_membres_actifs(self):
         """Retourne le nombre de membres actifs de ce type"""
-        return self.get_membres_actifs().count()
-    nb_membres_actifs.short_description = _("Nombre de membres actifs")
+        today = timezone.now().date()
+        return self.membres_historique.filter(
+            date_debut__lte=today,
+            date_fin__isnull=True
+        ).values('membre').distinct().count()
 
 
 class Membre(BaseModel):
