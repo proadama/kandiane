@@ -32,7 +32,7 @@ from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, Historique
 from django.db.models import F, IntegerField
 from django.utils.crypto import get_random_string
 from apps.accounts.models import CustomUser
-
+from django.http import Http404
 
 logger = logging.getLogger(__name__)
 
@@ -506,6 +506,46 @@ class TypeMembreUpdateView(StaffRequiredMixin, UpdateView):
     form_class = TypeMembreForm
     template_name = 'membres/type_membre_form.html'
     success_url = reverse_lazy('membres:type_membre_liste')
+    
+    def get_object(self, queryset=None):
+        """
+        Récupérer l'objet sans tenter d'annoter ou de compter les membres,
+        ce qui peut causer des erreurs avec les relations.
+        """
+        if queryset is None:
+            queryset = self.get_queryset()
+        
+        # Utiliser la méthode standard pour récupérer l'objet par pk
+        pk = self.kwargs.get(self.pk_url_kwarg)
+        queryset = queryset.filter(pk=pk)
+        
+        try:
+            # Get the single item from the filtered queryset
+            obj = queryset.get()
+        except queryset.model.DoesNotExist:
+            raise Http404(_("Aucun type de membre trouvé avec cet identifiant"))
+            
+        # Ajouter dynamiquement une méthode nb_membres_actifs à l'objet
+        # pour être compatible avec le template existant
+        type_membre = obj
+        today = timezone.now().date()
+        
+        # Calculer le nombre de membres actifs
+        membres_count = type_membre.membres_historique.filter(
+            date_debut__lte=today,
+            date_fin__isnull=True
+        ).values('membre').distinct().count()
+        
+        # Ajouter une méthode dynamique à l'objet qui renvoie ce nombre
+        # Cette approche évite de modifier le template
+        def nb_membres_actifs(self):
+            return membres_count
+            
+        # Lier la méthode à l'instance
+        import types
+        type_membre.nb_membres_actifs = types.MethodType(nb_membres_actifs, type_membre)
+        
+        return obj
     
     def form_valid(self, form):
         response = super().form_valid(form)
