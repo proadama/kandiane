@@ -6,7 +6,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from apps.core.models import Statut
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, HistoriqueMembre
-
+from django.db.models import Count
 
 # Mise à jour de MembreForm dans apps/membres/forms.py
 
@@ -467,85 +467,98 @@ class MembreImportForm(forms.Form):
 
 class MembreSearchForm(forms.Form):
     """
-    Formulaire de recherche avancée des membres
+    Formulaire de recherche avancée pour les membres
     """
     terme = forms.CharField(
+        label=_("Recherche"),
         required=False,
-        label=_("Rechercher"),
         widget=forms.TextInput(attrs={
-            'placeholder': _("Nom, prénom, email, téléphone..."),
-            'class': 'form-control'
+            'class': 'form-control',
+            'placeholder': _("Nom, prénom, email, téléphone...")
         })
     )
+    
     type_membre = forms.ModelChoiceField(
-        queryset=TypeMembre.objects.all(),
+        queryset=TypeMembre.objects.all().order_by('ordre_affichage', 'libelle'),
         required=False,
         empty_label=_("Tous les types"),
-        label=_("Type de membre"),
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.Select(attrs={'class': 'form-select'})
     )
+    
+    # Nous allons modifier ce champ dans la méthode __init__
     statut = forms.ModelChoiceField(
         queryset=Statut.objects.all(),
         required=False,
         empty_label=_("Tous les statuts"),
-        label=_("Statut"),
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.Select(attrs={'class': 'form-select'})
     )
+    
     date_adhesion_min = forms.DateField(
+        label=_("Adhésion depuis"),
         required=False,
-        label=_("Adhésion depuis le"),
-        widget=forms.DateInput(
-            attrs={'type': 'date', 'class': 'form-control'},
-            format='%Y-%m-%d'
-        )
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
     )
+    
     date_adhesion_max = forms.DateField(
-        required=False,
         label=_("Adhésion jusqu'au"),
-        widget=forms.DateInput(
-            attrs={'type': 'date', 'class': 'form-control'},
-            format='%Y-%m-%d'
-        )
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
     )
+    
     age_min = forms.IntegerField(
+        label=_("Âge min"),
         required=False,
         min_value=0,
-        max_value=120,
-        label=_("Âge minimum"),
         widget=forms.NumberInput(attrs={'class': 'form-control'})
     )
+    
     age_max = forms.IntegerField(
+        label=_("Âge max"),
         required=False,
         min_value=0,
-        max_value=120,
-        label=_("Âge maximum"),
         widget=forms.NumberInput(attrs={'class': 'form-control'})
     )
+    
     cotisations_impayees = forms.BooleanField(
-        required=False,
         label=_("Avec cotisations impayées"),
+        required=False,
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
+    
     avec_compte = forms.ChoiceField(
+        label=_("Compte utilisateur"),
         choices=[
             ('', _("Indifférent")),
-            ('avec', _("Avec compte utilisateur")),
-            ('sans', _("Sans compte utilisateur"))
+            ('avec', _("Avec compte")),
+            ('sans', _("Sans compte"))
         ],
         required=False,
-        label=_("Compte utilisateur"),
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.Select(attrs={'class': 'form-select'})
     )
+    
     actif = forms.ChoiceField(
+        label=_("Statut d'activité"),
         choices=[
             ('', _("Tous")),
             ('actif', _("Membres actifs")),
             ('inactif', _("Membres inactifs"))
         ],
         required=False,
-        label=_("Statut d'activité"),
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.Select(attrs={'class': 'form-select'})
     )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Ne proposer que les statuts qui sont attribués à au moins un membre
+        statuts_utilises = Statut.objects.filter(membre__isnull=False).distinct()
+        self.fields['statut'].queryset = statuts_utilises
     
     def clean(self):
         """Validation croisée des champs"""
