@@ -4,6 +4,39 @@ from django.utils import timezone
 from apps.core.managers import BaseManager
 import datetime
 
+class TypeMembreQuerySet(models.QuerySet):
+    """
+    QuerySet personnalisé pour le modèle TypeMembre
+    """
+    def actifs(self):
+        """Retourne les types de membres qui ont au moins un membre actif"""
+        from apps.membres.models import MembreTypeMembre
+        
+        types_ids = MembreTypeMembre.objects.filter(
+            date_debut__lte=timezone.now().date(),
+            date_fin__isnull=True
+        ).values_list('type_membre_id', flat=True).distinct()
+        
+        return self.filter(id__in=types_ids)
+    
+    def avec_nombre_membres(self):
+        """Retourne les types de membres avec le nombre de membres actifs"""
+        from apps.membres.models import MembreTypeMembre
+        
+        subquery = MembreTypeMembre.objects.filter(
+            type_membre=OuterRef('pk'),
+            date_debut__lte=timezone.now().date(),
+            date_fin__isnull=True
+        ).values('type_membre').annotate(
+            count=Count('membre', distinct=True)
+        ).values('count')
+        
+        return self.annotate(nombre_membres=Subquery(subquery))
+    
+    def par_ordre_affichage(self):
+        """Retourne les types de membres triés par ordre d'affichage"""
+        return self.order_by('ordre_affichage', 'libelle')
+    
 class TypeMembreManager(BaseManager):
     """
     Gestionnaire personnalisé pour le modèle TypeMembre

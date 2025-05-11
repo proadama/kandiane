@@ -466,7 +466,18 @@ class TypeMembreListView(ListView):
     context_object_name = 'types_membres'
     
     def get_queryset(self):
-        return TypeMembre.objects.avec_nombre_membres().par_ordre_affichage()
+        # Utiliser une annotation pour ajouter members_count à chaque type
+        today = timezone.now().date()
+        return TypeMembre.objects.annotate(
+            members_count=Count(
+                'membres_historique__membre',
+                filter=Q(
+                    membres_historique__date_debut__lte=today,
+                    membres_historique__date_fin__isnull=True
+                ),
+                distinct=True
+            )
+        ).order_by('ordre_affichage', 'libelle')
 
 
 class TypeMembreCreateView(StaffRequiredMixin, CreateView):
@@ -1250,64 +1261,29 @@ class MembreUpdateView(StaffRequiredMixin, UpdateView):
         )
         return super().form_valid(form)
     
-class GuideIntegrationView(TemplateView):
+class GuideIntegrationView(StaffRequiredMixin, TemplateView):
     """
     Vue pour afficher le guide d'intégration pour les nouveaux membres
     """
     template_name = 'membres/guide_integration.html'
     
-    def dispatch(self, request, *args, **kwargs):
-        """
-        Vérification d'accès avant l'exécution de la vue :
-        - Les administrateurs peuvent accéder à tous les guides
-        - Les membres connectés peuvent seulement voir leur propre guide
-        """
-        # Vérifier si un pk est fourni
-        membre_pk = kwargs.get('pk')
-        
-        # Si un pk est spécifié, on vérifie les permissions
-        if membre_pk:
-            # Récupérer l'objet membre concerné
-            membre_cible = get_object_or_404(Membre, pk=membre_pk)
-            
-            # Si l'utilisateur n'est pas staff, vérifier qu'il est le propriétaire
-            if not request.user.is_staff:
-                try:
-                    # Récupérer le membre associé à l'utilisateur connecté
-                    membre_utilisateur = Membre.objects.get(utilisateur=request.user)
-                    
-                    # Si l'utilisateur essaie d'accéder à un guide qui n'est pas le sien
-                    if membre_utilisateur.pk != membre_cible.pk:
-                        messages.error(request, _("Vous n'avez pas l'autorisation d'accéder à cette page."))
-                        return redirect('accueil')
-                        
-                except Membre.DoesNotExist:
-                    messages.error(request, _("Vous n'avez pas l'autorisation d'accéder à cette page."))
-                    return redirect('accueil')
-        
-        # Si aucun pk n'est spécifié, seul le staff peut accéder
-        elif not request.user.is_staff:
-            # Pour les non-staff, rediriger vers leur propre guide s'ils ont un profil
-            try:
-                membre_utilisateur = Membre.objects.get(utilisateur=request.user)
-                return redirect('membres:guide_integration', pk=membre_utilisateur.pk)
-            except Membre.DoesNotExist:
-                messages.error(request, _("Vous n'avez pas l'autorisation d'accéder à cette page."))
-                return redirect('accueil')
-                
-        return super().dispatch(request, *args, **kwargs)
-    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Si pk est fourni, récupérer ce membre spécifique
-        if 'pk' in self.kwargs:
-            context['membre'] = get_object_or_404(Membre, pk=self.kwargs['pk'])
-        # Sinon, essayer de récupérer le membre de l'utilisateur connecté
-        elif not self.request.user.is_anonymous:
+        # Récupérer le membre associé à l'utilisateur connecté
+        try:
+            context['membre'] = Membre.objects.get(utilisateur=self.request.user)
+        except Membre.DoesNotExist:
+            context['membre'] = None
+            
+        # Informations supplémentaires pour personnaliser le guide
+        if 'pk' in kwargs:
             try:
-                context['membre'] = Membre.objects.get(utilisateur=self.request.user)
+                membre = Membre.objects.get(pk=kwargs['pk'])
+                # Vérifier que l'utilisateur est administrateur ou le propriétaire du profil
+                if self.request.user.is_staff or (context['membre'] and context['membre'].pk == membre.pk):
+                    context['membre'] = membre
             except Membre.DoesNotExist:
-                context['membre'] = None
-                
+                pass
+        
         return context
