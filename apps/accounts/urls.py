@@ -24,7 +24,8 @@ urlpatterns = [
     # Profil utilisateur
     path('profile/', views.profile_view, name='profile'),
     path('profile/edit/', views.edit_profile, name='edit_profile'),
-    path('profile/change-password/', views.change_password, name='change_password'),
+    # path('profile/change-password/', views.change_password, name='change_password'),
+    path('profile/change-password/', views.ChangePasswordView.as_view(), name='change_password'),
     
     # Réinitialisation du mot de passe
     path('password/reset/', auth_views.PasswordResetView.as_view(

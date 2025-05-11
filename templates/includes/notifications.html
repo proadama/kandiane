@@ -44,16 +44,15 @@ function createNotification(type, message, autoDismiss = true, dismissTime = 800
     return notification;
 }
 
-// Fonction pour afficher les notifications Django
-function displayDjangoMessages() {
-    const messages = JSON.parse(document.getElementById('django-messages-data').textContent || '[]');
-    messages.forEach(message => {
-        createNotification(message.tags, message.message);
-    });
-}
-
-// Initialisation au chargement
+// NE PAS afficher automatiquement les messages Django ici,
+// car ils sont déjà affichés par messages.html
 document.addEventListener('DOMContentLoaded', function() {
-    displayDjangoMessages();
+    // Ne faisons rien automatiquement, pour éviter la duplication
+    // displayDjangoMessages();
 });
+
+// Cette fonction est disponible pour les appels AJAX/JS seulement
+window.showNotification = function(type, message, autoDismiss = true, dismissTime = 8000) {
+    return createNotification(type, message, autoDismiss, dismissTime);
+};
 </script>

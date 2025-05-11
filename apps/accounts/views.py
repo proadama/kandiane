@@ -1,37 +1,31 @@
 # apps/accounts/views.py
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.views import LoginView
+from django.contrib.auth import get_user_model, update_session_auth_hash, logout
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.views import LoginView
 from django.contrib import messages
-from django.views.generic import CreateView, ListView, UpdateView, DeleteView
+from django.views.generic import (
+    CreateView, ListView, UpdateView, DeleteView,
+    TemplateView, RedirectView, FormView
+)
 from django.utils import timezone
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.http import JsonResponse
 from django.utils.translation import gettext_lazy as _
 from django.db.models import Q
 from django.views.decorators.http import require_POST
 from django.core.mail import send_mail
 from django.conf import settings
-from django.contrib.auth import logout
-from django.shortcuts import redirect
-from django.views.generic import TemplateView, RedirectView
-from django.contrib.auth.forms import PasswordResetForm
-from django.core.exceptions import ValidationError
-from django.contrib.auth.views import LoginView, PasswordResetView
 
 from .models import Role, Permission, UserProfile, UserLoginHistory
 from .forms import (
     CustomUserCreationForm, UserProfileForm, RoleForm,
     CustomAuthenticationForm
 )
-from .middleware import RolePermissionMiddleware
-import logging
-from django.urls import reverse
 from apps.core.services import EmailService
-from django.views.generic import FormView
 
 
 logger = logging.getLogger(__name__)
@@ -43,12 +37,83 @@ class CustomLoginView(LoginView):
     """
     Vue personnalisée pour la connexion des utilisateurs.
     Enregistre les tentatives de connexion et met à jour la dernière connexion.
+    Redirige immédiatement vers la page de changement de mot de passe si le mot de passe est temporaire.
     """
     form_class = CustomAuthenticationForm
     template_name = 'accounts/login.html'
     redirect_authenticated_user = True
 
+    def form_valid(self, form):
+        """Enregistre la connexion réussie et met à jour la dernière connexion"""
+        # Obtenir l'utilisateur avant le super() pour accéder à l'utilisateur authentifié
+        user = form.get_user()
+        
+        # Vérifier si le mot de passe est temporaire et rediriger si nécessaire
+        if hasattr(user, 'password_temporary') and user.password_temporary:
+            # Connecter l'utilisateur d'abord
+            super().form_valid(form)
+            
+            # Enregistrement de l'historique de connexion pour un utilisateur avec mot de passe temporaire
+            UserLoginHistory.objects.create(
+                user=user,
+                ip_address=self.request.META.get('REMOTE_ADDR', ''),
+                user_agent=self.request.META.get('HTTP_USER_AGENT', ''),
+                session_key=self.request.session.session_key,
+                status='success'
+            )
+            
+            # Mise à jour de la dernière connexion
+            user.derniere_connexion = timezone.now()
+            user.save(update_fields=['derniere_connexion'])
+            
+            # Ajouter un message pour informer l'utilisateur
+            messages.info(
+                self.request, 
+                _("Votre mot de passe est temporaire. Veuillez le changer maintenant.")
+            )
+            
+            # Rediriger vers la page de changement de mot de passe
+            return redirect('accounts:change_password')
+        
+        # Si le mot de passe n'est pas temporaire, continuer normalement
+        response = super().form_valid(form)
+        
+        # Enregistrement de l'historique de connexion
+        UserLoginHistory.objects.create(
+            user=user,
+            ip_address=self.request.META.get('REMOTE_ADDR', ''),
+            user_agent=self.request.META.get('HTTP_USER_AGENT', ''),
+            session_key=self.request.session.session_key,
+            status='success'
+        )
+        
+        # Mise à jour de la dernière connexion
+        user.derniere_connexion = timezone.now()
+        user.save(update_fields=['derniere_connexion'])
+        
+        return response
     
+    def form_invalid(self, form):
+        """Enregistre les tentatives de connexion échouées"""
+        # Pour les échecs de connexion, on ne peut pas enregistrer l'utilisateur directement
+        # car l'authentification a échoué
+        email = form.cleaned_data.get('username', '')  # Dans votre cas, 'username' contient l'email
+        
+        # Essayer de trouver l'utilisateur correspondant à cet email
+        try:
+            user = User.objects.get(email=email)
+            # Enregistrer l'échec avec l'utilisateur trouvé
+            UserLoginHistory.objects.create(
+                user=user,
+                ip_address=self.request.META.get('REMOTE_ADDR', ''),
+                user_agent=self.request.META.get('HTTP_USER_AGENT', ''),
+                status='failed'
+            )
+        except User.DoesNotExist:
+            # L'utilisateur n'existe pas, on ne peut pas enregistrer l'historique
+            pass
+        
+        return super().form_invalid(form)
 
 
 class RegisterView(CreateView):
@@ -121,7 +186,6 @@ def activate_account(request, activation_key):
         )
         return redirect('accounts:login')
 
-# Supprimer : Ajoutez cette fonction à votre fichier views.py existant
 
 def custom_logout(request):
     """
@@ -147,6 +211,7 @@ def custom_logout(request):
     
     return response
 
+
 @require_POST
 def resend_activation(request):
     """
@@ -158,38 +223,35 @@ def resend_activation(request):
         messages.error(request, _("Veuillez fournir une adresse email."))
         return redirect('accounts:login')
     
+    # Pour des raisons de sécurité, ne pas divulguer si le compte existe
     user = User.objects.filter(email=email, is_active=False).first()
     
-    if not user:
-        messages.error(
-            request, 
-            _("Aucun compte inactif trouvé avec cette adresse email ou le compte est déjà activé.")
+    if user:
+        # Générer une nouvelle clé d'activation
+        activation_key = user.generate_activation_key()
+        
+        # Envoyer l'email d'activation
+        activation_link = f"{settings.SITE_URL}/accounts/activate/{activation_key}/"
+        
+        # Utiliser EmailService pour envoyer un email formaté
+        EmailService.send_template_email(
+            'emails/account_activation',
+            {
+                'user': user,
+                'activation_link': activation_link,
+                'site_name': settings.SITE_NAME,
+            },
+            _('Activation de votre compte'),
+            user.email
         )
-        return redirect('accounts:login')
+        
+        logger.info(f"Nouveau lien d'activation envoyé à: {user.email}")
     
-    # Générer une nouvelle clé d'activation
-    activation_key = user.generate_activation_key()
-    
-    # Envoyer l'email d'activation
-    activation_link = f"{settings.SITE_URL}/accounts/activate/{activation_key}/"
-    send_mail(
-        _('Activation de votre compte'),
-        _(f'Bonjour {user.get_full_name() or user.username},\n\n'
-          f'Voici un nouveau lien pour activer votre compte :\n'
-          f'{activation_link}\n\n'
-          f'Ce lien est valable pendant 24 heures.\n\n'
-          f'Cordialement,\n'
-          f'L\'équipe {settings.SITE_NAME}'),
-        settings.DEFAULT_FROM_EMAIL,
-        [user.email],
-        fail_silently=False,
-    )
-    
+    # Message générique qui ne révèle pas si l'email existe
     messages.success(
         request, 
-        _("Un nouveau lien d'activation a été envoyé à votre adresse email.")
+        _("Si un compte inactif existe avec cette adresse email, un nouveau lien d'activation a été envoyé.")
     )
-    logger.info(f"Nouveau lien d'activation envoyé à: {user.email}")
     
     return redirect('accounts:login')
 
@@ -199,8 +261,7 @@ def profile_view(request):
     """
     Vue pour afficher le profil utilisateur.
     """
-    user = request.user
-    return render(request, 'accounts/profile.html', {'user': user})
+    return render(request, 'accounts/profile.html', {'user': request.user})
 
 
 @login_required
@@ -224,23 +285,56 @@ def edit_profile(request):
     return render(request, 'accounts/edit_profile.html', {'form': form})
 
 
-@login_required
-def change_password(request):
-    """
-    Vue pour changer le mot de passe.
-    """
-    if request.method == 'POST':
-        form = PasswordChangeForm(request.user, request.POST)
-        if form.is_valid():
-            user = form.save()
-            # Mettre à jour la session pour éviter la déconnexion
-            update_session_auth_hash(request, user)
-            messages.success(request, _("Votre mot de passe a été changé avec succès."))
-            return redirect('accounts:profile')
-    else:
-        form = PasswordChangeForm(request.user)
-    
-    return render(request, 'accounts/change_password.html', {'form': form})
+class ChangePasswordView(LoginRequiredMixin, FormView):
+    """Vue pour changer son mot de passe"""
+    template_name = 'accounts/change_password.html'
+    form_class = PasswordChangeForm
+    success_url = reverse_lazy('accounts:profile')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['is_temporary'] = getattr(self.request.user, 'password_temporary', False)
+        
+        # Si c'est un mot de passe temporaire, ajouter un message d'information
+        if context['is_temporary']:
+            messages.info(
+                self.request, 
+                _("Pour des raisons de sécurité, vous devez changer votre mot de passe temporaire.")
+            )
+        
+        return context
+
+    def form_valid(self, form):
+        user = form.save()
+        
+        # Si c'était un mot de passe temporaire, le marquer comme permanent
+        if hasattr(user, 'password_temporary') and user.password_temporary:
+            user.password_temporary = False
+            user.save(update_fields=['password_temporary'])
+        
+        # Mettre à jour le hash de session pour éviter la déconnexion
+        update_session_auth_hash(self.request, user)
+        
+        # Message de succès
+        messages.success(
+            self.request,
+            _("Votre mot de passe a été modifié avec succès.")
+        )
+        
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        # Afficher des messages d'erreur explicites pour chaque champ
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f"{error}")
+        
+        return super().form_invalid(form)
 
 
 class SuperUserRequiredMixin(UserPassesTestMixin):
@@ -327,6 +421,7 @@ def required_permission(permission_code):
         return view_func
     return decorator
 
+
 class ProtectedPageView(LoginRequiredMixin, ListView):
     """
     Vue protégée pour afficher une liste d'utilisateurs.
@@ -347,11 +442,13 @@ class ProtectedPageView(LoginRequiredMixin, ListView):
         context['now'] = timezone.now()
         return context
 
+
 class TermsView(TemplateView):
     """
     Vue pour afficher les termes et conditions d'utilisation.
     """
     template_name = 'accounts/terms.html'
+
 
 class EmailVerificationView(RedirectView):
     """
@@ -359,14 +456,15 @@ class EmailVerificationView(RedirectView):
     """
     def get_redirect_url(self, *args, **kwargs):
         token = kwargs.get('token')
-        user = get_object_or_404(CustomUser, email_verification_token=token)
+        user = get_object_or_404(User, email_verification_token=token)
         
         if user.verify_email(token):
             messages.success(self.request, _("Votre adresse email a été vérifiée avec succès. Vous pouvez maintenant vous connecter."))
-            return reverse('login')
+            return reverse('accounts:login')
         else:
             messages.error(self.request, _("Le lien de vérification a expiré ou est invalide. Veuillez demander un nouveau lien."))
-            return reverse('email_verification_required')
+            return reverse('accounts:email_verification_required')
+
 
 class EmailVerificationRequiredView(TemplateView):
     """
@@ -376,7 +474,6 @@ class EmailVerificationRequiredView(TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Ajouter des infos au contexte si nécessaire
         return context
     
     def post(self, request, *args, **kwargs):
@@ -385,125 +482,42 @@ class EmailVerificationRequiredView(TemplateView):
         """
         email = request.POST.get('email')
         if email:
-            try:
-                user = CustomUser.objects.get(email=email)
-                if not user.is_email_verified:
-                    # Générer un nouveau token
-                    token = user.generate_email_verification_token()
-                    
-                    # Préparer le lien de vérification
-                    verification_url = request.build_absolute_uri(
-                        reverse('email_verify', kwargs={'token': token})
-                    )
-                    
-                    # Envoyer l'email de vérification
-                    context = {
-                        'user': user,
-                        'verification_url': verification_url
-                    }
-                    
-                    EmailService.send_template_email(
-                        'emails/email_verification',
-                        context,
-                        _("Vérification de votre adresse email"),
-                        user.email
-                    )
-                    
-                    messages.success(request, _("Un nouveau lien de vérification a été envoyé à votre adresse email."))
-                else:
-                    messages.info(request, _("Votre adresse email est déjà vérifiée. Vous pouvez vous connecter."))
-            except CustomUser.DoesNotExist:
-                # Ne pas divulguer l'existence ou non de l'utilisateur
-                messages.success(request, _("Si cette adresse est associée à un compte, un email de vérification sera envoyé."))
+            self._send_verification_email(email)
         
         return self.render_to_response(self.get_context_data())
-
-class ChangePasswordView(LoginRequiredMixin, FormView):
-    """Vue pour changer son mot de passe"""
-    template_name = 'accounts/change_password.html'
-    form_class = PasswordChangeForm
-    success_url = reverse_lazy('dashboard')  # Rediriger vers le tableau de bord après changement
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        return kwargs
-
-    def form_valid(self, form):
-        user = form.save()
-        # Important : mettre à jour le hash de session pour éviter la déconnexion
-        update_session_auth_hash(self.request, user)
-        
-        # Afficher un message de succès
-        messages.success(
-            self.request,
-            _(f"""
-            <div class="d-flex align-items-center">
-                <i class="fas fa-check-circle text-success me-3 fa-2x"></i>
-                <div>
-                    <h5 class="mb-1">Mot de passe modifié !</h5>
-                    <p class="mb-0">Votre mot de passe a été changé avec succès.</p>
-                </div>
-            </div>
-            """)
-        )
-        
-        return super().form_valid(form)
-
-    def form_invalid(self, form):
-        # Afficher des messages d'erreur
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f"{error}")
-        
-        return super().form_invalid(form)
     
-def change_password(request, initial_change=False):
-    """
-    Vue pour changer le mot de passe d'un utilisateur
-    Si initial_change=True, cela signifie qu'il s'agit du premier changement après un mot de passe temporaire
-    """
-    if request.method == 'POST':
-        form = PasswordChangeForm(request.user, request.POST)
-        if form.is_valid():
-            user = form.save()
-            # Mise à jour du hash de session pour éviter la déconnexion
-            update_session_auth_hash(request, user)
+    def _send_verification_email(self, email):
+        """
+        Méthode auxiliaire pour envoyer l'email de vérification
+        """
+        try:
+            user = User.objects.get(email=email)
+            if not user.is_email_verified:
+                # Générer un nouveau token
+                token = user.generate_email_verification_token()
+                
+                # Préparer le lien de vérification
+                verification_url = self.request.build_absolute_uri(
+                    reverse('accounts:email_verify', kwargs={'token': token})
+                )
+                
+                # Envoyer l'email de vérification
+                context = {
+                    'user': user,
+                    'verification_url': verification_url
+                }
+                
+                EmailService.send_template_email(
+                    'emails/email_verification',
+                    context,
+                    _("Vérification de votre adresse email"),
+                    user.email
+                )
+                
+                logger.info(f"Email de vérification envoyé à {user.email}")
             
-            # Message de succès formaté avec l'icône et le style
-            success_message = f"""
-            <div class="d-flex align-items-center">
-                <i class="fas fa-check-circle text-success me-3 fa-2x"></i>
-                <div>
-                    <h5 class="mb-1">{_('Mot de passe modifié!')}</h5>
-                    <p class="mb-0">{_('Votre mot de passe a été modifié avec succès.')}</p>
-                </div>
-            </div>
-            """
-            
-            messages.success(request, success_message)
-            
-            # Redirection adaptée selon le contexte
-            if initial_change:
-                return redirect('dashboard')  # Rediriger vers le tableau de bord après le premier changement
-            return redirect('accounts:profile')
-    else:
-        form = PasswordChangeForm(request.user)
+        except User.DoesNotExist:
+            logger.info(f"Tentative de vérification pour une adresse email inexistante: {email}")
         
-        # Message supplémentaire pour un mot de passe temporaire
-        if initial_change or getattr(request.user, 'password_temporary', False):
-            info_message = f"""
-            <div class="d-flex align-items-center">
-                <i class="fas fa-info-circle text-info me-3 fa-2x"></i>
-                <div>
-                    <h5 class="mb-1">{_('Action requise')}</h5>
-                    <p class="mb-0">{_('Veuillez changer votre mot de passe temporaire.')}</p>
-                </div>
-            </div>
-            """
-            messages.info(request, info_message)
-    
-    return render(request, 'accounts/change_password.html', {
-        'form': form,
-        'initial_change': initial_change
-    })
+        # Toujours afficher le même message pour éviter les fuites d'information
+        messages.success(self.request, _("Si cette adresse est associée à un compte, un email de vérification sera envoyé."))

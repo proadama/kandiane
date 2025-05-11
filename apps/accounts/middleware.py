@@ -106,7 +106,7 @@ class SessionExpiryMiddleware:
             request.session['last_activity'] = timezone.now().timestamp()
         
         return self.get_response(request)
-    
+
 class TemporaryPasswordMiddleware:
     """
     Middleware qui vérifie si l'utilisateur a un mot de passe temporaire
@@ -117,49 +117,48 @@ class TemporaryPasswordMiddleware:
         self.get_response = get_response
         
     def __call__(self, request):
-        # Exécuter le code avant la vue
-        
-        # Vérifier si l'utilisateur est authentifié et a un mot de passe temporaire
-        if request.user.is_authenticated and hasattr(request.user, 'password_temporary') and request.user.password_temporary:
-            # Path actuel pour éviter les boucles infinies
-            current_path = request.path
-            
-            # Ne pas rediriger si l'utilisateur est déjà sur la page de changement de mot de passe
-            # ou sur une URL d'administration ou de déconnexion
-            excluded_paths = [
-                reverse('accounts:change_password'),
-                reverse('accounts:logout'),
-                '/admin/',
-                '/static/',
-                '/media/'
-            ]
-            
-            should_redirect = True
-            for path in excluded_paths:
-                if current_path.startswith(path):
-                    should_redirect = False
-                    break
-            
-            if should_redirect:
-                # Informer l'utilisateur qu'il doit changer son mot de passe
-                messages.info(
-                    request, 
-                    _("""
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-info-circle text-info me-3 fa-2x"></i>
-                        <div>
-                            <h5 class="mb-1">Action requise</h5>
-                            <p class="mb-0">Votre mot de passe est temporaire. Veuillez le changer maintenant.</p>
-                        </div>
-                    </div>
-                    """)
-                )
+        # Vérifier si l'utilisateur est authentifié
+        if request.user.is_authenticated:
+            # Vérifier si l'utilisateur a un mot de passe temporaire
+            if hasattr(request.user, 'password_temporary') and request.user.password_temporary:
+                # Path actuel pour éviter les boucles infinies
+                current_path = request.path
                 
-                # Rediriger vers la page de changement de mot de passe
-                return redirect('accounts:change_password')
+                # Liste des chemins à exclure
+                excluded_paths = [
+                    '/accounts/profile/change-password/',  # URL correcte selon urls.py
+                    '/accounts/logout/',
+                    '/admin/',
+                    '/static/',
+                    '/media/',
+                ]
+                
+                # Vérifier si le chemin actuel doit être exclu
+                should_redirect = True
+                for path in excluded_paths:
+                    if current_path.startswith(path):
+                        should_redirect = False
+                        break
+                
+                if should_redirect:
+                    # Informer l'utilisateur qu'il doit changer son mot de passe
+                    messages.info(
+                        request, 
+                        _("""
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-info-circle text-info me-3 fa-2x"></i>
+                            <div>
+                                <h5 class="mb-1">Action requise</h5>
+                                <p class="mb-0">Votre mot de passe est temporaire. Veuillez le changer maintenant.</p>
+                            </div>
+                        </div>
+                        """)
+                    )
+                    
+                    # Rediriger vers la page de changement de mot de passe
+                    return redirect('accounts:change_password')
         
         # Exécuter la vue et continuer
         response = self.get_response(request)
         
-        # Exécuter le code après la vue
         return response

@@ -47,6 +47,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'apps.accounts.middleware.TemporaryPasswordMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -140,8 +141,3 @@ PASSWORD_RESET_TIMEOUT = 7200  # 2 heures en secondes
 # les emails dans la console au lieu de les envoyer réellement
 #if DEBUG:
 #    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-
-# Middleware pour le mot de passe temporaire
-MIDDLEWARE += [
-    'apps.accounts.middleware.TemporaryPasswordMiddleware',
-]
