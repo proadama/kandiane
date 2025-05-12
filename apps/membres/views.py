@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db.models.functions import ExtractMonth
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Q, F, IntegerField, Case, When
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -208,7 +208,7 @@ class MembreListView(ListView):
                 
                 # Approche simple mais efficace :
                 # 1. Trouver les IDs des membres qui ont au moins une cotisation impayée
-                from django.db.models import Q, Count, Case, When, IntegerField
+                from django.db.models import Count, Case, When, IntegerField
                 
                 # Cette requête annotée compte les cotisations impayées pour chaque membre
                 membres_avec_comptage = Cotisation.objects.values('membre_id').annotate(
@@ -690,12 +690,11 @@ class TypeMembreDeleteView(StaffRequiredMixin, DeleteView):
         if queryset is None:
             queryset = self.get_queryset()
         
-        # Utiliser la méthode standard pour récupérer l'objet par pk
-        pk = self.kwargs.get('pk')  # Utiliser directement 'pk' plutôt que self.pk_url_kwarg
+        # Utilisez self.pk_url_kwarg pour la cohérence et la flexibilité
+        pk = self.kwargs.get(self.pk_url_kwarg)
         queryset = queryset.filter(pk=pk)
         
         try:
-            # Get the single item from the filtered queryset
             obj = queryset.get()
         except queryset.model.DoesNotExist:
             raise Http404(_("Aucun type de membre trouvé avec cet identifiant"))
@@ -1417,18 +1416,6 @@ class MembreRestaurerView(StaffRequiredMixin, View):
         )
         return redirect('membres:membre_detail', pk=membre.pk)
     
-class MembreCorbeillePage(TrashViewMixin, ListView):
-    """Vue pour la corbeille des membres."""
-    model = Membre
-    template_name = 'membres/corbeille.html'
-    context_object_name = 'membres'
-    paginate_by = 20
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = _("Corbeille - Membres supprimés")
-        return context
-
 class MembreRestaurerView(RestoreViewMixin, View):
     """Vue pour restaurer un membre depuis la corbeille."""
     model = Membre
