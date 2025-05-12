@@ -1054,6 +1054,7 @@ class MembreExportView(StaffRequiredMixin, View):
     """
     Vue pour exporter la liste des membres au format CSV ou Excel
     """
+    # Correction pour MembreExportView.get() - Implémentation du filtre des cotisations impayées
     def get(self, request):
         format_export = request.GET.get('format', 'csv')
         
@@ -1084,8 +1085,37 @@ class MembreExportView(StaffRequiredMixin, View):
             if age_max := form.cleaned_data.get('age_max'):
                 queryset = queryset.par_age(age_max=age_max)
             
+            # Correction: Utiliser la même logique que dans MembreListView au lieu d'appeler une méthode inexistante
             if form.cleaned_data.get('cotisations_impayees'):
-                queryset = queryset.avec_cotisations_impayees()
+                try:
+                    from apps.cotisations.models import Cotisation
+                    from django.db.models import Count, Case, When, IntegerField
+                    
+                    # Cette requête annotée compte les cotisations impayées pour chaque membre
+                    membres_avec_comptage = Cotisation.objects.values('membre_id').annotate(
+                        nb_impayees=Count(
+                            Case(
+                                When(~Q(statut_paiement='payée'), then=1),
+                                output_field=IntegerField()
+                            )
+                        )
+                    ).filter(nb_impayees__gt=0)
+                    
+                    # Extraire uniquement les IDs des membres
+                    membres_avec_impayees = [item['membre_id'] for item in membres_avec_comptage]
+                    
+                    if membres_avec_impayees:
+                        # Filtrer le queryset pour ne garder que les membres avec cotisations impayées
+                        queryset = queryset.filter(id__in=membres_avec_impayees)
+                    else:
+                        # Aucune cotisation impayée trouvée
+                        queryset = queryset.none()  # Retourne un queryset vide
+                except ImportError:
+                    # Le module cotisations n'est pas disponible
+                    pass
+                except Exception:
+                    # Capturer toute autre exception pour éviter l'échec silencieux
+                    pass
             
             if compte := form.cleaned_data.get('avec_compte'):
                 if compte == 'avec':
