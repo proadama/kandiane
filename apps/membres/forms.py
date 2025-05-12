@@ -464,10 +464,12 @@ class MembreImportForm(forms.Form):
                 )
         return fichier
 
+# Modifier dans apps/membres/forms.py
+# Assurez-vous que la classe MembreSearchForm définit les bonnes valeurs par défaut
 
 class MembreSearchForm(forms.Form):
     """
-    Formulaire de recherche avancée pour les membres
+    Formulaire de recherche avancée pour les membres - Version corrigée
     """
     terme = forms.CharField(
         label=_("Recherche"),
@@ -485,7 +487,6 @@ class MembreSearchForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-select'})
     )
     
-    # Nous allons modifier ce champ dans la méthode __init__
     statut = forms.ModelChoiceField(
         queryset=Statut.objects.all(),
         required=False,
@@ -528,6 +529,7 @@ class MembreSearchForm(forms.Form):
     cotisations_impayees = forms.BooleanField(
         label=_("Avec cotisations impayées"),
         required=False,
+        initial=False,  # Assurez-vous que c'est False par défaut
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
     
@@ -559,6 +561,13 @@ class MembreSearchForm(forms.Form):
         # Ne proposer que les statuts qui sont attribués à au moins un membre
         statuts_utilises = Statut.objects.filter(membre__isnull=False).distinct()
         self.fields['statut'].queryset = statuts_utilises
+        
+        # Assurez-vous que les modèles sont bien disponibles pour les menus déroulants
+        if not self.fields['type_membre'].queryset.exists():
+            from django.db.models import Count
+            # Récupérer tous les types de membres, même sans membres associés
+            self.fields['type_membre'].queryset = TypeMembre.objects.annotate(
+                count=Count('id')).order_by('ordre_affichage', 'libelle')
     
     def clean(self):
         """Validation croisée des champs"""

@@ -113,14 +113,34 @@ class MembreManager(BaseManager):
         return self.filter(date_adhesion__gte=date_limite)
     
     def avec_cotisations_impayees(self):
-        """Retourne les membres ayant des cotisations impayées"""
-        from apps.cotisations.models import Cotisation
-        
-        membres_ids = Cotisation.objects.filter(
-            statut_paiement__in=['non_payée', 'partiellement_payée']
-        ).values_list('membre_id', flat=True).distinct()
-        
-        return self.filter(id__in=membres_ids)
+        """Retourne les membres ayant des cotisations impayées - Méthode corrigée"""
+        try:
+            # Import ici pour éviter les imports circulaires
+            from apps.cotisations.models import Cotisation
+            
+            # Rechercher les IDs des membres avec des cotisations impayées
+            membres_ids = Cotisation.objects.filter(
+                statut_paiement__in=['non_payée', 'partiellement_payée']
+            ).values_list('membre_id', flat=True).distinct()
+            
+            # Log pour débogage
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Membres avec cotisations impayées trouvés: {list(membres_ids)}")
+            
+            if membres_ids:
+                return self.filter(id__in=membres_ids)
+            else:
+                # Si aucun membre n'a de cotisations impayées, retourner un QuerySet vide
+                # mais du même type pour éviter les erreurs
+                return self.none()
+                
+        except ImportError as e:
+            # Si le module cotisations n'est pas disponible, log et retourne tous les membres
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Impossible d'accéder au module cotisations: {str(e)}")
+            return self.all()
     
     def avec_statistiques(self):
         """Ajoute des statistiques aux membres (cotisations, événements, etc.)"""

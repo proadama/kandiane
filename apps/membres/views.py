@@ -124,87 +124,148 @@ class MembreListView(ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        # On commence avec un queryset de base
+        """
+        Méthode pour filtrer les membres selon les critères de recherche.
+        """
+        # Commencer avec tous les membres (non supprimés)
         queryset = Membre.objects.all()
+        
+        # Récupérer et valider le formulaire
         form = MembreSearchForm(self.request.GET)
         
+        if not form.is_valid():
+            return queryset
+            
         # Récupérer les paramètres de tri
-        sort_by = self.request.GET.get('sort', 'nom')  # Tri par défaut par nom
-        sort_dir = self.request.GET.get('dir', 'asc')  # Direction par défaut: ascendant
+        sort_by = self.request.GET.get('sort', 'nom')
+        sort_dir = self.request.GET.get('dir', 'asc')
         
-        if form.is_valid():
-            # [Garder tout le code de filtrage existant]
-            # Variables pour stocker les différents critères de filtrage
-            term = form.cleaned_data.get('terme')
-            type_membre_id = form.cleaned_data.get('type_membre').id if form.cleaned_data.get('type_membre') else None
-            statut_id = form.cleaned_data.get('statut').id if form.cleaned_data.get('statut') else None
-            date_adhesion_min = form.cleaned_data.get('date_adhesion_min')
-            date_adhesion_max = form.cleaned_data.get('date_adhesion_max')
-            age_min = form.cleaned_data.get('age_min')
-            age_max = form.cleaned_data.get('age_max')
-            cotisations_impayees = form.cleaned_data.get('cotisations_impayees')
-            avec_compte = form.cleaned_data.get('avec_compte')
-            actif = form.cleaned_data.get('actif')
+        # Variables pour stocker les différents critères de filtrage
+        term = form.cleaned_data.get('terme')
+        type_membre = form.cleaned_data.get('type_membre')
+        type_membre_id = type_membre.id if type_membre else None
+        statut = form.cleaned_data.get('statut')
+        statut_id = statut.id if statut else None
+        date_adhesion_min = form.cleaned_data.get('date_adhesion_min')
+        date_adhesion_max = form.cleaned_data.get('date_adhesion_max')
+        age_min = form.cleaned_data.get('age_min')
+        age_max = form.cleaned_data.get('age_max')
+        cotisations_impayees = form.cleaned_data.get('cotisations_impayees')
+        avec_compte = form.cleaned_data.get('avec_compte')
+        actif = form.cleaned_data.get('actif')
+        
+        # Filtres de date d'adhésion
+        if date_adhesion_min:
+            queryset = queryset.filter(date_adhesion__gte=date_adhesion_min)
             
-            # Appliquer les filtres standards Django (qui fonctionnent sur n'importe quel QuerySet)
-            if date_adhesion_min:
-                queryset = queryset.filter(date_adhesion__gte=date_adhesion_min)
-            if date_adhesion_max:
-                queryset = queryset.filter(date_adhesion__lte=date_adhesion_max)
-                
-            # Construire un filtre Q complexe pour gérer tous les critères
-            q_objects = Q()
+        if date_adhesion_max:
+            queryset = queryset.filter(date_adhesion__lte=date_adhesion_max)
+        
+        # Filtre par terme de recherche
+        if term:
+            q_objects = (
+                Q(nom__icontains=term) | 
+                Q(prenom__icontains=term) | 
+                Q(email__icontains=term) | 
+                Q(telephone__icontains=term) |
+                Q(code_postal__icontains=term) |
+                Q(ville__icontains=term)
+            )
+            queryset = queryset.filter(q_objects)
+        
+        # Filtre par type de membre
+        if type_membre_id:
+            queryset = queryset.filter(
+                types_historique__type_membre_id=type_membre_id,
+                types_historique__date_debut__lte=timezone.now().date(),
+                types_historique__date_fin__isnull=True
+            ).distinct()
+        
+        # Filtre par statut
+        if statut_id:
+            queryset = queryset.filter(statut_id=statut_id)
+        
+        # Filtres par âge
+        if age_min is not None or age_max is not None:
+            today = timezone.now().date()
             
-            # Ajouter les filtres manuellement avec des expressions Q
-            if term:
-                q_objects &= (
-                    Q(nom__icontains=term) | 
-                    Q(prenom__icontains=term) | 
-                    Q(email__icontains=term) | 
-                    Q(telephone__icontains=term) |
-                    Q(code_postal__icontains=term) |
-                    Q(ville__icontains=term)
-                )
+            if age_min is not None:
+                date_naissance_max = today.replace(year=today.year - age_min)
+                queryset = queryset.filter(date_naissance__lte=date_naissance_max)
+                
+            if age_max is not None:
+                date_naissance_min = today.replace(year=today.year - age_max - 1)
+                date_naissance_min = date_naissance_min.replace(day=date_naissance_min.day + 1)
+                queryset = queryset.filter(date_naissance__gt=date_naissance_min)
+
+        # Filtre par cotisations impayées
+        if cotisations_impayees:
+            try:
+                from apps.cotisations.models import Cotisation
+                
+                # Récupérer les valeurs uniques de statut_paiement
+                statuts_uniques = list(Cotisation.objects.values_list('statut_paiement', flat=True).distinct())
+                
+                # Approche simple mais efficace :
+                # 1. Trouver les IDs des membres qui ont au moins une cotisation impayée
+                from django.db.models import Q, Count, Case, When, IntegerField
+                
+                # Cette requête annotée compte les cotisations impayées pour chaque membre
+                membres_avec_comptage = Cotisation.objects.values('membre_id').annotate(
+                    nb_impayees=Count(
+                        Case(
+                            When(~Q(statut_paiement='payée'), then=1),
+                            output_field=IntegerField()
+                        )
+                    )
+                ).filter(nb_impayees__gt=0)
+                
+                # Extraire uniquement les IDs des membres
+                membres_avec_impayees = [item['membre_id'] for item in membres_avec_comptage]
+                
+                if membres_avec_impayees:
+                    # Filtrer le queryset pour ne garder que les membres avec cotisations impayées
+                    queryset = queryset.filter(id__in=membres_avec_impayees)
+                else:
+                    # Aucune cotisation impayée trouvée
+                    queryset = queryset.none()  # Retourne un queryset vide
+                    
+            except ImportError as e:
+                # Le module cotisations n'est pas disponible
+                pass
+            except Exception as e:
+                # Capturer toute autre exception pour éviter l'échec silencieux
+                pass
+        
+        # Filtre par compte utilisateur
+        if avec_compte == 'avec':
+            queryset = queryset.filter(utilisateur__isnull=False)
+        elif avec_compte == 'sans':
+            queryset = queryset.filter(utilisateur__isnull=True)
+        
+        # Filtre par statut d'activité
+        if actif == 'actif':
+            # Obtenir les IDs des membres avec au moins un type de membre actif
+            membres_ids = MembreTypeMembre.objects.filter(
+                date_debut__lte=timezone.now().date(),
+                date_fin__isnull=True
+            ).values_list('membre_id', flat=True).distinct()
             
-            if type_membre_id:
-                q_objects &= Q(
-                    types_historique__type_membre_id=type_membre_id,
-                    types_historique__date_debut__lte=timezone.now().date(),
-                    types_historique__date_fin__isnull=True
-                )
+            queryset = queryset.filter(id__in=membres_ids)
+        elif actif == 'inactif':
+            # Obtenir les IDs des membres avec au moins un type de membre actif
+            membres_ids = MembreTypeMembre.objects.filter(
+                date_debut__lte=timezone.now().date(),
+                date_fin__isnull=True
+            ).values_list('membre_id', flat=True).distinct()
             
-            if statut_id:
-                q_objects &= Q(statut_id=statut_id)
-                
-            # Applique tous les filtres Q construits
-            if q_objects:
-                queryset = queryset.filter(q_objects).distinct()
-                
-            # Appliquer les filtres spéciaux qui ne peuvent pas être facilement exprimés avec Q
-            if age_min is not None or age_max is not None:
-                queryset = Membre.objects.par_age(age_min=age_min, age_max=age_max)
-                
-            if cotisations_impayees:
-                queryset = Membre.objects.avec_cotisations_impayees()
-                
-            if avec_compte == 'avec':
-                queryset = queryset.filter(utilisateur__isnull=False)
-            elif avec_compte == 'sans':
-                queryset = queryset.filter(utilisateur__isnull=True)
-                
-            if actif == 'actif':
-                queryset = Membre.objects.actifs()
-            elif actif == 'inactif':
-                queryset = Membre.objects.inactifs()
+            queryset = queryset.exclude(id__in=membres_ids)
         
         # Appliquer le tri
         if sort_by:
-            # Déterminer l'ordre (ascendant ou descendant)
             direction = '' if sort_dir == 'asc' else '-'
             
-            # Configurer les champs de tri en fonction des colonnes
             if sort_by == 'nom':
-                # Trier d'abord par nom puis par prénom
                 order_fields = [f'{direction}nom', f'{direction}prenom']
             elif sort_by == 'email':
                 order_fields = [f'{direction}email']
@@ -213,13 +274,9 @@ class MembreListView(ListView):
             elif sort_by == 'date_adhesion':
                 order_fields = [f'{direction}date_adhesion']
             elif sort_by == 'statut':
-                # Trier par le nom du statut (nécessite un join)
                 queryset = queryset.select_related('statut')
                 order_fields = [f'{direction}statut__nom', f'{direction}nom']
             elif sort_by == 'types':
-                # Pour types, on peut trier par le nombre de types actifs
-                # Cette approche est plus complexe, on utilise annotation
-                from django.db.models import Count
                 queryset = queryset.annotate(
                     nb_types=Count(
                         'types_historique',
@@ -232,14 +289,15 @@ class MembreListView(ListView):
                 )
                 order_fields = [f'{direction}nb_types', f'{direction}nom']
             else:
-                # Par défaut, trier par nom et prénom
                 order_fields = ['nom', 'prenom']
             
-            # Appliquer l'ordre
             queryset = queryset.order_by(*order_fields)
         
         # Précharger les relations pour optimiser les performances
-        return queryset.select_related('statut').prefetch_related('types')
+        result = queryset.select_related('statut').prefetch_related('types')
+        
+        return result
+    
 
     # Ajouter à la méthode get_context_data pour passer les paramètres de tri au template
     def get_context_data(self, **kwargs):

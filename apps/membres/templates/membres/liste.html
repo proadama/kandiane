@@ -129,9 +129,11 @@
                         <i class="fas fa-search"></i> {% trans "Afficher/masquer les filtres" %}
                     </button>
                     
+                    <!-- Modification dans le template liste.html - section du formulaire de recherche -->
+                    <!-- Assurez-vous que le nom et l'ID des champs correspondent exactement à ce qui est attendu -->
+
                     <div class="collapse {% if request.GET %}show{% endif %}" id="searchCollapse">
                         <form method="get" action="{% url 'membres:membre_liste' %}">
-                            {% csrf_token %}
                             <div class="row g-3">
                                 <div class="col-md-4">
                                     <label class="form-label">{% trans "Recherche" %}</label>
