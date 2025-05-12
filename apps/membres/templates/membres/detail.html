@@ -277,58 +277,27 @@
             </div>
             
             <!-- Formulaire pour ajouter un type -->
-            {% if perms.membres.add_membretypemembre %}
-            <div class="card mb-4">
-                <div class="card-header bg-light">
-                    <h5 class="card-title mb-0">{% trans "Ajouter un type de membre" %}</h5>
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title">Documents associés</h5>
+                    <span class="badge bg-secondary">Prochainement</span>
                 </div>
                 <div class="card-body">
-                    <form method="post" action="{% url 'membres:membre_ajouter_type' membre.id %}">
-                        {% csrf_token %}
-                        
-                        <div class="mb-3">
-                            <label for="{{ type_form.type_membre.id_for_label }}" class="form-label">
-                                {{ type_form.type_membre.label }}
-                            </label>
-                            {{ type_form.type_membre }}
-                            {% if type_form.type_membre.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ type_form.type_membre.errors }}
-                            </div>
-                            {% endif %}
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="{{ type_form.date_debut.id_for_label }}" class="form-label">
-                                {{ type_form.date_debut.label }}
-                            </label>
-                            {{ type_form.date_debut }}
-                            {% if type_form.date_debut.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ type_form.date_debut.errors }}
-                            </div>
-                            {% endif %}
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="{{ type_form.commentaire.id_for_label }}" class="form-label">
-                                {{ type_form.commentaire.label }}
-                            </label>
-                            {{ type_form.commentaire }}
-                            {% if type_form.commentaire.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ type_form.commentaire.errors }}
-                            </div>
-                            {% endif %}
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-plus"></i> {% trans "Ajouter" %}
-                        </button>
-                    </form>
+                    <p class="text-center mb-3">Cette fonctionnalité sera disponible prochainement</p>
+                    <div class="alert alert-light border" role="alert">
+                        <h6>Types de documents qui seront disponibles :</h6>
+                        <ul class="mb-0">
+                            <li>Carte de membre</li>
+                            <li>Attestation de paiement</li>
+                            <li>Certificat médical</li>
+                            <li>Autres documents personnels</li>
+                        </ul>
+                        <p class="small mt-2 mb-0">
+                            <i class="fas fa-info-circle"></i> Cette section vous permettra de gérer les documents associés à ce membre.
+                        </p>
+                    </div>
                 </div>
             </div>
-            {% endif %}
         </div>
         
         <!-- Colonne de droite: historique et activités -->
