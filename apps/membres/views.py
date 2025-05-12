@@ -34,6 +34,7 @@ from django.utils.crypto import get_random_string
 from apps.accounts.models import CustomUser
 from django.http import Http404
 import types
+import openpyxl.styles
 
 logger = logging.getLogger(__name__)
 
@@ -1148,11 +1149,14 @@ class MembreExportView(StaffRequiredMixin, View):
             return self._export_csv(membres, champs, date_str)
     
     def _export_csv(self, membres, champs, date_str):
-        """Exporter au format CSV"""
-        response = HttpResponse(content_type='text/csv')
+        """Exporter au format CSV avec encodage UTF-8 et BOM pour Excel"""
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
         response['Content-Disposition'] = f'attachment; filename="membres_{date_str}.csv"'
         
-        writer = csv.writer(response)
+        # Ajouter un BOM (Byte Order Mark) pour que Excel reconnaisse correctement l'UTF-8
+        response.write('\ufeff')
+        
+        writer = csv.writer(response, delimiter=';')  # Utiliser point-virgule pour Excel
         
         # Écrire l'en-tête
         header = [
@@ -1172,14 +1176,18 @@ class MembreExportView(StaffRequiredMixin, View):
                 elif champ == 'types_actifs':
                     types = ", ".join([t.libelle for t in membre.get_types_actifs()])
                     row.append(types)
+                elif champ in ('date_adhesion', 'date_naissance') and getattr(membre, champ):
+                    # Formater les dates au format européen
+                    date_value = getattr(membre, champ)
+                    row.append(date_value.strftime('%d/%m/%Y'))
                 else:
                     row.append(getattr(membre, champ, ''))
             writer.writerow(row)
         
         return response
-    
+
     def _export_excel(self, membres, champs, date_str):
-        """Exporter au format Excel"""
+        """Exporter au format Excel avec prise en charge correcte des caractères accentués"""
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
@@ -1208,8 +1216,13 @@ class MembreExportView(StaffRequiredMixin, View):
                 elif champ == 'types_actifs':
                     types = ", ".join([t.libelle for t in membre.get_types_actifs()])
                     row.append(types)
+                elif champ in ('date_adhesion', 'date_naissance') and getattr(membre, champ):
+                    # Pour Excel, on peut garder les objets date directement
+                    row.append(getattr(membre, champ))
                 else:
-                    row.append(getattr(membre, champ, ''))
+                    value = getattr(membre, champ, '')
+                    # S'assurer que les valeurs None sont converties en chaînes vides
+                    row.append(str(value) if value is not None else '')
             ws.append(row)
         
         # Style de l'en-tête
@@ -1221,9 +1234,28 @@ class MembreExportView(StaffRequiredMixin, View):
             max_length = 0
             column_letter = column[0].column_letter
             for cell in column:
-                if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            ws.column_dimensions[column_letter].width = max_length + 2
+                try:
+                    if cell.value:
+                        # Ajuster la largeur en fonction de la longueur de la valeur
+                        # en tenant compte des caractères spéciaux
+                        cell_length = len(str(cell.value))
+                        if cell_length > max_length:
+                            max_length = cell_length
+                except:
+                    pass
+            # Largeur minimale de 8 caractères
+            adjusted_width = max(max_length + 2, 8)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Formater les dates
+        date_format = 'DD/MM/YYYY'
+        date_style = openpyxl.styles.NamedStyle(name='date_style', number_format=date_format)
+        for row_idx, row in enumerate(ws.iter_rows(min_row=2), 2):
+            # Colonnes des dates (9 = date_adhesion, 10 = date_naissance)
+            for col_idx in [9, 10]:
+                cell = ws.cell(row=row_idx, column=col_idx)
+                if isinstance(cell.value, datetime.date):
+                    cell.style = date_style
         
         # Enregistrer le classeur dans la réponse
         wb.save(response)
