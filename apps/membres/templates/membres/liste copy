@@ -1,78 +1,7 @@
 {% extends "layouts/base.html" %}
 {% load i18n %}
-{% load static %}
 
 {% block title %}{% trans "Liste des membres" %}{% endblock %}
-
-{% block extra_css %}
-<style>
-  /* Style amélioré pour les en-têtes de colonne triables */
-  .table th {
-    background-color: #f8f9fa;
-    position: relative;
-    padding-right: 25px; /* Espace pour les icônes de tri */
-    border-bottom: 2px solid #dee2e6;
-    vertical-align: middle;
-  }
-
-  .table th a {
-    color: #333;
-    text-decoration: none;
-    font-weight: bold;
-    display: block;
-    padding: 8px 0;
-  }
-  
-  /* Indicateurs de tri sous forme de triangles */
-  .sort-indicator {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-  
-  .sort-indicator .triangle-up {
-    width: 0;
-    height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-bottom: 8px solid #ccc;
-    display: block;
-    margin-bottom: 2px;
-  }
-  
-  .sort-indicator .triangle-down {
-    width: 0;
-    height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 8px solid #ccc;
-    display: block;
-  }
-  
-  /* Style pour le triangle actif */
-  .sort-asc .triangle-up {
-    border-bottom-color: #007bff;
-  }
-  
-  .sort-desc .triangle-down {
-    border-top-color: #007bff;
-  }
-  
-  /* Effet au survol */
-  .table th:hover {
-    background-color: #e9ecef;
-  }
-  
-  .table th:hover .triangle-up {
-    border-bottom-color: #666;
-  }
-  
-  .table th:hover .triangle-down {
-    border-top-color: #666;
-  }
-</style>
-{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -85,16 +14,12 @@
             </a>
             {% endif %}
             <div class="btn-group">
-                {% if perms.membres.import_membre %}
                 <a href="{% url 'membres:membre_importer' %}" class="btn btn-success">
                     <i class="fas fa-file-import"></i> {% trans "Importer" %}
                 </a>
-                {% endif %}
-                {% if perms.membres.export_membre %}
-                <a href="{% url 'membres:membre_exporter' %}?{{ request.GET.urlencode|safe }}" class="btn btn-secondary">
+                <a href="{% url 'membres:membre_exporter' %}?{{ request.GET.urlencode }}" class="btn btn-secondary">
                     <i class="fas fa-file-export"></i> {% trans "Exporter" %}
                 </a>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -131,7 +56,6 @@
                     
                     <div class="collapse {% if request.GET %}show{% endif %}" id="searchCollapse">
                         <form method="get" action="{% url 'membres:membre_liste' %}">
-                            {% csrf_token %}
                             <div class="row g-3">
                                 <div class="col-md-4">
                                     <label class="form-label">{% trans "Recherche" %}</label>
@@ -208,74 +132,26 @@
                 <table class="table table-striped table-hover">
                     <thead>
                         <tr>
-                            <th class="{% if sort == 'nom' %}sort-{{ sort_dir }}{% endif %}">
-                                <a href="?{% if query_params %}{{ query_params|safe }}&{% endif %}sort=nom&dir={% if sort == 'nom' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
-                                    {% trans "Nom" %}
-                                    <div class="sort-indicator">
-                                        <div class="triangle-up"></div>
-                                        <div class="triangle-down"></div>
-                                    </div>
-                                </a>
-                            </th>
-                            <th class="{% if sort == 'email' %}sort-{{ sort_dir }}{% endif %}">
-                                <a href="?{% if query_params %}{{ query_params|safe }}&{% endif %}sort=email&dir={% if sort == 'email' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
-                                    {% trans "Email" %}
-                                    <div class="sort-indicator">
-                                        <div class="triangle-up"></div>
-                                        <div class="triangle-down"></div>
-                                    </div>
-                                </a>
-                            </th>
-                            <th class="{% if sort == 'telephone' %}sort-{{ sort_dir }}{% endif %}">
-                                <a href="?{% if query_params %}{{ query_params|safe }}&{% endif %}sort=telephone&dir={% if sort == 'telephone' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
-                                    {% trans "Téléphone" %}
-                                    <div class="sort-indicator">
-                                        <div class="triangle-up"></div>
-                                        <div class="triangle-down"></div>
-                                    </div>
-                                </a>
-                            </th>
-                            <th class="{% if sort == 'date_adhesion' %}sort-{{ sort_dir }}{% endif %}">
-                                <a href="?{% if query_params %}{{ query_params|safe }}&{% endif %}sort=date_adhesion&dir={% if sort == 'date_adhesion' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
-                                    {% trans "Date d'adhésion" %}
-                                    <div class="sort-indicator">
-                                        <div class="triangle-up"></div>
-                                        <div class="triangle-down"></div>
-                                    </div>
-                                </a>
-                            </th>
-                            <th class="{% if sort == 'statut' %}sort-{{ sort_dir }}{% endif %}">
-                                <a href="?{% if query_params %}{{ query_params|safe }}&{% endif %}sort=statut&dir={% if sort == 'statut' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
-                                    {% trans "Statut" %}
-                                    <div class="sort-indicator">
-                                        <div class="triangle-up"></div>
-                                        <div class="triangle-down"></div>
-                                    </div>
-                                </a>
-                            </th>
-                            <th class="{% if sort == 'types' %}sort-{{ sort_dir }}{% endif %}">
-                                <a href="?{% if query_params %}{{ query_params|safe }}&{% endif %}sort=types&dir={% if sort == 'types' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
-                                    {% trans "Types" %}
-                                    <div class="sort-indicator">
-                                        <div class="triangle-up"></div>
-                                        <div class="triangle-down"></div>
-                                    </div>
-                                </a>
-                            </th>
+                            <th>{% trans "Nom" %}</th>
+                            <th>{% trans "Email" %}</th>
+                            <th>{% trans "Téléphone" %}</th>
+                            <th>{% trans "Date d'adhésion" %}</th>
+                            <th>{% trans "Statut" %}</th>
+                            <th>{% trans "Types" %}</th>
                             <th>{% trans "Actions" %}</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for membre in membres %}
                         <tr>
-                            <td>{{ membre.prenom|escape }} {{ membre.nom|escape }}</td>
-                            <td>{{ membre.email|escape }}</td>
-                            <td>{{ membre.telephone|default:"-"|escape }}</td>
+                            <td>{{ membre.prenom }} {{ membre.nom }}</td>
+                            <td>{{ membre.email }}</td>
+                            <td>{{ membre.telephone|default:"-" }}</td>
                             <td>{{ membre.date_adhesion }}</td>
                             <td>
                                 {% if membre.statut %}
                                 <span class="badge {% if membre.statut.nom == 'Actif' %}bg-success{% else %}bg-secondary{% endif %}">
-                                    {{ membre.statut.nom|escape }}
+                                    {{ membre.statut.nom }}
                                 </span>
                                 {% else %}
                                 -
@@ -283,24 +159,23 @@
                             </td>
                             <td>
                                 {% for type in membre.get_types_actifs %}
-                                <span class="badge bg-primary">{{ type.libelle|escape }}</span>
+                                <span class="badge bg-primary">{{ type.libelle }}</span>
                                 {% empty %}
                                 <span class="badge bg-warning text-dark">{% trans "Aucun" %}</span>
                                 {% endfor %}
                             </td>
                             <td>
                                 <div class="btn-group">
-                                    <a href="{% url 'membres:membre_detail' membre.id %}" class="btn btn-sm btn-info" title="{% trans 'Voir les détails' %}">
+                                    <a href="{% url 'membres:membre_detail' membre.id %}" class="btn btn-sm btn-info">
                                         <i class="fas fa-eye"></i>
                                     </a>
                                     {% if perms.membres.change_membre %}
-                                    <a href="{% url 'membres:membre_modifier' membre.id %}" class="btn btn-sm btn-warning" title="{% trans 'Modifier' %}">
+                                    <a href="{% url 'membres:membre_modifier' membre.id %}" class="btn btn-sm btn-warning">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     {% endif %}
                                     {% if perms.membres.delete_membre %}
-                                    <a href="{% url 'membres:membre_supprimer' membre.id %}" class="btn btn-sm btn-danger" title="{% trans 'Supprimer' %}" 
-                                       onclick="return confirm('{% trans "Êtes-vous sûr de vouloir supprimer ce membre?" %}');">
+                                    <a href="{% url 'membres:membre_supprimer' membre.id %}" class="btn btn-sm btn-danger">
                                         <i class="fas fa-trash"></i>
                                     </a>
                                     {% endif %}
@@ -318,12 +193,12 @@
                 <ul class="pagination justify-content-center mt-4">
                     {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode|safe }}&{% endif %}page=1" aria-label="{% trans 'Première page' %}">
+                        <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page=1">
                             <i class="fas fa-angle-double-left"></i>
                         </a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode|safe }}&{% endif %}page={{ page_obj.previous_page_number }}" aria-label="{% trans 'Page précédente' %}">
+                        <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}">
                             <i class="fas fa-angle-left"></i>
                         </a>
                     </li>
@@ -331,24 +206,24 @@
                     
                     {% for num in page_obj.paginator.page_range %}
                         {% if page_obj.number == num %}
-                        <li class="page-item active" aria-current="page">
+                        <li class="page-item active">
                             <span class="page-link">{{ num }}</span>
                         </li>
                         {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                         <li class="page-item">
-                            <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode|safe }}&{% endif %}page={{ num }}">{{ num }}</a>
+                            <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ num }}">{{ num }}</a>
                         </li>
                         {% endif %}
                     {% endfor %}
                     
                     {% if page_obj.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode|safe }}&{% endif %}page={{ page_obj.next_page_number }}" aria-label="{% trans 'Page suivante' %}">
+                        <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ page_obj.next_page_number }}">
                             <i class="fas fa-angle-right"></i>
                         </a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode|safe }}&{% endif %}page={{ page_obj.paginator.num_pages }}" aria-label="{% trans 'Dernière page' %}">
+                        <a class="page-link" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&{% endif %}page={{ page_obj.paginator.num_pages }}">
                             <i class="fas fa-angle-double-right"></i>
                         </a>
                     </li>
@@ -365,26 +240,4 @@
         </div>
     </div>
 </div>
-
-{% block extra_js %}
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    // Effet de survol supplémentaire (optionnel)
-    const headers = document.querySelectorAll('th a');
-    headers.forEach(header => {
-      header.addEventListener('mouseenter', function() {
-        const th = this.closest('th');
-        if (!th.classList.contains('sort-asc') && !th.classList.contains('sort-desc')) {
-          th.classList.add('hover-effect');
-        }
-      });
-      
-      header.addEventListener('mouseleave', function() {
-        this.closest('th').classList.remove('hover-effect');
-      });
-    });
-  });
-</script>
-{% endblock %}
-
 {% endblock %}

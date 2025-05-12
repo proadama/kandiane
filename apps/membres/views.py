@@ -124,13 +124,17 @@ class MembreListView(ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        # On commence avec un queryset vide mais qui sera rempli par les filtres
+        # On commence avec un queryset de base
         queryset = Membre.objects.all()
         form = MembreSearchForm(self.request.GET)
         
+        # Récupérer les paramètres de tri
+        sort_by = self.request.GET.get('sort', 'nom')  # Tri par défaut par nom
+        sort_dir = self.request.GET.get('dir', 'asc')  # Direction par défaut: ascendant
+        
         if form.is_valid():
+            # [Garder tout le code de filtrage existant]
             # Variables pour stocker les différents critères de filtrage
-            filters = {}
             term = form.cleaned_data.get('terme')
             type_membre_id = form.cleaned_data.get('type_membre').id if form.cleaned_data.get('type_membre') else None
             statut_id = form.cleaned_data.get('statut').id if form.cleaned_data.get('statut') else None
@@ -193,9 +197,51 @@ class MembreListView(ListView):
             elif actif == 'inactif':
                 queryset = Membre.objects.inactifs()
         
+        # Appliquer le tri
+        if sort_by:
+            # Déterminer l'ordre (ascendant ou descendant)
+            direction = '' if sort_dir == 'asc' else '-'
+            
+            # Configurer les champs de tri en fonction des colonnes
+            if sort_by == 'nom':
+                # Trier d'abord par nom puis par prénom
+                order_fields = [f'{direction}nom', f'{direction}prenom']
+            elif sort_by == 'email':
+                order_fields = [f'{direction}email']
+            elif sort_by == 'telephone':
+                order_fields = [f'{direction}telephone']
+            elif sort_by == 'date_adhesion':
+                order_fields = [f'{direction}date_adhesion']
+            elif sort_by == 'statut':
+                # Trier par le nom du statut (nécessite un join)
+                queryset = queryset.select_related('statut')
+                order_fields = [f'{direction}statut__nom', f'{direction}nom']
+            elif sort_by == 'types':
+                # Pour types, on peut trier par le nombre de types actifs
+                # Cette approche est plus complexe, on utilise annotation
+                from django.db.models import Count
+                queryset = queryset.annotate(
+                    nb_types=Count(
+                        'types_historique',
+                        filter=Q(
+                            types_historique__date_debut__lte=timezone.now().date(),
+                            types_historique__date_fin__isnull=True
+                        ),
+                        distinct=True
+                    )
+                )
+                order_fields = [f'{direction}nb_types', f'{direction}nom']
+            else:
+                # Par défaut, trier par nom et prénom
+                order_fields = ['nom', 'prenom']
+            
+            # Appliquer l'ordre
+            queryset = queryset.order_by(*order_fields)
+        
         # Précharger les relations pour optimiser les performances
         return queryset.select_related('statut').prefetch_related('types')
-    
+
+    # Ajouter à la méthode get_context_data pour passer les paramètres de tri au template
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
@@ -206,8 +252,20 @@ class MembreListView(ListView):
         context['total_membres'] = Membre.objects.count()
         context['membres_actifs'] = Membre.objects.actifs().count()
         
+        # Paramètres de tri pour le template
+        context['sort'] = self.request.GET.get('sort', 'nom')
+        context['sort_dir'] = self.request.GET.get('dir', 'asc')
+        
+        # Créer les paramètres de requête pour les liens de tri
+        # en excluant les paramètres de tri existants
+        query_params = self.request.GET.copy()
+        if 'sort' in query_params:
+            query_params.pop('sort')
+        if 'dir' in query_params:
+            query_params.pop('dir')
+        context['query_params'] = query_params.urlencode()
+        
         return context
-
 
 class MembreDetailView(DetailView):
     """
