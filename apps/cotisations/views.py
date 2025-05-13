@@ -160,6 +160,18 @@ class DashboardView(StaffRequiredMixin, TemplateView):
             total=Sum('montant')
         ).order_by('type_membre__libelle')
         
+        # Préparation des données pour le JSON des types de membre
+        cotisations_par_type_data = []
+        for item in cotisations_par_type:
+            libelle = item['type_membre__libelle']
+            if libelle is None:
+                libelle = 'Non défini'
+            
+            cotisations_par_type_data.append({
+                'libelle': libelle,
+                'total': float(item['total'] or 0)
+            })
+        
         # Définir les noms des mois en français
         mois_fr = [
             'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -225,6 +237,41 @@ class DashboardView(StaffRequiredMixin, TemplateView):
         cotisations_retard = Cotisation.objects.en_retard()
         cotisations_echeance = Cotisation.objects.a_echeance(jours=30)
         
+        # S'assurer que les données JSON sont bien formatées
+        try:
+            # Sérialiser toutes les données pour les graphiques
+            cotisations_par_mois_json = json.dumps(cotisations_par_mois, cls=ExtendedJSONEncoder, ensure_ascii=False)
+            paiements_par_mois_json = json.dumps(paiements_par_mois, cls=ExtendedJSONEncoder, ensure_ascii=False)
+            cotisations_non_payees_par_mois_json = json.dumps(cotisations_non_payees_par_mois, cls=ExtendedJSONEncoder, ensure_ascii=False)
+            
+            # Sérialiser les données de statut
+            statuts_data = {
+                'non_payee': 0,
+                'partiellement_payee': 0,
+                'payee': 0
+            }
+            
+            for statut in cotisations_par_statut:
+                statut_key = statut['statut_paiement']
+                if statut_key in statuts_data:
+                    statuts_data[statut_key] = statut['count']
+            
+            statuts_json = json.dumps(statuts_data, cls=ExtendedJSONEncoder, ensure_ascii=False)
+            
+            # Sérialiser les données de type de membre
+            types_json = json.dumps(cotisations_par_type_data, cls=ExtendedJSONEncoder, ensure_ascii=False)
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de la sérialisation JSON: {str(e)}")
+            logger.error(traceback.format_exc())
+            
+            # En cas d'erreur, utiliser des tableaux vides
+            cotisations_par_mois_json = "[]"
+            paiements_par_mois_json = "[]"
+            cotisations_non_payees_par_mois_json = "[]"
+            statuts_json = '{"non_payee": 0, "partiellement_payee": 0, "payee": 0}'
+            types_json = "[]"
+        
         # Ajouter les données au contexte
         context.update({
             'periode': periode,
@@ -237,9 +284,11 @@ class DashboardView(StaffRequiredMixin, TemplateView):
             'taux_recouvrement': taux_recouvrement,
             'cotisations_par_statut': cotisations_par_statut,
             'cotisations_par_type': cotisations_par_type,
-            'cotisations_par_mois': json.dumps(cotisations_par_mois),
-            'paiements_par_mois': json.dumps(paiements_par_mois),
-            'cotisations_non_payees_par_mois': json.dumps(cotisations_non_payees_par_mois),
+            'cotisations_par_mois': cotisations_par_mois_json,
+            'paiements_par_mois': paiements_par_mois_json,
+            'cotisations_non_payees_par_mois': cotisations_non_payees_par_mois_json,
+            'statuts_json': statuts_json,
+            'types_json': types_json,
             'cotisations_retard': cotisations_retard,
             'cotisations_echeance': cotisations_echeance,
             'nb_cotisations_retard': cotisations_retard.count(),
@@ -249,11 +298,7 @@ class DashboardView(StaffRequiredMixin, TemplateView):
         })
         
         return context
-
-
-#
-# Vues pour les cotisations
-#
+    
 class CotisationListView(StaffRequiredMixin, ListView):
     """
     Vue pour afficher la liste des cotisations avec filtres.
@@ -2731,6 +2776,103 @@ class ExportCotisationsView(StaffRequiredMixin, View):
         """Exporte les cotisations au format Excel."""
         return export_utils.export_cotisations_excel(queryset)
 
+class StatistiquesView(StaffRequiredMixin, TemplateView):
+    """
+    Vue pour afficher les statistiques financières des cotisations et paiements.
+    """
+    template_name = 'cotisations/statistiques.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Récupérer les paramètres de filtre
+        annee = self.request.GET.get('annee', timezone.now().date().year)
+        try:
+            annee = int(annee)
+        except (ValueError, TypeError):
+            annee = timezone.now().date().year
+        
+        # Statistiques générales
+        total_cotisations = Cotisation.objects.filter(annee=annee).count()
+        montant_total = Cotisation.objects.filter(annee=annee).aggregate(
+            total=Sum('montant')
+        ).get('total') or Decimal('0.00')
+        
+        montant_paye = Paiement.objects.filter(
+            cotisation__annee=annee,
+            type_transaction='paiement'
+        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        
+        montant_remboursement = Paiement.objects.filter(
+            cotisation__annee=annee,
+            type_transaction='remboursement'
+        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
+        
+        # Calcul du taux de recouvrement
+        taux_recouvrement = 0
+        if montant_total > 0:
+            taux_recouvrement = (montant_paye / montant_total * 100).quantize(Decimal('0.01'))
+        
+        # Statistiques par mois
+        stats_par_mois = []
+        for mois in range(1, 13):
+            cotisations_mois = Cotisation.objects.filter(annee=annee, mois=mois)
+            paiements_mois = Paiement.objects.filter(
+                cotisation__annee=annee,
+                cotisation__mois=mois,
+                type_transaction='paiement'
+            )
+            
+            montant_cotisations = cotisations_mois.aggregate(
+                total=Sum('montant')
+            ).get('total') or Decimal('0.00')
+            
+            montant_paiements = paiements_mois.aggregate(
+                total=Sum('montant')
+            ).get('total') or Decimal('0.00')
+            
+            stats_par_mois.append({
+                'mois': mois,
+                'mois_nom': datetime.date(2000, mois, 1).strftime('%B'),
+                'montant_cotisations': montant_cotisations,
+                'montant_paiements': montant_paiements,
+                'difference': montant_paiements - montant_cotisations,
+            })
+        
+        # Statistiques par type de membre
+        stats_par_type = Cotisation.objects.filter(annee=annee).values(
+            'type_membre__libelle'
+        ).annotate(
+            nb_cotisations=Count('id'),
+            montant_total=Sum('montant'),
+            montant_paye=Sum(F('montant') - F('montant_restant')),
+        ).order_by('type_membre__libelle')
+        
+        # Statistiques par mode de paiement
+        stats_par_mode = Paiement.objects.filter(
+            cotisation__annee=annee,
+            type_transaction='paiement'
+        ).values(
+            'mode_paiement__libelle'
+        ).annotate(
+            nb_paiements=Count('id'),
+            montant_total=Sum('montant')
+        ).order_by('-montant_total')
+        
+        context.update({
+            'annee': annee,
+            'annees_disponibles': range(datetime.date.today().year - 5, datetime.date.today().year + 1),
+            'total_cotisations': total_cotisations,
+            'montant_total': montant_total,
+            'montant_paye': montant_paye,
+            'montant_remboursement': montant_remboursement,
+            'taux_recouvrement': taux_recouvrement,
+            'stats_par_mois': stats_par_mois,
+            'stats_par_type': stats_par_type,
+            'stats_par_mode': stats_par_mode,
+        })
+        
+        return context
 
 @login_required
 def export_cotisations_pdf(request):
@@ -3250,104 +3392,6 @@ def api_marquer_paiement_recu(request, paiement_id):
         'message': _("Paiement marqué comme ayant reçu un reçu.")
     }, encoder=ExtendedJSONEncoder)
 
-
-class StatistiquesView(StaffRequiredMixin, TemplateView):
-    """
-    Vue pour afficher les statistiques financières des cotisations et paiements.
-    """
-    template_name = 'cotisations/statistiques.html'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Récupérer les paramètres de filtre
-        annee = self.request.GET.get('annee', timezone.now().date().year)
-        try:
-            annee = int(annee)
-        except (ValueError, TypeError):
-            annee = timezone.now().date().year
-        
-        # Statistiques générales
-        total_cotisations = Cotisation.objects.filter(annee=annee).count()
-        montant_total = Cotisation.objects.filter(annee=annee).aggregate(
-            total=Sum('montant')
-        ).get('total') or Decimal('0.00')
-        
-        montant_paye = Paiement.objects.filter(
-            cotisation__annee=annee,
-            type_transaction='paiement'
-        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
-        
-        montant_remboursement = Paiement.objects.filter(
-            cotisation__annee=annee,
-            type_transaction='remboursement'
-        ).aggregate(total=Sum('montant')).get('total') or Decimal('0.00')
-        
-        # Calcul du taux de recouvrement
-        taux_recouvrement = 0
-        if montant_total > 0:
-            taux_recouvrement = (montant_paye / montant_total * 100).quantize(Decimal('0.01'))
-        
-        # Statistiques par mois
-        stats_par_mois = []
-        for mois in range(1, 13):
-            cotisations_mois = Cotisation.objects.filter(annee=annee, mois=mois)
-            paiements_mois = Paiement.objects.filter(
-                cotisation__annee=annee,
-                cotisation__mois=mois,
-                type_transaction='paiement'
-            )
-            
-            montant_cotisations = cotisations_mois.aggregate(
-                total=Sum('montant')
-            ).get('total') or Decimal('0.00')
-            
-            montant_paiements = paiements_mois.aggregate(
-                total=Sum('montant')
-            ).get('total') or Decimal('0.00')
-            
-            stats_par_mois.append({
-                'mois': mois,
-                'mois_nom': datetime.date(2000, mois, 1).strftime('%B'),
-                'montant_cotisations': montant_cotisations,
-                'montant_paiements': montant_paiements,
-                'difference': montant_paiements - montant_cotisations,
-            })
-        
-        # Statistiques par type de membre
-        stats_par_type = Cotisation.objects.filter(annee=annee).values(
-            'type_membre__libelle'
-        ).annotate(
-            nb_cotisations=Count('id'),
-            montant_total=Sum('montant'),
-            montant_paye=Sum(F('montant') - F('montant_restant')),
-        ).order_by('type_membre__libelle')
-        
-        # Statistiques par mode de paiement
-        stats_par_mode = Paiement.objects.filter(
-            cotisation__annee=annee,
-            type_transaction='paiement'
-        ).values(
-            'mode_paiement__libelle'
-        ).annotate(
-            nb_paiements=Count('id'),
-            montant_total=Sum('montant')
-        ).order_by('-montant_total')
-        
-        context.update({
-            'annee': annee,
-            'annees_disponibles': range(datetime.date.today().year - 5, datetime.date.today().year + 1),
-            'total_cotisations': total_cotisations,
-            'montant_total': montant_total,
-            'montant_paye': montant_paye,
-            'montant_remboursement': montant_remboursement,
-            'taux_recouvrement': taux_recouvrement,
-            'stats_par_mois': stats_par_mois,
-            'stats_par_type': stats_par_type,
-            'stats_par_mode': stats_par_mode,
-        })
-        
-        return context
 
 #
 # API pour les statistiques et rapports

@@ -2,6 +2,7 @@
 {% extends "cotisations/base.html" %}
 {% load i18n %}
 {% load custom_filters %}
+{% load static %}
 
 {% block breadcrumb %}
 <li class="breadcrumb-item active">{% trans "Tableau de bord" %}</li>
@@ -315,10 +316,34 @@
         </div>
     </div>
 </div>
+
+<!-- Éléments cachés contenant les données JSON pour les graphiques -->
+<!-- Éléments cachés contenant les données JSON pour les graphiques -->
+<script type="application/json" id="cotisations-data">
+    {{ cotisations_par_mois|safe }}
+    </script>
+    
+    <script type="application/json" id="paiements-data">
+    {{ paiements_par_mois|safe }}
+    </script>
+    
+    <script type="application/json" id="non-payees-data">
+    {{ cotisations_non_payees_par_mois|safe }}
+    </script>
+    
+    <script type="application/json" id="statuts-data">
+    {{ statuts_json|safe }}
+    </script>
+    
+    <script type="application/json" id="types-data">
+    {{ types_json|safe }}
+    </script>
+
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'js/cotisations/dashboard-charts.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Afficher/masquer le champ d'année
@@ -332,173 +357,6 @@ document.addEventListener('DOMContentLoaded', function() {
             anneeContainer.style.display = 'none';
         }
     });
-    
-    // Graphique d'évolution des cotisations
-    const cotisationsData = {{ cotisations_par_mois|safe }};
-    const paiementsData = {{ paiements_par_mois|safe }};
-    const nonPayeesData = {{ cotisations_non_payees_par_mois|safe }};
-    
-    if (document.getElementById('cotisationsChart')) {
-        const cotisationsChart = new Chart(
-            document.getElementById('cotisationsChart'),
-            {
-                type: 'bar',
-                data: {
-                    labels: cotisationsData.map(item => item.month),
-                    datasets: [
-                        {
-                            label: '{% trans "Cotisations émises" %}',
-                            data: cotisationsData.map(item => item.total),
-                            backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                        },
-                        {
-                            label: '{% trans "Paiements reçus" %}',
-                            data: paiementsData.map(item => item.total),
-                            backgroundColor: 'rgba(75, 192, 192, 0.7)',
-                        },
-                        {
-                            label: '{% trans "Cotisations non payées" %}',
-                            data: nonPayeesData.map(item => item.total),
-                            backgroundColor: 'rgba(255, 99, 132, 0.7)',
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                        },
-                        title: {
-                            display: false,
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return value + ' €';
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        );
-    }
-    
-    // Graphique des statuts
-    if (document.getElementById('statutsChart')) {
-        // Construire de façon sécurisée les données du graphique des statuts
-        const statuts = {
-            'non_payee': 0,
-            'partiellement_payee': 0,
-            'payee': 0
-        };
-        
-        // Préparation des données pour le statut
-        {% for statut in cotisations_par_statut %}
-            {% if statut.statut_paiement == 'non_payee' %}
-                statuts['non_payee'] = {{ statut.count }};
-            {% elif statut.statut_paiement == 'partiellement_payee' %}
-                statuts['partiellement_payee'] = {{ statut.count }};
-            {% elif statut.statut_paiement == 'payee' %}
-                statuts['payee'] = {{ statut.count }};
-            {% endif %}
-        {% endfor %}
-        
-        const statutsChart = new Chart(
-            document.getElementById('statutsChart'),
-            {
-                type: 'doughnut',
-                data: {
-                    labels: [
-                        '{% trans "Non payée" %}',
-                        '{% trans "Partiellement payée" %}',
-                        '{% trans "Payée" %}'
-                    ],
-                    datasets: [{
-                        data: [
-                            statuts['non_payee'],
-                            statuts['partiellement_payee'],
-                            statuts['payee']
-                        ],
-                        backgroundColor: [
-                            'rgba(255, 99, 132, 0.7)',
-                            'rgba(255, 205, 86, 0.7)',
-                            'rgba(75, 192, 192, 0.7)'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                        }
-                    }
-                }
-            }
-        );
-    }
-    
-    // Graphique par type de membre
-    if (document.getElementById('typeMembreChart')) {
-        // Récupérer les données pour le graphique par type de membre
-        const typesData = [];
-        {% for type in cotisations_par_type %}
-            typesData.push({
-                libelle: "{{ type.type_membre__libelle|default:'Non défini'|escapejs }}",
-                total: {{ type.total|default:0 }}
-            });
-        {% endfor %}
-        
-        // Couleurs pour le graphique en donut
-        const backgroundColors = [
-            'rgba(78, 115, 223, 0.7)',
-            'rgba(28, 200, 138, 0.7)',
-            'rgba(246, 194, 62, 0.7)',
-            'rgba(231, 74, 59, 0.7)',
-            'rgba(54, 185, 204, 0.7)',
-            'rgba(133, 135, 150, 0.7)'
-        ];
-        
-        // Créer le graphique en donut
-        const typeMembreChart = new Chart(
-            document.getElementById('typeMembreChart'),
-            {
-                type: 'doughnut',
-                data: {
-                    labels: typesData.map(item => item.libelle),
-                    datasets: [{
-                        data: typesData.map(item => item.total),
-                        backgroundColor: backgroundColors.slice(0, typesData.length)
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.label || '';
-                                    let value = context.raw || 0;
-                                    return label + ': ' + value.toFixed(2) + ' €';
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        );
-    }
 });
 </script>
 {% endblock %}
