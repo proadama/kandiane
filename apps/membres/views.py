@@ -347,10 +347,10 @@ class MembreDetailView(DetailView):
         # Formulaire pour ajouter un nouveau type
         context['type_form'] = MembreTypeMembreForm(membre=membre, user=self.request.user)
         
-        # Historique des modifications
+        # Historique des modifications - Limité aux 5 dernières entrées
         context['historique'] = HistoriqueMembre.objects.filter(
             membre=membre
-        ).select_related('utilisateur').order_by('-created_at')[:10]
+        ).select_related('utilisateur').order_by('-created_at')[:5]
         
         # Informations supplémentaires calculées
         context['age'] = membre.age()
