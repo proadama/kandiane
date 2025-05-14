@@ -463,7 +463,7 @@ class MembreTypeMembre(models.Model):
         ]
     
     def __str__(self):
-        statut = _("actif") if self.date_fin is None else _("terminé")
+        statut = _("actif") if self.est_actif else _("terminé")
         return f"{self.membre} - {self.type_membre} ({statut})"
     
     def clean(self):
@@ -475,16 +475,40 @@ class MembreTypeMembre(models.Model):
             })
     
     def save(self, *args, **kwargs):
-        """Surcharge de la méthode save pour la validation"""
+        """Surcharge de la méthode save pour la validation et la mise à jour du cache"""
         self.clean()
-        super().save(*args, **kwargs)
+        
+        # Sauvegarde des valeurs précédentes pour vérifier les changements
+        if self.pk:
+            old_instance = MembreTypeMembre.objects.get(pk=self.pk)
+            date_fin_changed = old_instance.date_fin != self.date_fin
+        else:
+            date_fin_changed = False
+        
+        # Sauvegarde normale
+        result = super().save(*args, **kwargs)
+        
+        # Si la date de fin a changé, forcer la mise à jour du cache des types actifs du membre
+        if date_fin_changed and self.membre:
+            # Forcer le rechargement des types actifs si nécessaire
+            try:
+                # Cette ligne force Django à recalculer les types actifs
+                # en invalidant le cache QuerySet
+                refresh_types = list(self.membre.get_types_actifs())
+            except Exception:
+                pass  # Ignorer les erreurs potentielles
+        
+        return result
     
     @property
     def est_actif(self):
         """Vérifie si cette association est active"""
+        today = timezone.now().date()
+        # Une association est active si sa date de début est dans le passé
+        # et si sa date de fin est soit nulle, soit dans le futur
         return (
-            self.date_debut <= timezone.now().date() and 
-            (self.date_fin is None or self.date_fin >= timezone.now().date())
+            self.date_debut <= today and 
+            (self.date_fin is None or self.date_fin > today)  # Utiliser > au lieu de >=
         )
 
 

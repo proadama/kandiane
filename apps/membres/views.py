@@ -816,27 +816,42 @@ class MembreTypeMembreTerminerView(StaffRequiredMixin, View):
     Vue pour terminer l'association entre un membre et un type de membre
     """
     def post(self, request, pk):
+        # Récupérer l'association
         association = get_object_or_404(MembreTypeMembre, pk=pk)
         membre = association.membre
+        type_membre = association.type_membre
+        
+        # Stocker le nom du type pour le message
+        type_libelle = type_membre.libelle
         
         # Date de fin par défaut aujourd'hui
         date_fin = timezone.now().date()
         commentaire = request.POST.get('commentaire', '')
         
-        # Mettre à jour l'association
-        association.date_fin = date_fin
+        # Utiliser le mécanisme de suppression du membre plutôt que la mise à jour directe
+        # Cela garantit que tous les signaux et logiques métier sont appliqués
+        membre.supprimer_type(type_membre, date_fin)
+        
+        # Mettre également à jour cette instance spécifique pour le commentaire et l'utilisateur
+        association.date_fin = date_fin  
         association.commentaire = commentaire
         association.modifie_par = request.user
-        association.save()
+        association.save(update_fields=['date_fin', 'commentaire', 'modifie_par'])
         
+        # Forcer la mise à jour du cache des types actifs si une telle méthode existe
+        if hasattr(membre, 'reset_types_cache'):
+            membre.reset_types_cache()
+        
+        # Ajouter un paramètre à l'URL pour forcer le rechargement
         messages.success(
             request, 
             _("L'association avec le type %(type)s a été terminée.") % {
-                'type': association.type_membre.libelle
+                'type': type_libelle
             }
         )
         
-        return redirect('membres:membre_detail', pk=membre.pk)
+        # Rediriger vers la page détail avec un paramètre pour forcer le rafraîchissement
+        return redirect(f"{membre.get_absolute_url()}?refresh=true&ts={int(timezone.now().timestamp())}")
 
 
 class MembreImportView(StaffRequiredMixin, FormView):
