@@ -21,7 +21,7 @@ from django.views.generic import (
 
 from openpyxl import Workbook
 from openpyxl import load_workbook
-
+from django.db.utils import IntegrityError
 from apps.core.mixins import StaffRequiredMixin, TrashViewMixin, RestoreViewMixin
 from apps.core.models import Statut
 from apps.membres.forms import (
@@ -338,11 +338,11 @@ class MembreDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         membre = self.object
         
-        # Types de membre actuels et historiques
+        # Types de membre actuels et historiques - Limité aux 5 derniers
         context['types_actifs'] = membre.get_types_actifs()
         context['historique_types'] = MembreTypeMembre.objects.filter(
             membre=membre
-        ).select_related('type_membre', 'modifie_par').order_by('-date_debut')
+        ).select_related('type_membre', 'modifie_par').order_by('-date_debut')[:5]
         
         # Formulaire pour ajouter un nouveau type
         context['type_form'] = MembreTypeMembreForm(membre=membre, user=self.request.user)
@@ -384,7 +384,7 @@ class MembreDetailView(DetailView):
             context['documents'] = Document.objects.filter(
                 reference_id=membre.id,
                 type_document__nom='membre'
-            ).order_by('-date_upload')
+            ).order_by('-date_upload')[:5]  # Limité aux 5 derniers documents
         except ImportError:
             context['documents'] = None
         
@@ -765,15 +765,74 @@ class MembreTypeMembreCreateView(StaffRequiredMixin, CreateView):
         return context
     
     def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(
-            self.request, 
-            _("Le type de membre %(type)s a été ajouté avec succès à %(name)s.") % {
-                'type': form.instance.type_membre.libelle,
-                'name': form.instance.membre.nom_complet
-            }
-        )
-        return response
+        try:
+            type_membre = form.cleaned_data['type_membre']
+            date_debut = form.cleaned_data['date_debut']
+            commentaire = form.cleaned_data.get('commentaire', '')
+            
+            # Vérifier si ce type est déjà associé au membre avec une date de début identique
+            existing = MembreTypeMembre.objects.filter(
+                membre=self.membre,
+                type_membre=type_membre,
+                date_debut=date_debut
+            ).exists()
+            
+            if existing:
+                # L'association existe déjà, afficher un message et rediriger
+                messages.warning(
+                    self.request,
+                    _("Ce type de membre est déjà associé à ce membre avec la même date de début.")
+                )
+                return redirect('membres:membre_detail', pk=self.membre.pk)
+            
+            # Vérifier s'il existe déjà un type actif (sans date de fin)
+            active_assoc = MembreTypeMembre.objects.filter(
+                membre=self.membre,
+                type_membre=type_membre,
+                date_fin__isnull=True
+            ).first()
+            
+            if active_assoc:
+                # Mettre fin à l'association active avant d'en créer une nouvelle
+                active_assoc.date_fin = date_debut
+                active_assoc.save(update_fields=['date_fin'])
+                
+                messages.info(
+                    self.request,
+                    _("L'association précédente avec ce type a été automatiquement terminée.")
+                )
+            
+            # Créer la nouvelle association
+            association = form.save(commit=False)
+            association.membre = self.membre
+            association.modifie_par = self.request.user
+            association.commentaire = commentaire
+            association.save()
+            
+            messages.success(
+                self.request, 
+                _("Le type de membre %(type)s a été ajouté avec succès à %(name)s.") % {
+                    'type': association.type_membre.libelle,
+                    'name': association.membre.nom_complet
+                }
+            )
+            
+            return redirect('membres:membre_detail', pk=self.membre.pk)
+            
+        except IntegrityError:
+            # Capturer l'erreur de contrainte d'unicité
+            messages.error(
+                self.request,
+                _("Impossible d'ajouter ce type - une association identique existe déjà.")
+            )
+            return self.form_invalid(form)
+        except Exception as e:
+            # Capturer toute autre erreur inattendue
+            messages.error(
+                self.request,
+                _("Une erreur est survenue: %(error)s") % {'error': str(e)}
+            )
+            return self.form_invalid(form)
     
     def get_success_url(self):
         return reverse('membres:membre_detail', kwargs={'pk': self.membre.pk})
@@ -1561,12 +1620,91 @@ class MembreUpdateView(StaffRequiredMixin, UpdateView):
         return kwargs
     
     def form_valid(self, form):
-        membre = form.save()
-        messages.success(
-            self.request, 
-            _("Le membre %(name)s a été modifié avec succès.") % {'name': membre.nom_complet}
-        )
-        return super().form_valid(form)
+        try:
+            membre = form.save(commit=False)
+            
+            # Si le formulaire inclut un champ pour les types de membre
+            types_membre = form.cleaned_data.get('types_membre', [])
+            
+            # Vérifier s'il y a des doublons dans les dates de début
+            if types_membre:
+                type_dates = {}
+                for type_membre in types_membre:
+                    # Si plusieurs types ont la même date de début, cela pourrait causer l'erreur
+                    date_debut = form.cleaned_data.get(f'date_debut_{type_membre.id}', timezone.now().date())
+                    if (type_membre.id, date_debut) in type_dates:
+                        messages.warning(
+                            self.request,
+                            _("Attention: Plusieurs types de membre ne peuvent pas avoir la même date de début.")
+                        )
+                        return self.form_invalid(form)
+                    type_dates[(type_membre.id, date_debut)] = True
+            
+            # Enregistrer le membre de base
+            membre.save()
+            
+            # Enregistrer les relations avec les types de membre, si le formulaire les gère
+            if types_membre:
+                for type_membre in types_membre:
+                    try:
+                        # Vérifier si ce type est déjà associé au membre
+                        date_debut = form.cleaned_data.get(f'date_debut_{type_membre.id}', timezone.now().date())
+                        
+                        # Vérifier s'il existe déjà une association avec la même date
+                        if MembreTypeMembre.objects.filter(
+                            membre=membre,
+                            type_membre=type_membre,
+                            date_debut=date_debut
+                        ).exists():
+                            continue  # Ignorer ce type s'il existe déjà une association
+                        
+                        # Vérifier s'il existe une association active pour ce type
+                        active_assoc = MembreTypeMembre.objects.filter(
+                            membre=membre,
+                            type_membre=type_membre,
+                            date_fin__isnull=True
+                        ).first()
+                        
+                        if active_assoc:
+                            # Mettre fin à l'association active
+                            if active_assoc.date_debut != date_debut:
+                                active_assoc.date_fin = date_debut
+                                active_assoc.save(update_fields=['date_fin'])
+                            else:
+                                # Si même date de début, pas besoin de créer une nouvelle association
+                                continue
+                        
+                        # Créer une nouvelle association
+                        MembreTypeMembre.objects.create(
+                            membre=membre,
+                            type_membre=type_membre,
+                            date_debut=date_debut,
+                            modifie_par=self.request.user
+                        )
+                        
+                    except IntegrityError:
+                        # Ignorer les erreurs d'intégrité pour ce type
+                        logger.warning(f"Erreur d'intégrité ignorée pour le type {type_membre.libelle}")
+                        continue
+            
+            messages.success(
+                self.request, 
+                _("Le membre %(name)s a été modifié avec succès.") % {'name': membre.nom_complet}
+            )
+            
+            return super().form_valid(form)
+            
+        except IntegrityError as e:
+            logger.error(f"Erreur d'intégrité dans MembreUpdateView: {str(e)}")
+            messages.error(
+                self.request,
+                _("Erreur de contrainte d'unicité. Veuillez vérifier que vous n'avez pas de doublons dans les types de membre ou leurs dates.")
+            )
+            return self.form_invalid(form)
+        except Exception as e:
+            logger.error(f"Erreur inattendue dans MembreUpdateView: {str(e)}")
+            messages.error(self.request, _("Une erreur est survenue: %(error)s") % {'error': str(e)})
+            return self.form_invalid(form)
     
 class GuideIntegrationView(StaffRequiredMixin, TemplateView):
     """
