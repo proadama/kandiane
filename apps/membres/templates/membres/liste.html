@@ -301,8 +301,7 @@
                                     </a>
                                     {% endif %}
                                     {% if perms.membres.delete_membre %}
-                                    <a href="{% url 'membres:membre_supprimer' membre.id %}" class="btn btn-sm btn-danger" title="{% trans 'Supprimer' %}" 
-                                       onclick="return confirm('{% trans "Êtes-vous sûr de vouloir supprimer ce membre?" %}');">
+                                    <a href="{% url 'membres:membre_supprimer' membre.id %}" class="btn btn-sm btn-danger">
                                         <i class="fas fa-trash"></i>
                                     </a>
                                     {% endif %}
