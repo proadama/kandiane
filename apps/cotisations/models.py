@@ -427,6 +427,19 @@ class Cotisation(BaseModel):
         
         return data
 
+    def restore(self):
+        """
+        Restaure une cotisation qui a été supprimée logiquement.
+        """
+        if self.deleted_at:
+            self.deleted_at = None
+            self.save(update_fields=['deleted_at'])
+            # Si vous avez un historique des actions, vous pourriez vouloir l'enregistrer ici
+            # Par exemple:
+            # if hasattr(self, 'log_action'):
+            #     self.log_action('restauration')
+        return self
+
     @property
     def est_en_retard(self):
         """

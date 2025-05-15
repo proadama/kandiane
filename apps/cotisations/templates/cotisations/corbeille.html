@@ -1,0 +1,157 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% translate "Corbeille - Cotisations supprimées" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">{% translate "Corbeille - Cotisations supprimées" %}</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="/">{% translate "Tableau de bord" %}</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'cotisations:liste' %}">{% translate "Cotisations" %}</a></li>
+        <li class="breadcrumb-item active">{% translate "Corbeille" %}</li>
+    </ol>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-trash-alt me-1"></i>
+            {% translate "Cotisations supprimées" %}
+        </div>
+        <div class="card-body">
+            {% if cotisations_list %}
+                <form id="actionForm" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <div class="btn-group" role="group">
+                            <button type="submit" name="action" value="restaurer" class="btn btn-success">
+                                <i class="fas fa-trash-restore me-1"></i> {% translate "Restaurer la sélection" %}
+                            </button>
+                            <button type="submit" name="action" value="supprimer" class="btn btn-danger" 
+                                onclick="return confirm('{% translate "Êtes-vous sûr de vouloir supprimer définitivement les cotisations sélectionnées ?" %}')">
+                                <i class="fas fa-times me-1"></i> {% translate "Supprimer définitivement la sélection" %}
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <table class="table table-striped table-hover" id="cotisationsTable">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="selectAll">
+                                        <label class="form-check-label" for="selectAll"></label>
+                                    </div>
+                                </th>
+                                <th>{% translate "Référence" %}</th>
+                                <th>{% translate "Membre" %}</th>
+                                <th>{% translate "Montant" %}</th>
+                                <th>{% translate "Date échéance" %}</th>
+                                <th>{% translate "Statut" %}</th>
+                                <th>{% translate "Date suppression" %}</th>
+                                <th>{% translate "Actions" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cotisation in cotisations_list %}
+                                <tr>
+                                    <td>
+                                        <div class="form-check">
+                                            <input class="form-check-input cotisation-checkbox" type="checkbox" 
+                                                name="selected_ids" value="{{ cotisation.id }}" 
+                                                id="cotisation-{{ cotisation.id }}">
+                                            <label class="form-check-label" for="cotisation-{{ cotisation.id }}"></label>
+                                        </div>
+                                    </td>
+                                    <td>{{ cotisation.reference }}</td>
+                                    <td>
+                                        {% if cotisation.membre %}
+                                            {{ cotisation.membre.prenom }} {{ cotisation.membre.nom }}
+                                        {% else %}
+                                            {% translate "Membre supprimé" %}
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ cotisation.montant }} €</td>
+                                    <td>{{ cotisation.date_echeance|date:"d/m/Y" }}</td>
+                                    <td>
+                                        {% if cotisation.statut %}
+                                            <span class="badge bg-{{ cotisation.statut.classe_css|default:'secondary' }}">
+                                                {{ cotisation.statut.nom }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{% translate "Non défini" %}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ cotisation.deleted_at|date:"d/m/Y H:i" }}</td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{% url 'cotisations:restaurer' pk=cotisation.id %}" class="btn btn-sm btn-success" 
+                                               title="{% translate 'Restaurer' %}">
+                                                <i class="fas fa-trash-restore"></i>
+                                            </a>
+                                            <a href="{% url 'cotisations:supprimer_definitivement' pk=cotisation.id %}" 
+                                               class="btn btn-sm btn-danger" 
+                                               onclick="return confirm('{% translate "Êtes-vous sûr de vouloir supprimer définitivement cette cotisation ?" %}')"
+                                               title="{% translate 'Supprimer définitivement' %}">
+                                                <i class="fas fa-times"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </form>
+                {% include "includes/pagination.html" %}
+            {% else %}
+                <div class="alert alert-info">
+                    {% translate "Aucune cotisation supprimée à afficher." %}
+                </div>
+            {% endif %}
+        </div>
+        <div class="card-footer">
+            <a href="{% url 'cotisations:liste' %}" class="btn btn-primary">
+                <i class="fas fa-arrow-left me-1"></i> {% translate "Retour à la liste" %}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // DataTables initialization
+        var table = $('#cotisationsTable').DataTable({
+            language: {
+                url: "{% static 'js/datatables/fr-FR.json' %}"
+            },
+            responsive: true,
+            order: [[6, 'desc']], // Trier par date de suppression par défaut (colonne 6 maintenant)
+            columnDefs: [
+                { orderable: false, targets: [0, 7] } // Désactive le tri pour les colonnes checkbox et actions
+            ]
+        });
+        
+        // Sélection multiple
+        $('#selectAll').change(function() {
+            $('.cotisation-checkbox').prop('checked', $(this).prop('checked'));
+        });
+        
+        // Si toutes les checkboxes sont cochées, cocher aussi "Sélectionner tout"
+        $('.cotisation-checkbox').change(function() {
+            $('#selectAll').prop('checked', $('.cotisation-checkbox:checked').length === $('.cotisation-checkbox').length);
+        });
+        
+        // Vérifier qu'au moins un élément est sélectionné avant de soumettre
+        $('#actionForm').submit(function(e) {
+            if ($('.cotisation-checkbox:checked').length === 0) {
+                e.preventDefault();
+                alert("{% translate 'Veuillez sélectionner au moins une cotisation.' %}");
+                return false;
+            }
+            return true;
+        });
+    });
+</script>
+{% endblock %}

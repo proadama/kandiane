@@ -42,6 +42,10 @@ urlpatterns = [
     
     # Fonctionnalités avancées
     path('corbeille/', views.corbeille, name='corbeille'),
+    path('liste/', views.CotisationListView.as_view(), name='liste'),
+    path('corbeille/', views.CotisationCorbeilleView.as_view(), name='corbeille'),
+    path('restaurer/<int:pk>/', views.RestaurerCotisationView.as_view(), name='restaurer'),
+    path('supprimer-definitivement/<int:pk>/', views.SupprimerDefinitivementCotisationView.as_view(), name='supprimer_definitivement'),
     path('statistiques/', views.statistiques, name='statistiques'),
     path('export/', views.export, name='export'),
     path('import/', views.import_cotisations, name='import'),

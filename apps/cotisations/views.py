@@ -45,7 +45,9 @@ except ImportError:
 from apps.core.mixins import StaffRequiredMixin, TrashViewMixin, RestoreViewMixin
 from apps.core.models import Statut
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre
-
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import View
+from apps.core.mixins import StaffRequiredMixin
 # Importations locales
 from . import export_utils
 from .models import (
@@ -1432,24 +1434,53 @@ def bareme_reactive(request):
     
     return redirect('cotisations:bareme_liste')
 
-
-#
-# Vues pour la corbeille
-#
 class CotisationCorbeilleView(StaffRequiredMixin, TrashViewMixin, ListView):
-    """
-    Vue pour afficher les cotisations supprimées (corbeille).
-    """
+
     model = Cotisation
     template_name = 'cotisations/corbeille.html'
-    context_object_name = 'cotisations'
-    paginate_by = 20
+    context_object_name = 'cotisations_list'
+    paginate_by = 10
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = _("Corbeille - Cotisations supprimées")
-        return context
+    def get_queryset(self):
+        return Cotisation.objects.only_deleted()
+    
+    def post(self, request, *args, **kwargs):
+        selected_ids = request.POST.getlist('selected_ids')
+        action = request.POST.get('action')
+        
+        if not selected_ids:
+            messages.warning(request, _("Aucune cotisation n'a été sélectionnée."))
+            return redirect('cotisations:corbeille')
+        
+        cotisations = Cotisation.objects.only_deleted().filter(id__in=selected_ids)
+        count = cotisations.count()
+        
+        if action == 'restaurer':
+            # Restaurer les cotisations sélectionnées
+            for cotisation in cotisations:
+                cotisation.restore()
+            messages.success(request, _("{} cotisations ont été restaurées avec succès.").format(count))
+        
+        elif action == 'supprimer':
+            # Supprimer définitivement les cotisations sélectionnées
+            cotisations.delete(hard=True)
+            messages.success(request, _("{} cotisations ont été supprimées définitivement.").format(count))
+        
+        return redirect('cotisations:corbeille')
 
+class RestaurerCotisationView(StaffRequiredMixin, LoginRequiredMixin, View):
+    def get(self, request, pk):
+        cotisation = get_object_or_404(Cotisation.objects.only_deleted(), pk=pk)
+        cotisation.restore()
+        messages.success(request, _("La cotisation a été restaurée avec succès."))
+        return redirect('cotisations:corbeille')
+
+class SupprimerDefinitivementCotisationView(StaffRequiredMixin, LoginRequiredMixin, View):
+    def get(self, request, pk):
+        cotisation = get_object_or_404(Cotisation.objects.only_deleted(), pk=pk)
+        cotisation.delete(hard=True)
+        messages.success(request, _("La cotisation a été supprimée définitivement."))
+        return redirect('cotisations:corbeille')
 
 class CotisationRestoreView(StaffRequiredMixin, RestoreViewMixin, View):
     """
