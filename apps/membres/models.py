@@ -369,7 +369,7 @@ class Membre(BaseModel):
                 'deleted_at': str(self.deleted_at)
             }
         )
-
+    
     def _log_restoration(self, user):
         """Journaliser la restauration d'un membre."""
         from apps.membres.models import HistoriqueMembre

@@ -12,7 +12,7 @@ import os
 import tempfile
 import traceback
 from decimal import Decimal, InvalidOperation
-
+from django.db import connection
 # Importations Django
 from django.contrib import messages
 from django import forms
@@ -3765,6 +3765,13 @@ def rappel_supprimer_ajax(request, rappel_id):
         }, encoder=ExtendedJSONEncoder)
 
 
+"""
+Solution finale pour api_types_membre_par_membre utilisant la méthode existante get_types_actifs()
+
+Cette solution utilise directement la méthode intégrée au modèle Membre qui est déjà
+conçue pour récupérer les types de membre actifs.
+"""
+
 @login_required
 def api_types_membre_par_membre(request):
     """
@@ -3772,26 +3779,33 @@ def api_types_membre_par_membre(request):
     """
     membre_id = request.GET.get('membre_id')
     
+    # Logs de débogage
+    print(f"=== APPEL API TYPES MEMBRE ===")
+    print(f"membre_id reçu: {membre_id}")
+    
     if not membre_id:
         return JsonResponse({'success': False, 'message': _("Membre non spécifié")})
     
     try:
+        # Récupérer le membre
         membre = Membre.objects.get(pk=membre_id)
+        print(f"Membre trouvé: {membre.id} - {membre.prenom} {membre.nom}")
         
-        today = timezone.now().date()
+        # Date actuelle pour le débogage
+        today = datetime.date.today()
+        print(f"Date actuelle: {today}")
         
-        # Récupérer les types actifs via l'association MembreTypeMembre
-        types_actifs = TypeMembre.objects.filter(
-            membretypemembre__membre=membre,
-            membretypemembre__date_debut__lte=today,
-            membretypemembre__date_fin__isnull=True
-        ).distinct()
+        # Utiliser la méthode intégrée get_types_actifs() du modèle Membre
+        # Cette méthode est déjà définie pour récupérer les types actifs
+        types_actifs = membre.get_types_actifs()
         
-        # Si aucun type actif, essayer une autre méthode si disponible
-        if not types_actifs.exists() and hasattr(membre, 'get_types_actifs'):
-            types_actifs = membre.get_types_actifs()
+        print(f"Nombre de types actifs: {types_actifs.count()}")
         
-        # Préparer les données
+        # Liste pour les logs de débogage
+        for tm in types_actifs:
+            print(f" - Type actif: {tm.id} - {tm.libelle}")
+        
+        # Préparer la réponse JSON
         types_membre = []
         for tm in types_actifs:
             types_membre.append({
@@ -3801,6 +3815,7 @@ def api_types_membre_par_membre(request):
         
         # Message personnalisé si aucun type actif
         if not types_membre:
+            print("ATTENTION: Aucun type de membre actif trouvé!")
             return JsonResponse({
                 'success': True,
                 'types_membre': [],
@@ -3809,6 +3824,7 @@ def api_types_membre_par_membre(request):
                 'message': _("Ce membre n'a aucun type actif à la date d'aujourd'hui")
             })
         
+        # Réponse normale
         return JsonResponse({
             'success': True,
             'types_membre': types_membre,
@@ -3817,11 +3833,13 @@ def api_types_membre_par_membre(request):
         })
         
     except Membre.DoesNotExist:
+        print(f"Erreur: Membre {membre_id} non trouvé")
         return JsonResponse({'success': False, 'message': _("Membre non trouvé")})
     except Exception as e:
-        logger.error(f"Erreur dans api_types_membre_par_membre: {str(e)}")
-        logger.error(traceback.format_exc())
-        return JsonResponse({'success': False, 'message': _("Une erreur est survenue lors de la récupération des types de membre")})
+        import traceback
+        print(f"Exception dans api_types_membre_par_membre: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({'success': False, 'message': str(e)})
 
 
 def get_duree_jours_par_periodicite(periodicite):
