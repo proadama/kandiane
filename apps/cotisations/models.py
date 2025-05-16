@@ -620,6 +620,23 @@ class Paiement(BaseModel):
         is_new = self.pk is None
         if is_new:
             self.reference_paiement = self._generer_reference()
+            
+            # Attribuer un statut par défaut si aucun n'est défini
+            if self.statut is None:
+                # Import local pour éviter les imports circulaires
+                from apps.core.models import Statut
+                
+                # Chercher un statut approprié pour les paiements
+                default_status = Statut.objects.filter(nom__iexact='Validé').first()
+                if not default_status:
+                    default_status = Statut.objects.filter(nom__iexact='Non payé').first()
+                if not default_status:
+                    # Si aucun statut spécifique n'existe, créer un statut "Validé"
+                    default_status = Statut.objects.create(
+                        nom='Validé',
+                        description='Statut par défaut pour les paiements validés'
+                    )
+                self.statut = default_status
         
         # Sauvegarder le paiement
         super().save(*args, **kwargs)

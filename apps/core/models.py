@@ -116,3 +116,45 @@ class Statut(BaseModel):
     def pour_paiements(cls):
         """Retourne les statuts applicables aux paiements."""
         return cls.objects.filter(Q(type_entite='paiement') | Q(type_entite='global'))
+    
+    
+    def get_badge_class(self):
+        """
+        Retourne la classe CSS Bootstrap appropriée en fonction du nom du statut
+        et du contexte de son utilisation (type d'entité).
+        """
+        nom_lower = self.nom.lower() if self.nom else ""
+        
+        # Statuts de Cotisation
+        if nom_lower == 'payée':
+            return 'success'
+        elif nom_lower == 'en retard':
+            return 'warning'
+        elif nom_lower == 'non payée':
+            return 'secondary'
+        elif nom_lower == 'annulée':
+            return 'danger'
+        elif nom_lower == 'partiellement payée':
+            return 'info'
+        
+        # Statuts de Membre
+        elif nom_lower == 'actif':
+            return 'success'
+        elif nom_lower == 'suspendu':
+            return 'warning'
+        elif nom_lower == 'bloqué':
+            return 'danger'
+        elif nom_lower == 'désactivé':
+            return 'secondary'
+        
+        # Statuts de Paiement
+        elif nom_lower == 'validé':
+            return 'success'
+        elif nom_lower == 'en attente':
+            return 'warning'
+        elif nom_lower in ['annulé', 'rejeté']:
+            return 'danger'
+        
+        # Statut par défaut
+        else:
+            return 'secondary'
