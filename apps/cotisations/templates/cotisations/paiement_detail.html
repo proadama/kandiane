@@ -76,7 +76,7 @@
                             <dt class="col-sm-5">{% trans "Statut" %}</dt>
                             <dd class="col-sm-7">
                                 {% if paiement.statut %}
-                                <span class="badge bg-secondary">{{ paiement.statut.nom }}</span>
+                                <span class="badge bg-{{ paiement.statut.get_badge_class }}">{{ paiement.statut.nom }}</span>
                                 {% else %}
                                 -
                                 {% endif %}
@@ -181,7 +181,9 @@
                     
                     <dt class="col-sm-5">{% trans "Statut" %}</dt>
                     <dd class="col-sm-7">
-                        {% if paiement.cotisation.statut_paiement == 'non_payee' %}
+                        {% if paiement.cotisation.statut %}
+                        <span class="badge bg-{{ paiement.cotisation.statut.get_badge_class }}">{{ paiement.cotisation.statut.nom }}</span>
+                        {% elif paiement.cotisation.statut_paiement == 'non_payee' %}
                         <span class="badge bg-danger">{% trans "Non payée" %}</span>
                         {% elif paiement.cotisation.statut_paiement == 'partiellement_payee' %}
                         <span class="badge bg-warning">{% trans "Partiellement payée" %}</span>
