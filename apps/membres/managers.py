@@ -75,6 +75,7 @@ class MembreManager(BaseManager):
     """
     Gestionnaire personnalisé pour le modèle Membre
     """
+    
     def recherche(self, query):
         """Recherche de membres par différents critères"""
         if not query:
@@ -221,8 +222,7 @@ class MembreManager(BaseManager):
     def with_deleted(self):
         # Renvoie tous les objets, y compris les supprimés
         return super().get_queryset()
-
-
+        
 class MembreTypeMembreManager(models.Manager):
     """
     Gestionnaire personnalisé pour le modèle MembreTypeMembre

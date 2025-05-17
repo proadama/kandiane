@@ -203,14 +203,52 @@ class Membre(BaseModel):
         Suppression logique par défaut.
         Si hard=True, suppression physique.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if hard:
-            # Suppression physique
-            return super().delete(*args, **kwargs)
+            # Suppression physique - bypasser complètement la logique de soft delete
+            logger.info(f"Suppression physique de {self.__class__.__name__} ID={self.id}")
+            # Désactiver tous les signaux qui pourraient interférer
+            from django.db.models.signals import pre_save, post_save
+            post_save.disconnect(dispatch_uid=None, sender=self.__class__)
+            
+            # Appeler la méthode delete() du parent (models.Model)
+            # pour éviter toute logique de soft delete dans la hiérarchie d'héritage
+            return models.Model.delete(self, *args, **kwargs)
         else:
             # Suppression logique
+            logger.info(f"Suppression logique de {self.__class__.__name__} ID={self.id}")
             self.deleted_at = timezone.now()
             self.save(update_fields=['deleted_at'])
             return 1, {}  # Simuler le retour de la méthode delete() standard
+    
+    def delete_permanent(self):
+        """
+        Suppression définitive qui contourne complètement le mécanisme de soft delete
+        en utilisant une requête SQL directe.
+        """
+        import logging
+        from django.db import connection
+        
+        logger = logging.getLogger(__name__)
+        logger.info(f"Suppression définitive du membre ID={self.id}, nom={self.nom}")
+        
+        membre_id = self.id
+        
+        with connection.cursor() as cursor:
+            # Supprimer d'abord les relations
+            cursor.execute("DELETE FROM membres_membretypemembre WHERE membre_id = %s", [membre_id])
+            cursor.execute("DELETE FROM membres_historiquemembre WHERE membre_id = %s", [membre_id])
+            
+            # Puis supprimer le membre lui-même
+            cursor.execute("DELETE FROM membres_membre WHERE id = %s", [membre_id])
+            
+            # Loguer le nombre de lignes supprimées
+            rows_deleted = cursor.rowcount
+            logger.info(f"Membre ID={membre_id} supprimé définitivement ({rows_deleted} lignes)")
+            
+        return rows_deleted
 
     def clean(self):
         # Vérifier que la date de naissance n'est pas dans le futur

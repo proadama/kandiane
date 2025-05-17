@@ -1569,41 +1569,45 @@ class MembreRestaurerView(RestoreViewMixin, View):
         )
         return redirect(self.success_url)
 
-class MembreSuppressionDefinitiveView(RestoreViewMixin, View):
+class MembreSuppressionDefinitiveView(StaffRequiredMixin, View):
     """Vue pour supprimer définitivement un membre."""
-    model = Membre
-    success_url = reverse_lazy('membres:membre_corbeille')
     
-    def get_object(self):
-        """Récupérer le membre à supprimer définitivement."""
-        return get_object_or_404(Membre.objects.only_deleted(), pk=self.kwargs['pk'])
-    
-    def post(self, request, *args, **kwargs):
-        """Supprimer définitivement le membre."""
-        membre = self.get_object()
+    def post(self, request, pk):
+        logger.info(f"Demande de suppression définitive du membre ID={pk}")
         
-        # Journaliser l'action avant suppression définitive
-        HistoriqueMembre.objects.create(
-            membre=membre,
-            utilisateur=request.user,
-            action='suppression_definitive',
-            description=_("Suppression définitive du membre"),
-            donnees_avant={
-                'nom': membre.nom,
-                'prenom': membre.prenom,
-                'email': membre.email,
-                'deleted_at': str(membre.deleted_at)
-            }
-        )
+        # Récupérer le membre avec only_deleted pour s'assurer qu'il est bien dans la corbeille
+        membre = get_object_or_404(Membre.objects.only_deleted(), pk=pk)
         
-        # Suppression physique
-        membre.delete(hard=True)
+        try:
+            # Journaliser l'action avant suppression définitive
+            HistoriqueMembre.objects.create(
+                membre=membre,
+                utilisateur=request.user,
+                action='suppression_definitive',
+                description=_("Suppression définitive du membre"),
+                donnees_avant={
+                    'nom': membre.nom,
+                    'prenom': membre.prenom,
+                    'email': membre.email,
+                    'deleted_at': str(membre.deleted_at)
+                }
+            )
+            
+            # Utiliser la nouvelle méthode de suppression définitive
+            membre.delete_permanent()
+            
+            messages.success(
+                request, 
+                _("Le membre a été définitivement supprimé.")
+            )
+        except Exception as e:
+            logger.error(f"Erreur lors de la suppression définitive du membre {pk}: {str(e)}", exc_info=True)
+            messages.error(
+                request,
+                _("Une erreur s'est produite lors de la suppression définitive: %(error)s") % {'error': str(e)}
+            )
         
-        messages.success(
-            request, 
-            _("Le membre a été définitivement supprimé.")
-        )
-        return redirect(self.success_url)
+        return redirect('membres:membre_corbeille')
 
 class MembreUpdateView(StaffRequiredMixin, UpdateView):
     """
