@@ -944,6 +944,11 @@ class RappelCreateView(StaffRequiredMixin, CreateView):
         if rappel.etat == 'envoye':
             rappel.date_envoi = rappel.date_creation
         # Pour les rappels planifiés, date_envoi est celle spécifiée dans le formulaire
+        elif rappel.etat == 'planifie' and not form.cleaned_data.get('date_envoi'):
+            # Si aucune date d'envoi n'est spécifiée pour un rappel planifié,
+            # définir une date par défaut (par exemple, demain à la même heure)
+            rappel.date_envoi = timezone.now() + datetime.timedelta(days=1)
+            # Sinon, la date_envoi du formulaire sera utilisée
         
         rappel.save()
         return super().form_valid(form)
