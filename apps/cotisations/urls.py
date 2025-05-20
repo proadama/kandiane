@@ -39,6 +39,7 @@ urlpatterns = [
     path('rappels/<int:rappel_id>/contenu/', views.rappel_contenu_ajax, name='rappel_contenu_ajax'),
     path('rappels/<int:rappel_id>/envoyer/', views.rappel_envoi_ajax, name='rappel_envoi_ajax'),
     path('rappels/<int:rappel_id>/supprimer/', views.rappel_supprimer_ajax, name='rappel_supprimer_ajax'),
+    path('rappels/<int:pk>/supprimer/', views.RappelDeleteView.as_view(), name='rappel_supprimer'),
     
     # Fonctionnalités avancées
     path('corbeille/', views.corbeille, name='corbeille'),

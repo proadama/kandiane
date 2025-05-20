@@ -1,0 +1,36 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}">{{ cotisation.reference }}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:rappel_detail' pk=rappel.pk %}">{% trans "Détail du rappel" %} #{{ rappel.id }}</a></li>
+<li class="breadcrumb-item active">{% trans "Supprimer" %}</li>
+{% endblock %}
+
+{% block page_title %}
+{% trans "Confirmer la suppression" %}
+{% endblock %}
+
+{% block cotisations_content %}
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title text-danger">{% trans "Êtes-vous sûr de vouloir supprimer ce rappel ?" %}</h5>
+        <p>{% trans "Cette action ne peut pas être annulée." %}</p>
+        
+        <div class="mt-4">
+            <form method="post">
+                {% csrf_token %}
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'cotisations:rappel_detail' pk=rappel.pk %}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> {% trans "Annuler" %}
+                    </a>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> {% trans "Confirmer la suppression" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

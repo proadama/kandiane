@@ -60,6 +60,8 @@ from .forms import (
     ConfigurationCotisationForm
 )
 
+from apps.cotisations.models import Rappel, RAPPEL_ETAT_PLANIFIE, RAPPEL_ETAT_ENVOYE, RAPPEL_ETAT_ECHOUE, RAPPEL_ETAT_LU
+
 # Configuration du logging
 logger = logging.getLogger(__name__)
 
@@ -903,10 +905,6 @@ class PaiementDeleteView(StaffRequiredMixin, DeleteView):
         cotisation_id = self.object.cotisation.id
         return reverse('cotisations:cotisation_detail', kwargs={'pk': cotisation_id})
 
-
-#
-# Vues pour les rappels
-#
 class RappelCreateView(StaffRequiredMixin, CreateView):
     """
     Vue pour créer un nouveau rappel.
@@ -924,7 +922,7 @@ class RappelCreateView(StaffRequiredMixin, CreateView):
         if cotisation_id:
             self.cotisation = get_object_or_404(Cotisation, pk=cotisation_id)
             kwargs['cotisation'] = self.cotisation
-            kwargs['membre'] = self.cotisation.membre  # Ajouter le membre pour le formulaire
+            kwargs['membre'] = self.cotisation.membre
         
         return kwargs
     
@@ -932,32 +930,22 @@ class RappelCreateView(StaffRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         if hasattr(self, 'cotisation'):
             context['cotisation'] = self.cotisation
+        # Ajouter la date courante pour le template
+        context['today'] = timezone.now().date()
         return context
     
     def form_valid(self, form):
-        rappel = form.save(commit=False)
-        
-        # La date de création est toujours maintenant
-        rappel.date_creation = timezone.now()
-        
-        # Pour les rappels envoyés immédiatement, date_envoi = date_creation
-        if rappel.etat == 'envoye':
-            rappel.date_envoi = rappel.date_creation
-        # Pour les rappels planifiés, date_envoi est celle spécifiée dans le formulaire
-        elif rappel.etat == 'planifie' and not form.cleaned_data.get('date_envoi'):
-            # Si aucune date d'envoi n'est spécifiée pour un rappel planifié,
-            # définir une date par défaut (par exemple, demain à la même heure)
-            rappel.date_envoi = timezone.now() + datetime.timedelta(days=1)
-            # Sinon, la date_envoi du formulaire sera utilisée
-        
-        rappel.save()
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        messages.success(
+            self.request, 
+            _("Le rappel a été créé avec succès.")
+        )
+        return response
         
     def get_success_url(self):
         if hasattr(self, 'cotisation'):
             return reverse('cotisations:cotisation_detail', kwargs={'pk': self.cotisation.pk})
         return reverse('cotisations:cotisation_liste')
-
 
 @require_POST
 def rappel_create_ajax(request, cotisation_id):
@@ -1207,14 +1195,14 @@ class RappelDetailView(LoginRequiredMixin, DetailView):
         
         if action == 'envoyer':
             # Logique pour envoyer le rappel
-            rappel.etat = 'envoye'
+            rappel.etat = RAPPEL_ETAT_ENVOYE
             rappel.date_envoi = timezone.now()
             rappel.save()
             messages.success(request, _("Le rappel a été envoyé avec succès."))
             
         elif action == 'reenvoyer':
             # Logique pour réessayer l'envoi d'un rappel échoué
-            rappel.etat = 'envoye'
+            rappel.etat = RAPPEL_ETAT_ENVOYE
             rappel.date_envoi = timezone.now()
             rappel.save()
             messages.success(request, _("Le rappel a été renvoyé avec succès."))
@@ -1290,7 +1278,32 @@ class RappelEnvoyerView(LoginRequiredMixin, View):
         messages.success(request, _("Rappel envoyé avec succès"))
         return redirect('cotisations:rappel_detail', pk=pk)
 
+class RappelDeleteView(StaffRequiredMixin, DeleteView):
+    """
+    Vue pour supprimer un rappel.
+    """
+    model = Rappel
+    template_name = 'cotisations/rappel_confirm_delete.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['cotisation'] = self.object.cotisation
+        return context
+    
+    def delete(self, request, *args, **kwargs):
+        rappel = self.get_object()
+        cotisation = rappel.cotisation
+        rappel.delete()  # Suppression logique via BaseModel
+        
+        messages.success(
+            request, 
+            _("Le rappel a été supprimé avec succès.")
+        )
+        return redirect('cotisations:cotisation_detail', pk=cotisation.pk)
 
+    def get_success_url(self):
+        cotisation_id = self.object.cotisation.id
+        return reverse('cotisations:cotisation_detail', kwargs={'pk': cotisation_id})
 #
 # Vues pour les barèmes de cotisation
 #
@@ -3733,7 +3746,7 @@ def rappel_envoi_ajax(request, rappel_id):
     rappel = get_object_or_404(Rappel, pk=rappel_id)
     
     # Vérifier que le rappel est en état 'planifié'
-    if rappel.etat != 'planifie':
+    if rappel.etat != RAPPEL_ETAT_PLANIFIE:
         return JsonResponse({
             'success': False,
             'message': _("Ce rappel est déjà traité.")
@@ -3741,7 +3754,7 @@ def rappel_envoi_ajax(request, rappel_id):
     
     try:
         # Marquer comme envoyé
-        rappel.etat = 'envoye'
+        rappel.etat = RAPPEL_ETAT_ENVOYE
         rappel.date_envoi = timezone.now()
         rappel.save()
         
@@ -3761,7 +3774,7 @@ def rappel_envoi_ajax(request, rappel_id):
         logger.error(f"Erreur lors de l'envoi du rappel: {str(e)}")
         
         # En cas d'erreur, marquer comme échoué
-        rappel.etat = 'echoue'
+        rappel.etat = RAPPEL_ETAT_ECHOUE
         rappel.resultat = str(e)
         rappel.save()
         

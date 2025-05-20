@@ -8,9 +8,29 @@ from decimal import Decimal
 from apps.core.models import BaseModel, Statut
 from apps.membres.models import Membre, TypeMembre
 from apps.accounts.models import CustomUser
-
 from .managers import CotisationManager, PaiementManager
 
+# États des rappels
+RAPPEL_ETAT_PLANIFIE = 'planifie'
+RAPPEL_ETAT_ENVOYE = 'envoye'
+RAPPEL_ETAT_ECHOUE = 'echoue'
+RAPPEL_ETAT_LU = 'lu'
+
+# Types de rappels
+RAPPEL_TYPE_EMAIL = 'email'
+RAPPEL_TYPE_SMS = 'sms'
+RAPPEL_TYPE_COURRIER = 'courrier'
+RAPPEL_TYPE_APPEL = 'appel'
+
+# Autres constantes utiles
+COTISATION_STATUT_NON_PAYEE = 'non_payee'
+COTISATION_STATUT_PARTIELLEMENT_PAYEE = 'partiellement_payee'
+COTISATION_STATUT_PAYEE = 'payee'
+
+# Types de transactions pour les paiements
+PAIEMENT_TYPE_PAIEMENT = 'paiement'
+PAIEMENT_TYPE_REMBOURSEMENT = 'remboursement'
+PAIEMENT_TYPE_REJET = 'rejet'
 
 class BaremeCotisation(BaseModel):
     """
@@ -690,10 +710,10 @@ class Rappel(BaseModel):
     type_rappel = models.CharField(
         max_length=20,
         choices=[
-            ('email', _('Email')),
-            ('sms', _('SMS')),
-            ('courrier', _('Courrier')),
-            ('appel', _('Appel téléphonique')),
+            (RAPPEL_TYPE_EMAIL, _('Email')),
+            (RAPPEL_TYPE_SMS, _('SMS')),
+            (RAPPEL_TYPE_COURRIER, _('Courrier')),
+            (RAPPEL_TYPE_APPEL, _('Appel téléphonique')),
         ],
         verbose_name=_("Type de rappel")
     )
@@ -705,12 +725,12 @@ class Rappel(BaseModel):
     etat = models.CharField(
         max_length=20,
         choices=[
-            ('planifie', _('Planifié')),
-            ('envoye', _('Envoyé')),
-            ('echoue', _('Échoué')),
-            ('lu', _('Lu')),
+            (RAPPEL_ETAT_PLANIFIE, _('Planifié')),
+            (RAPPEL_ETAT_ENVOYE, _('Envoyé')),
+            (RAPPEL_ETAT_ECHOUE, _('Échoué')),
+            (RAPPEL_ETAT_LU, _('Lu')),
         ],
-        default='planifie',
+        default=RAPPEL_ETAT_PLANIFIE,
         verbose_name=_("État")
     )
     niveau = models.PositiveSmallIntegerField(

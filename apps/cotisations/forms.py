@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
 from decimal import Decimal
-
+import datetime
 from apps.membres.models import Membre, TypeMembre
 from apps.core.models import Statut
 
@@ -13,6 +13,8 @@ from .models import (
     Rappel, ConfigurationCotisation
 )
 
+from .models import (RAPPEL_ETAT_PLANIFIE, RAPPEL_ETAT_ENVOYE, RAPPEL_ETAT_ECHOUE, 
+                    RAPPEL_TYPE_EMAIL, RAPPEL_TYPE_SMS, RAPPEL_TYPE_COURRIER, RAPPEL_TYPE_APPEL)
 
 class BaremeCotisationForm(forms.ModelForm):
     """
@@ -311,10 +313,18 @@ class RappelForm(forms.ModelForm):
     """
     Formulaire pour créer ou modifier un rappel.
     """
+    
+    # Champ caché pour stocker si c'est un envoi immédiat ou planifié
+    envoi_immediat = forms.BooleanField(required=False, widget=forms.HiddenInput())
+    # Date planifiée avec widget date
+    date_planifiee = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    # Heure planifiée avec widget time
+    heure_planifiee = forms.TimeField(required=False, widget=forms.TimeInput(attrs={'type': 'time'}))
+    
     class Meta:
         model = Rappel
         fields = [
-            'type_rappel', 'contenu', 'niveau'
+            'type_rappel', 'niveau', 'contenu'
         ]
         widgets = {
             'contenu': forms.Textarea(attrs={'rows': 5, 'class': 'form-control'}),
@@ -325,6 +335,16 @@ class RappelForm(forms.ModelForm):
         self.cotisation = kwargs.pop('cotisation', None)
         self.membre = kwargs.pop('membre', None)
         super().__init__(*args, **kwargs)
+        
+        # Si c'est une édition, pré-remplir les champs de date et heure
+        if self.instance and self.instance.pk and self.instance.date_envoi:
+            self.fields['envoi_immediat'].initial = False
+            self.fields['date_planifiee'].initial = self.instance.date_envoi.date()
+            self.fields['heure_planifiee'].initial = self.instance.date_envoi.time()
+        else:
+            self.fields['envoi_immediat'].initial = True
+            self.fields['date_planifiee'].initial = timezone.now().date()
+            self.fields['heure_planifiee'].initial = timezone.now().time()
         
         # Ajouter des classes CSS pour le styling
         for field_name, field in self.fields.items():
@@ -362,27 +382,73 @@ class RappelForm(forms.ModelForm):
                 'date': date_echeance.strftime('%d/%m/%Y')
             }
     
+    def clean(self):
+        cleaned_data = super().clean()
+        envoi_immediat = cleaned_data.get('envoi_immediat')
+        date_planifiee = cleaned_data.get('date_planifiee')
+        heure_planifiee = cleaned_data.get('heure_planifiee')
+        etat = cleaned_data.get('etat', RAPPEL_ETAT_PLANIFIE)
+        
+        # Si c'est un envoi immédiat, définir l'état à 'envoyé'
+        if envoi_immediat:
+            cleaned_data['etat'] = RAPPEL_ETAT_ENVOYE
+        else:
+            # Sinon c'est planifié
+            cleaned_data['etat'] = RAPPEL_ETAT_PLANIFIE
+            
+            # Vérifier que date et heure sont fournies pour un rappel planifié
+            if not date_planifiee:
+                self.add_error('date_planifiee', _('Veuillez sélectionner une date d\'envoi'))
+            if not heure_planifiee:
+                self.add_error('heure_planifiee', _('Veuillez sélectionner une heure d\'envoi'))
+            
+            # Vérifier que la date planifiée est dans le futur
+            if date_planifiee and heure_planifiee:
+                # Combiner date et heure
+                now = timezone.now()
+                date_envoi = datetime.datetime.combine(
+                    date_planifiee, 
+                    heure_planifiee,
+                    tzinfo=now.tzinfo
+                )
+                
+                if date_envoi <= now:
+                    self.add_error('date_planifiee', _('La date d\'envoi planifiée doit être dans le futur'))
+                else:
+                    # Stocker la date d'envoi combinée dans cleaned_data
+                    cleaned_data['date_envoi'] = date_envoi
+                    
+        return cleaned_data
+
     def save(self, commit=True):
-        instance = super().save(commit=False)
+        rappel = super().save(commit=False)
         
-        # Associer à la cotisation et au membre si fournis
-        if not self.instance.pk:
-            if self.cotisation:
-                instance.cotisation = self.cotisation
-            if self.membre or (self.cotisation and self.cotisation.membre):
-                instance.membre = self.membre or self.cotisation.membre
+        # Assigner la cotisation et le membre
+        if self.cotisation:
+            rappel.cotisation = self.cotisation
+        if self.membre:
+            rappel.membre = self.membre
+        elif self.cotisation and self.cotisation.membre:
+            rappel.membre = self.cotisation.membre
             
-            # Initialiser le statut à 'planifié'
-            instance.etat = 'planifie'
-            
-            # Enregistrer l'utilisateur qui crée le rappel
-            if self.user and hasattr(self.user, 'is_authenticated') and self.user.is_authenticated:
-                instance.cree_par = self.user
+        # Définir la date de création si c'est un nouveau rappel
+        if not rappel.pk:
+            rappel.date_creation = timezone.now()
         
+        # Définir la date d'envoi en fonction du mode (immédiat ou planifié)
+        if self.cleaned_data.get('envoi_immediat'):
+            rappel.date_envoi = timezone.now()
+        elif 'date_envoi' in self.cleaned_data and self.cleaned_data['date_envoi']:
+            rappel.date_envoi = self.cleaned_data['date_envoi']
+        
+        # Définir le créateur
+        if self.user and self.user.is_authenticated and not rappel.cree_par:
+            rappel.cree_par = self.user
+            
         if commit:
-            instance.save()
-        
-        return instance
+            rappel.save()
+            
+        return rappel
 
 
 class CotisationSearchForm(forms.Form):

@@ -288,7 +288,6 @@
 <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
 <script>
 // Voici le code JavaScript amélioré à ajouter à rappel_form.html
-
 document.addEventListener('DOMContentLoaded', function() {
     // Variables globales
     const rappelForm = document.getElementById('rappelForm');
@@ -318,11 +317,42 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
     document.head.appendChild(style);
     
+    // Créer ou récupérer les champs cachés pour la planification
+    let envoi_immediat_input = document.getElementById('id_envoi_immediat');
+    let date_planifiee_input = document.getElementById('id_date_planifiee');
+    let heure_planifiee_input = document.getElementById('id_heure_planifiee');
+    
+    if (!envoi_immediat_input) {
+        envoi_immediat_input = document.createElement('input');
+        envoi_immediat_input.type = 'hidden';
+        envoi_immediat_input.name = 'envoi_immediat';
+        envoi_immediat_input.id = 'id_envoi_immediat';
+        rappelForm.appendChild(envoi_immediat_input);
+    }
+    
+    if (!date_planifiee_input) {
+        date_planifiee_input = document.createElement('input');
+        date_planifiee_input.type = 'hidden';
+        date_planifiee_input.name = 'date_planifiee';
+        date_planifiee_input.id = 'id_date_planifiee';
+        rappelForm.appendChild(date_planifiee_input);
+    }
+    
+    if (!heure_planifiee_input) {
+        heure_planifiee_input = document.createElement('input');
+        heure_planifiee_input.type = 'hidden';
+        heure_planifiee_input.name = 'heure_planifiee';
+        heure_planifiee_input.id = 'id_heure_planifiee';
+        rappelForm.appendChild(heure_planifiee_input);
+    }
+    
     // Gérer les liens de date rapide
     document.querySelectorAll('.set-date').forEach(link => {
         link.addEventListener('click', function(e) {
             e.preventDefault();
             datePlanification.value = this.getAttribute('data-date');
+            // Mettre à jour le champ caché correspondant
+            date_planifiee_input.value = datePlanification.value;
         });
     });
     
@@ -331,8 +361,23 @@ document.addEventListener('DOMContentLoaded', function() {
         link.addEventListener('click', function(e) {
             e.preventDefault();
             heurePlanification.value = this.getAttribute('data-time');
+            // Mettre à jour le champ caché correspondant
+            heure_planifiee_input.value = heurePlanification.value;
         });
     });
+    
+    // Mettre à jour les champs cachés lorsque les valeurs de date/heure changent
+    if (datePlanification) {
+        datePlanification.addEventListener('change', function() {
+            date_planifiee_input.value = this.value;
+        });
+    }
+    
+    if (heurePlanification) {
+        heurePlanification.addEventListener('change', function() {
+            heure_planifiee_input.value = this.value;
+        });
+    }
     
     // Fonction pour mettre à jour les styles des boutons de modèle
     function updateTemplateButtonStyles(activeButton) {
@@ -368,7 +413,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (templateDefaultBtn) {
         templateDefaultBtn.onclick = function() {
-            // Modèle standard avec date limite à 7 jours
+            // Code existant inchangé
             const dateLimite = new Date();
             dateLimite.setDate(dateLimite.getDate() + 7);
             const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
@@ -389,7 +434,7 @@ L'équipe de l'association`;
     
     if (templateUrgentBtn) {
         templateUrgentBtn.onclick = function() {
-            // Modèle urgent avec date limite à 5 jours
+            // Code existant inchangé
             const dateLimite = new Date();
             dateLimite.setDate(dateLimite.getDate() + 5);
             const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
@@ -412,7 +457,7 @@ L'équipe de l'association`;
     
     if (templateFormalBtn) {
         templateFormalBtn.onclick = function() {
-            // Modèle formel avec date limite à 15 jours
+            // Code existant inchangé
             const dateLimite = new Date();
             dateLimite.setDate(dateLimite.getDate() + 15);
             const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
@@ -438,7 +483,7 @@ Association XYZ`;
     // Adapter le contenu en fonction du type de rappel
     if (typeRappelSelect) {
         typeRappelSelect.addEventListener('change', function() {
-            // Adapter les templates en fonction du type de rappel
+            // Code existant inchangé
             const type = this.value;
             if (type === 'email') {
                 // Activer tous les modèles pour email
@@ -477,11 +522,51 @@ Association XYZ`;
     const optionsPlanification = document.getElementById('optionsPlanification');
     
     if (envoyerImmediatementSwitch && optionsPlanification) {
+        // Initialisation: mettre à jour le champ caché avec l'état actuel du switch
+        envoi_immediat_input.value = envoyerImmediatementSwitch.checked ? 'true' : 'false';
+        
+        // Initialiser l'affichage en fonction de l'état initial
+        if (envoyerImmediatementSwitch.checked) {
+            optionsPlanification.style.display = 'none';
+        } else {
+            optionsPlanification.style.display = 'block';
+            
+            // Si les champs de date/heure sont vides, les initialiser avec des valeurs par défaut
+            if (!datePlanification.value) {
+                // Par défaut : demain
+                const demain = new Date();
+                demain.setDate(demain.getDate() + 1);
+                datePlanification.value = demain.toISOString().split('T')[0]; // format YYYY-MM-DD
+                date_planifiee_input.value = datePlanification.value;
+            }
+            
+            if (!heurePlanification.value) {
+                heurePlanification.value = '09:00'; // 9h du matin par défaut
+                heure_planifiee_input.value = heurePlanification.value;
+            }
+        }
+        
         envoyerImmediatementSwitch.addEventListener('change', function() {
+            // Mettre à jour le champ caché avec la nouvelle valeur
+            envoi_immediat_input.value = this.checked ? 'true' : 'false';
+            
             if (this.checked) {
                 optionsPlanification.style.display = 'none';
             } else {
                 optionsPlanification.style.display = 'block';
+                
+                // Si les champs sont vides, mettre des valeurs par défaut lors du passage à planifié
+                if (!datePlanification.value) {
+                    const demain = new Date();
+                    demain.setDate(demain.getDate() + 1);
+                    datePlanification.value = demain.toISOString().split('T')[0];
+                    date_planifiee_input.value = datePlanification.value;
+                }
+                
+                if (!heurePlanification.value) {
+                    heurePlanification.value = '09:00';
+                    heure_planifiee_input.value = heurePlanification.value;
+                }
             }
         });
     }
@@ -525,11 +610,28 @@ Association XYZ`;
                 if (datePlanification && !datePlanification.value) {
                     isValid = false;
                     highlightField(datePlanification, 'Veuillez sélectionner une date d\'envoi.');
+                } else {
+                    // Mettre à jour le champ caché avec la valeur finale
+                    date_planifiee_input.value = datePlanification.value;
                 }
                 
                 if (heurePlanification && !heurePlanification.value) {
                     isValid = false;
                     highlightField(heurePlanification, 'Veuillez sélectionner une heure d\'envoi.');
+                } else {
+                    // Mettre à jour le champ caché avec la valeur finale
+                    heure_planifiee_input.value = heurePlanification.value;
+                }
+                
+                // Vérifier que la date/heure est dans le futur
+                if (datePlanification && datePlanification.value && heurePlanification && heurePlanification.value) {
+                    const now = new Date();
+                    const planifiedDate = new Date(`${datePlanification.value}T${heurePlanification.value}`);
+                    
+                    if (planifiedDate <= now) {
+                        isValid = false;
+                        highlightField(datePlanification, 'La date et l\'heure d\'envoi doivent être dans le futur.');
+                    }
                 }
             }
             

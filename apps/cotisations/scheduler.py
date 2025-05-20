@@ -5,6 +5,7 @@ from django.utils import timezone
 from apps.cotisations.tasks import traiter_rappels_planifies
 import logging
 import time
+from apps.cotisations.models import RAPPEL_ETAT_PLANIFIE, RAPPEL_ETAT_ENVOYE
 
 logger = logging.getLogger(__name__)
 
@@ -53,3 +54,17 @@ def traiter_rappels_planifies_avec_retry():
     
     logger.error(f"Échec du traitement des rappels après {max_retries} tentatives")
     return 0
+
+def verifier_rappels_manques():
+    """Vérifie si des rappels planifiés ont été manqués."""
+    now = timezone.now()
+    yesterday = now - datetime.timedelta(days=1)
+    
+    # Chercher les rappels planifiés dont la date est passée mais qui n'ont pas été envoyés
+    missed_count = Rappel.objects.filter(
+        etat=RAPPEL_ETAT_PLANIFIE,
+        date_envoi__lt=yesterday
+    ).update(etat=RAPPEL_ETAT_ENVOYE, date_envoi=now)
+    
+    if missed_count > 0:
+        logger.warning(f"{missed_count} rappels manqués ont été traités")

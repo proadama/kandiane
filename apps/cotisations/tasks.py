@@ -1,6 +1,6 @@
 # Dans apps/cotisations/tasks.py
 from django.utils import timezone
-from apps.cotisations.models import Rappel
+from apps.cotisations.models import Rappel, RAPPEL_ETAT_PLANIFIE, RAPPEL_ETAT_ENVOYE, RAPPEL_ETAT_ECHOUE, RAPPEL_TYPE_EMAIL, RAPPEL_TYPE_SMS
 from django.db import OperationalError
 import logging
 import time
@@ -10,11 +10,6 @@ logger = logging.getLogger(__name__)
 def traiter_rappels_planifies(max_retries=3, retry_delay_initial=1):
     """
     Vérifie les rappels planifiés dont la date est passée et les marque comme envoyés.
-    Déclenche également l'envoi effectif des rappels.
-    
-    Args:
-        max_retries: Nombre maximum de tentatives en cas d'erreur de verrouillage de la base
-        retry_delay_initial: Délai initial entre les tentatives (en secondes)
     """
     retry_count = 0
     retry_delay = retry_delay_initial
@@ -22,45 +17,41 @@ def traiter_rappels_planifies(max_retries=3, retry_delay_initial=1):
     while retry_count < max_retries:
         try:
             now = timezone.now()
-            # Utiliser 'planifie' sans accent
+            # Utiliser la constante pour l'état planifié
             rappels_a_envoyer = Rappel.objects.filter(
-                etat='planifie',
+                etat=RAPPEL_ETAT_PLANIFIE,
                 date_envoi__lte=now
             )
             
-            # Log le nombre de rappels trouvés
             logger.info(f"Rappels à envoyer trouvés: {rappels_a_envoyer.count()}")
             
             count = 0
             for rappel in rappels_a_envoyer:
                 try:
                     # Logique d'envoi du rappel selon le type
-                    if rappel.type_rappel == 'email':
-                        # Envoi par email
+                    if rappel.type_rappel == RAPPEL_TYPE_EMAIL:
                         logger.info(f"Simulation d'envoi d'email pour le rappel {rappel.id}")
                         pass
-                    elif rappel.type_rappel == 'sms':
-                        # Envoi par SMS
+                    elif rappel.type_rappel == RAPPEL_TYPE_SMS:
                         logger.info(f"Simulation d'envoi de SMS pour le rappel {rappel.id}")
                         pass
                     
-                    # Utiliser 'envoye' sans accent
-                    rappel.etat = 'envoye'
+                    # Utiliser la constante pour l'état envoyé
+                    rappel.etat = RAPPEL_ETAT_ENVOYE
                     rappel.save()
                     count += 1
                     logger.info(f"Rappel {rappel.id} marqué comme envoyé")
                 except OperationalError as db_err:
                     if 'database is locked' in str(db_err):
-                        # Ne pas marquer le rappel comme échoué, nous réessaierons
                         logger.warning(f"Base de données verrouillée lors du traitement du rappel {rappel.id}")
-                        raise  # Propager l'erreur pour déclencher le retry
+                        raise
                     else:
-                        rappel.etat = 'echoue'
+                        rappel.etat = RAPPEL_ETAT_ECHOUE
                         rappel.save()
                         logger.error(f"Erreur opérationnelle lors de l'envoi du rappel {rappel.id}: {str(db_err)}")
                 except Exception as e:
-                    # Utiliser 'echoue' sans accent
-                    rappel.etat = 'echoue'
+                    # Utiliser la constante pour l'état échoué
+                    rappel.etat = RAPPEL_ETAT_ECHOUE
                     rappel.save()
                     logger.error(f"Erreur lors de l'envoi du rappel {rappel.id}: {str(e)}")
             
