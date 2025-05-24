@@ -1,0 +1,374 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}">{{ cotisation.reference }}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:rappel_detail' pk=rappel.pk %}">{% trans "Détail du rappel" %} #{{ rappel.id }}</a></li>
+<li class="breadcrumb-item active">{% trans "Supprimer" %}</li>
+{% endblock %}
+
+{% block page_title %}
+<div class="text-center">{% trans "Confirmer la suppression" %}</div>
+{% endblock %}
+
+{% block cotisations_content %}
+<!-- Notification de confirmation de suppression (masquée par défaut) -->
+<div class="position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 1050; margin-top: 60px; display: none;" id="confirmationToast">
+    <div class="toast bg-success text-white border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="fas fa-check-circle me-2"></i> {% trans "Suppression en cours..." %}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        {% if can_delete %}
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="ribbon-wrapper" id="ribbonWrapper">
+                    <div class="ribbon bg-danger">
+                        {% trans "Action critique" %}
+                    </div>
+                </div>
+                <div class="card-body text-center p-4 position-relative">
+                    <!-- Icône de suppression grande et en haut -->
+                    <div class="mb-3 deletion-icon-container">
+                        <div class="rounded-circle bg-danger p-3 d-inline-block mb-2">
+                            <i class="fas fa-trash-alt text-white fa-2x"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- Titre et avertissement -->
+                    <h5 class="fw-bold text-danger mb-2">{% trans "Êtes-vous sûr de vouloir supprimer ce rappel ?" %}</h5>
+                    <p class="text-muted mb-4">
+                        {% trans "Cette action ne peut pas être annulée. Toutes les informations associées à ce rappel seront définitivement supprimées." %}
+                    </p>
+                    
+                    <!-- Information sur le rappel à supprimer -->
+                    <div class="card bg-light mb-3">
+                        <div class="card-body p-2">
+                            <div class="row g-3">
+                                <div class="col-md-6 text-start">
+                                    <p class="mb-1 small"><strong>{% trans "ID du rappel" %}</strong></p>
+                                    <p class="mb-1 text-secondary small">#{{ rappel.id }}</p>
+                                </div>
+                                <div class="col-md-6 text-start">
+                                    <p class="mb-1 small"><strong>{% trans "Type" %}</strong></p>
+                                    <p class="mb-1 text-secondary small">{{ rappel.get_type_rappel_display }}</p>
+                                </div>
+                                <div class="col-md-6 text-start">
+                                    <p class="mb-1 small"><strong>{% trans "Date planifiée" %}</strong></p>
+                                    <p class="mb-1 text-secondary small">{{ rappel.date_envoi|date:"d/m/Y H:i" }}</p>
+                                </div>
+                                <div class="col-md-6 text-start">
+                                    <p class="mb-1 small"><strong>{% trans "Destinataire" %}</strong></p>
+                                    <p class="mb-1 text-secondary small">{{ rappel.membre.prenom }} {{ rappel.membre.nom }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Formulaire de confirmation -->
+                    <form method="post" id="deleteForm">
+                        {% csrf_token %}
+                        
+                        <!-- Sécurité supplémentaire: case à cocher de confirmation -->
+                        <div class="form-check mb-3 text-start">
+                            <input class="form-check-input" type="checkbox" id="confirmCheck" required>
+                            <label class="form-check-label text-muted" for="confirmCheck">
+                                {% trans "Je confirme vouloir supprimer définitivement ce rappel" %}
+                            </label>
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                            <a href="{% url 'cotisations:rappel_detail' pk=rappel.pk %}" class="btn btn-outline-secondary" id="cancelBtn">
+                                <i class="fas fa-times me-2"></i>{% trans "Annuler" %}
+                            </a>
+                            <button type="submit" class="btn btn-danger" id="confirmBtn" data-bs-toggle="tooltip" data-bs-placement="top" title="{% trans 'Cette action ne peut pas être annulée' %}">
+                                <i class="fas fa-trash me-2"></i>{% trans "Supprimer définitivement" %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        {% else %}
+            <div class="card shadow-sm border-0">
+                <div class="card-body text-center p-4">
+                    <div class="mb-3">
+                        <div class="rounded-circle bg-warning p-3 d-inline-block">
+                            <i class="fas fa-exclamation-triangle text-white fa-2x"></i>
+                        </div>
+                    </div>
+                    
+                    <h5 class="fw-bold mb-2">{% trans "Action non autorisée" %}</h5>
+                    <div class="alert alert-danger mb-4">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        {% trans "Seuls les rappels planifiés peuvent être supprimés." %}
+                    </div>
+                    
+                    <p class="text-muted mb-4">
+                        {% trans "Le rappel que vous tentez de supprimer a déjà été envoyé ou traité. Pour cette raison, il ne peut pas être supprimé." %}
+                    </p>
+                    
+                    <div class="d-grid gap-2 col-lg-6 mx-auto">
+                        <a href="{% url 'cotisations:rappel_detail' pk=rappel.pk %}" class="btn btn-primary">
+                            <i class="fas fa-arrow-left me-2"></i>{% trans "Retour au détail du rappel" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Encadré d'aide contextuelle -->
+<div class="row mt-3">
+    <div class="col-lg-8 mx-auto">
+        <div class="card bg-light border-0 shadow-sm">
+            <div class="card-body p-2">
+                <h6 class="fw-bold mb-2"><i class="fas fa-info-circle me-2"></i>{% trans "À savoir" %}</h6>
+                <p class="mb-0 small text-muted">
+                    {% if can_delete %}
+                        {% trans "La suppression d'un rappel planifié annule son envoi futur, mais n'affecte pas la cotisation associée ni les autres rappels existants." %}
+                        <a href="#" class="ms-2" data-bs-toggle="tooltip" data-bs-placement="top" title="{% trans 'Cette action ne peut pas être annulée après confirmation.' %}">
+                            <i class="fas fa-question-circle text-info"></i>
+                        </a>
+                    {% else %}
+                        {% trans "Les rappels déjà envoyés font partie de l'historique des communications et ne peuvent pas être supprimés pour des raisons de traçabilité." %}
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Animation pour les boutons
+    const confirmBtn = document.getElementById('confirmBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const deleteForm = document.getElementById('deleteForm');
+    const confirmCheck = document.getElementById('confirmCheck');
+    const confirmationToast = document.getElementById('confirmationToast');
+    
+    // Vérifier si les éléments existent
+    if (confirmBtn && cancelBtn && deleteForm) {
+        // Désactiver le bouton de confirmation jusqu'à ce que la case soit cochée
+        confirmBtn.disabled = true;
+        
+        // Activer/désactiver le bouton de confirmation en fonction de la case à cocher
+        if (confirmCheck) {
+            confirmCheck.addEventListener('change', function() {
+                confirmBtn.disabled = !this.checked;
+                
+                if (this.checked) {
+                    confirmBtn.classList.add('btn-pulse');
+                } else {
+                    confirmBtn.classList.remove('btn-pulse');
+                }
+            });
+        }
+        
+        // Animation de secousse pour le bouton de confirmation
+        confirmBtn.addEventListener('mouseenter', function() {
+            if (!this.disabled) {
+                this.classList.add('pulse-danger');
+                setTimeout(() => {
+                    this.classList.remove('pulse-danger');
+                }, 500);
+            }
+        });
+        
+        // Animation de transition pour le formulaire
+        deleteForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Afficher le toast de confirmation
+            if (confirmationToast) {
+                const toast = new bootstrap.Toast(confirmationToast.querySelector('.toast'));
+                confirmationToast.style.display = 'block';
+                toast.show();
+            }
+            
+            confirmBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin me-2"></i>{% trans "Suppression..." %}';
+            confirmBtn.disabled = true;
+            cancelBtn.disabled = true;
+            
+            // Animer le ribbon avant la soumission
+            const ribbonWrapper = document.getElementById('ribbonWrapper');
+            if (ribbonWrapper) {
+                ribbonWrapper.classList.add('ribbon-animate');
+            }
+            
+            setTimeout(() => {
+                this.submit();
+            }, 1200);
+        });
+    }
+    
+    // Animation pour l'icône
+    const iconContainer = document.querySelector('.deletion-icon-container');
+    if (iconContainer) {
+        setTimeout(() => {
+            iconContainer.classList.add('animate-warning');
+        }, 300);
+    }
+    
+    // Ajouter des tooltips aux éléments
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
+
+<style>
+/* Animations */
+.pulse-danger {
+    animation: pulse-red 1s;
+}
+
+@keyframes pulse-red {
+    0% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
+}
+
+.animate-warning {
+    animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-5px); }
+    40%, 80% { transform: translateX(5px); }
+}
+
+/* Améliorations de style */
+.card {
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.btn {
+    transition: all 0.2s ease;
+}
+
+.btn-lg {
+    padding: 0.6rem 1.2rem;
+}
+
+.btn-danger:hover {
+    background-color: #bd2130;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+}
+
+.btn-outline-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(108, 117, 125, 0.2);
+}
+
+/* Ruban "Action critique" */
+.ribbon-wrapper {
+    width: 85px;
+    height: 88px;
+    overflow: hidden;
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    z-index: 1;
+}
+
+.ribbon {
+    font-size: 10px;
+    font-weight: bold;
+    color: #FFF;
+    text-transform: uppercase;
+    text-align: center;
+    line-height: 20px;
+    transform: rotate(45deg);
+    -webkit-transform: rotate(45deg);
+    width: 120px;
+    display: block;
+    background: #bc0031;
+    box-shadow: 0 3px 10px -5px rgba(0, 0, 0, 1);
+    position: absolute;
+    top: 19px;
+    right: -30px;
+}
+
+.ribbon:before, .ribbon:after {
+    content: "";
+    position: absolute;
+    left: 0px;
+    top: 100%;
+    z-index: -1;
+    border-left: 3px solid #8F0808;
+    border-right: 3px solid transparent;
+    border-bottom: 3px solid transparent;
+    border-top: 3px solid #8F0808;
+}
+
+.ribbon:after {
+    right: 0px;
+    left: auto;
+    border-left: 3px solid transparent;
+    border-right: 3px solid #8F0808;
+    border-bottom: 3px solid transparent;
+    border-top: 3px solid #8F0808;
+}
+
+.ribbon-animate {
+    animation: ribbon-pulse 0.8s ease-in-out;
+}
+
+@keyframes ribbon-pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+/* Toast de confirmation */
+.toast {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+/* Animation pour le bouton de confirmation quand activé */
+.btn-pulse {
+    animation: btn-active-pulse 2s infinite;
+}
+
+@keyframes btn-active-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
+}
+
+/* Style pour la checkbox de confirmation */
+.form-check-input:checked {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+</style>
+{% endblock %}

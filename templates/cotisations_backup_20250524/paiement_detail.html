@@ -1,0 +1,307 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+{% load static %}
+{% load cotisation_filters %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:dashboard' %}">{% trans "Tableau de bord" %}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:paiement_liste' %}">{% trans "Liste des paiements" %}</a></li>
+<li class="breadcrumb-item active">{% trans "Détail du paiement" %}</li>
+{% endblock %}
+
+{% block page_title %}
+{% trans "Détail du paiement" %} {{ paiement.reference_paiement|default:"" }}
+{% endblock %}
+
+{% block cotisations_content %}
+<div class="row">
+    <!-- Détails du paiement -->
+    <div class="col-lg-8 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">{% trans "Informations du paiement" %}</h5>
+                <div class="btn-group">
+                    <a href="{% url 'cotisations:paiement_modifier' pk=paiement.pk %}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-edit"></i> {% trans "Modifier" %}
+                    </a>
+                    <a href="{% url 'cotisations:paiement_supprimer' pk=paiement.pk %}" class="btn btn-sm btn-outline-danger">
+                        <i class="fas fa-trash"></i> {% trans "Supprimer" %}
+                    </a>
+                    {% if paiement.type_transaction == 'paiement' and not paiement.recu_envoye %}
+                    <a href="{% url 'cotisations:api_generer_recu' paiement_id=paiement.pk %}" class="btn btn-sm btn-outline-success">
+                        <i class="fas fa-file-invoice"></i> {% trans "Générer un reçu" %}
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-5">{% trans "Montant" %}</dt>
+                            <dd class="col-sm-7">
+                                <span class="fw-bold {% if paiement.type_transaction == 'remboursement' or paiement.type_transaction == 'rejet' %}text-danger{% else %}text-success{% endif %}">
+                                    {% if paiement.type_transaction == 'remboursement' or paiement.type_transaction == 'rejet' %}-{% endif %}
+                                    {{ paiement.montant|floatformat:2 }} €
+                                </span>
+                            </dd>
+                            
+                            <dt class="col-sm-5">{% trans "Date de paiement" %}</dt>
+                            <dd class="col-sm-7">{{ paiement.date_paiement|date:"d/m/Y H:i" }}</dd>
+                            
+                            <dt class="col-sm-5">{% trans "Mode de paiement" %}</dt>
+                            <dd class="col-sm-7">{{ paiement.mode_paiement.libelle|default:"-" }}</dd>
+                            
+                            <dt class="col-sm-5">{% trans "Type de transaction" %}</dt>
+                            <dd class="col-sm-7">
+                                {% if paiement.type_transaction == 'paiement' %}
+                                <span class="badge bg-success">{% trans "Paiement" %}</span>
+                                {% elif paiement.type_transaction == 'remboursement' %}
+                                <span class="badge bg-warning">{% trans "Remboursement" %}</span>
+                                {% elif paiement.type_transaction == 'rejet' %}
+                                <span class="badge bg-danger">{% trans "Rejet" %}</span>
+                                {% endif %}
+                            </dd>
+                        </dl>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-5">{% trans "Référence paiement" %}</dt>
+                            <dd class="col-sm-7">{{ paiement.reference_paiement|default:"-" }}</dd>
+                            
+                            <dt class="col-sm-5">{% trans "Devise" %}</dt>
+                            <dd class="col-sm-7">{{ paiement.devise }}</dd>
+                            
+                            <dt class="col-sm-5">{% trans "Statut" %}</dt>
+                            <dd class="col-sm-7">
+                                {% if paiement.statut %}
+                                <span class="badge bg-{{ paiement.statut.get_badge_class }}">{{ paiement.statut.nom }}</span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </dd>
+                            
+                            <dt class="col-sm-5">{% trans "Reçu envoyé" %}</dt>
+                            <dd class="col-sm-7">
+                                {% if paiement.recu_envoye %}
+                                <span class="badge bg-success">{% trans "Oui" %}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{% trans "Non" %}</span>
+                                {% endif %}
+                            </dd>
+                        </dl>
+                    </div>
+                    
+                    {% if paiement.commentaire %}
+                    <div class="col-12 mt-3">
+                        <h6 class="border-bottom pb-2">{% trans "Commentaire" %}</h6>
+                        <p class="mb-0">{{ paiement.commentaire }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if paiement.metadata %}
+                    <div class="col-12 mt-3">
+                        <h6 class="border-bottom pb-2">{% trans "Métadonnées" %}</h6>
+                        <pre class="bg-light p-2 rounded"><code>{{ paiement.metadata|pprint }}</code></pre>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="col-12 mt-3">
+                        <h6 class="border-bottom pb-2">{% trans "Informations système" %}</h6>
+                        <dl class="row small mb-0">
+                            <dt class="col-sm-3">{% trans "Créé le" %}</dt>
+                            <dd class="col-sm-3">{{ paiement.created_at|date:"d/m/Y H:i" }}</dd>
+                            
+                            <dt class="col-sm-3">{% trans "Créé par" %}</dt>
+                            <dd class="col-sm-3">
+                                {% if paiement.cree_par %}
+                                {{ paiement.cree_par.username }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </dd>
+                            
+                            <dt class="col-sm-3">{% trans "Modifié le" %}</dt>
+                            <dd class="col-sm-3">{{ paiement.updated_at|date:"d/m/Y H:i" }}</dd>
+                            
+                            <dt class="col-sm-3">{% trans "Modifié par" %}</dt>
+                            <dd class="col-sm-3">
+                                {% if paiement.modifie_par %}
+                                {{ paiement.modifie_par.username }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Informations sur la cotisation liée -->
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">{% trans "Cotisation associée" %}</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-5">{% trans "Référence" %}</dt>
+                    <dd class="col-sm-7">
+                        <a href="{% url 'cotisations:cotisation_detail' pk=paiement.cotisation.pk %}">
+                            {{ paiement.cotisation.reference }}
+                        </a>
+                    </dd>
+                    
+                    <dt class="col-sm-5">{% trans "Membre" %}</dt>
+                    <dd class="col-sm-7">
+                        {% if paiement.cotisation.membre %}
+                        <a href="{% url 'membres:membre_detail' pk=paiement.cotisation.membre.pk %}">
+                            {{ paiement.cotisation.membre.prenom }} {{ paiement.cotisation.membre.nom }}
+                        </a>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-5">{% trans "Montant total" %}</dt>
+                    <dd class="col-sm-7">{{ paiement.cotisation.montant|floatformat:2 }} €</dd>
+                    
+                    <dt class="col-sm-5">{% trans "Montant payé" %}</dt>
+                    <dd class="col-sm-7">{{ montant_paye|floatformat:2 }} €</dd>
+                    
+                    <dt class="col-sm-5">{% trans "Montant restant" %}</dt>
+                    <dd class="col-sm-7">
+                        <span class="fw-bold {% if paiement.cotisation.montant_restant > 0 %}text-danger{% else %}text-success{% endif %}">
+                            {{ paiement.cotisation.montant_restant|floatformat:2 }} €
+                        </span>
+                    </dd>
+                    
+                    <dt class="col-sm-5">{% trans "Statut" %}</dt>
+                    <dd class="col-sm-7">
+                        {% if paiement.cotisation.statut %}
+                        <span class="badge bg-{{ paiement.cotisation.statut.get_badge_class }}">{{ paiement.cotisation.statut.nom }}</span>
+                        {% elif paiement.cotisation.statut_paiement == 'non_payee' %}
+                        <span class="badge bg-danger">{% trans "Non payée" %}</span>
+                        {% elif paiement.cotisation.statut_paiement == 'partiellement_payee' %}
+                        <span class="badge bg-warning">{% trans "Partiellement payée" %}</span>
+                        {% else %}
+                        <span class="badge bg-success">{% trans "Payée" %}</span>
+                        {% endif %}
+                    </dd>
+                    
+                    {% if paiement.cotisation.date_echeance %}
+                    <dt class="col-sm-5">{% trans "Échéance" %}</dt>
+                    <dd class="col-sm-7">
+                        <span class="{% if paiement.cotisation.est_en_retard %}text-danger{% endif %}">
+                            {{ paiement.cotisation.date_echeance|date:"d/m/Y" }}
+                            {% if paiement.cotisation.est_en_retard %}
+                            <br><small class="text-danger">{{ paiement.cotisation.jours_retard }} {% trans "jours de retard" %}</small>
+                            {% endif %}
+                        </span>
+                    </dd>
+                    {% endif %}
+                    
+                    <dt class="col-sm-5">{% trans "Type de membre" %}</dt>
+                    <dd class="col-sm-7">
+                        {% if paiement.cotisation.type_membre %}
+                        {{ paiement.cotisation.type_membre.libelle }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+            <div class="card-footer bg-light">
+                <a href="{% url 'cotisations:cotisation_detail' pk=paiement.cotisation.pk %}" class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-info-circle"></i> {% trans "Voir le détail de la cotisation" %}
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Historique des actions -->
+    {% if historique %}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">{% trans "Historique des actions" %}</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>{% trans "Date" %}</th>
+                                <th>{% trans "Action" %}</th>
+                                <th>{% trans "Utilisateur" %}</th>
+                                <th>{% trans "Détails" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entree in historique %}
+                            <tr>
+                                <td>{{ entree.date_action|date:"d/m/Y H:i" }}</td>
+                                <td>
+                                    {% if entree.action == 'creation' %}
+                                    <span class="badge bg-success">{% trans "Création" %}</span>
+                                    {% elif entree.action == 'modification' %}
+                                    <span class="badge bg-info">{% trans "Modification" %}</span>
+                                    {% elif entree.action == 'suppression' %}
+                                    <span class="badge bg-danger">{% trans "Suppression" %}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ entree.action }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ entree.utilisateur.username|default:"-" }}</td>
+                                <td>
+                                    {% if entree.details %}
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalDetails{{ entree.id }}">
+                                        <i class="fas fa-eye"></i> {% trans "Voir" %}
+                                    </button>
+                                    <!-- Modal pour les détails -->
+                                    <div class="modal fade" id="modalDetails{{ entree.id }}" tabindex="-1" aria-labelledby="modalLabel{{ entree.id }}" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="modalLabel{{ entree.id }}">{% trans "Détails de l'action" %}</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Fermer' %}"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <pre class="bg-light p-2 rounded"><code>{{ entree.details|pprint }}</code></pre>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Fermer" %}</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialisation des composants Bootstrap (tooltips, modals, etc.)
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+});
+</script>
+{% endblock %}

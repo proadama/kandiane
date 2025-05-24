@@ -1,0 +1,36 @@
+{# templates/cotisations/base.html #}
+{% extends "layouts/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Gestion des cotisations" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">{% trans "Tableau de bord" %}</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'cotisations:dashboard' %}">{% trans "Cotisations" %}</a></li>
+                    {% block breadcrumb %}{% endblock %}
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">{% block page_title %}{% trans "Gestion des cotisations" %}{% endblock %}</h1>
+        <div class="d-flex">
+            {% block actions %}{% endblock %}
+        </div>
+    </div>
+
+    {% include "includes/messages.html" %}
+
+    {% block cotisations_content %}
+    {% endblock %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% endblock %}

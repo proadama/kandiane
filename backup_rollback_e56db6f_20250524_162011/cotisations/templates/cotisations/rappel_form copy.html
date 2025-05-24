@@ -1,0 +1,909 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+{% load static %}
+{% load cotisations_extras %}
+
+{% block breadcrumb %}
+{% if form.instance.pk %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}">{{ cotisation.reference }}</a></li>
+<li class="breadcrumb-item active">{% trans "Modifier le rappel" %}</li>
+{% else %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}">{{ cotisation.reference }}</a></li>
+<li class="breadcrumb-item active">{% trans "Créer un rappel" %}</li>
+{% endif %}
+{% endblock %}
+
+{% block page_title %}
+{% if form.instance.pk %}
+{% trans "Modifier le rappel" %}
+{% else %}
+{% trans "Créer un rappel" %}
+{% endif %}
+{% endblock %}
+
+{% block cotisations_content %}
+<div class="row">
+    <!-- Informations sur la cotisation -->
+    {% if cotisation %}
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">{% trans "Détails de la cotisation" %}</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-5">{% trans "Référence" %}</dt>
+                    <dd class="col-sm-7">{{ cotisation.reference|escape }}</dd>
+                    
+                    <dt class="col-sm-5">{% trans "Membre" %}</dt>
+                    <dd class="col-sm-7">
+                        {{ cotisation.membre.prenom|escape }} {{ cotisation.membre.nom|escape }}
+                        <br><small class="text-muted">{{ cotisation.membre.email|escape }}</small>
+                    </dd>
+                    
+                    <dt class="col-sm-5">{% trans "Montant total" %}</dt>
+                    <dd class="col-sm-7">{{ cotisation.montant|floatformat:2 }} €</dd>
+                    
+                    <dt class="col-sm-5">{% trans "Montant restant" %}</dt>
+                    <dd class="col-sm-7">
+                        <span class="fw-bold {% if cotisation.montant_restant > 0 %}text-danger{% else %}text-success{% endif %}">
+                            {{ cotisation.montant_restant|floatformat:2 }} €
+                        </span>
+                    </dd>
+                    
+                    <dt class="col-sm-5">{% trans "Statut" %}</dt>
+                    <dd class="col-sm-7">
+                        {% if cotisation.statut_paiement == 'non_payee' %}
+                        <span class="badge bg-danger">{% trans "Non payée" %}</span>
+                        {% elif cotisation.statut_paiement == 'partiellement_payee' %}
+                        <span class="badge bg-warning">{% trans "Partiellement payée" %}</span>
+                        {% else %}
+                        <span class="badge bg-success">{% trans "Payée" %}</span>
+                        {% endif %}
+                    </dd>
+                    
+                    {% if cotisation.date_echeance %}
+                    <dt class="col-sm-5">{% trans "Échéance" %}</dt>
+                    <dd class="col-sm-7">
+                        <span class="{% if cotisation.est_en_retard %}text-danger{% endif %}">
+                            {{ cotisation.date_echeance|date:"d/m/Y" }}
+                            {% if cotisation.est_en_retard %}
+                            <br><small class="text-danger">{{ cotisation.jours_retard }} {% trans "jours de retard" %}</small>
+                            {% endif %}
+                        </span>
+                    </dd>
+                    {% endif %}
+                    
+                    <!-- Dates clés pour les rappels -->
+                    <dt class="col-sm-5">{% trans "Dates de suivi" %}</dt>
+                    <dd class="col-sm-7">
+                        <small><strong>{% trans "Date limite rapide" %}:</strong> {{ today|add_days:7|date:"d/m/Y" }}</small><br>
+                        <small><strong>{% trans "Date limite standard" %}:</strong> {{ today|add_days:15|date:"d/m/Y" }}</small><br>
+                        <small><strong>{% trans "Date limite formelle" %}:</strong> {{ today|add_days:30|date:"d/m/Y" }}</small>
+                    </dd>
+                </dl>
+                
+                <!-- Liste des rappels précédents -->
+                {% with rappels_precedents=cotisation.rappels.all %}
+                {% if rappels_precedents %}
+                <hr>
+                <h6>{% trans "Rappels précédents" %}</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>{% trans "Date" %}</th>
+                                <th>{% trans "Type" %}</th>
+                                <th>{% trans "Niveau" %}</th>
+                                <th>{% trans "État" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rappel in rappels_precedents|dictsortreversed:"date_envoi"|slice:":3" %}
+                            <tr>
+                                <td>{{ rappel.date_envoi|date:"d/m/Y" }}</td>
+                                <td>{{ rappel.get_type_rappel_display }}</td>
+                                <td>{{ rappel.niveau }}</td>
+                                <td>
+                                    {% if rappel.etat == 'planifie' %}
+                                    <span class="badge bg-secondary">{% trans "Planifié" %}</span>
+                                    {% elif rappel.etat == 'envoye' %}
+                                    <span class="badge bg-success">{% trans "Envoyé" %}</span>
+                                    {% elif rappel.etat == 'echoue' %}
+                                    <span class="badge bg-danger">{% trans "Échoué" %}</span>
+                                    {% elif rappel.etat == 'lu' %}
+                                    <span class="badge bg-info">{% trans "Lu" %}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if rappels_precedents.count > 3 %}
+                <small class="text-muted">{% trans "Affichage des 3 derniers rappels sur" %} {{ rappels_precedents.count }}</small>
+                {% endif %}
+                {% endif %}
+                {% endwith %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Formulaire de rappel -->
+    <div class="col-lg-{% if cotisation %}8{% else %}12{% endif %}">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" id="rappelForm" novalidate>
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        {% trans "Veuillez corriger les erreurs ci-dessous." %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row g-3">
+                        <!-- Type de rappel -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.type_rappel.errors %} has-error{% endif %}">
+                                {{ form.type_rappel.label_tag }}
+                                {{ form.type_rappel }}
+                                {% if form.type_rappel.help_text %}
+                                <small class="form-text text-muted">{{ form.type_rappel.help_text }}</small>
+                                {% endif %}
+                                {% if form.type_rappel.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.type_rappel.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Niveau de rappel -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.niveau.errors %} has-error{% endif %}">
+                                {{ form.niveau.label_tag }}
+                                {{ form.niveau }}
+                                {% if form.niveau.help_text %}
+                                <small class="form-text text-muted">{{ form.niveau.help_text }}</small>
+                                {% endif %}
+                                <small class="form-text text-muted">
+                                    {% trans "1: Premier rappel, 2: Relance, 3: Mise en demeure, etc." %}
+                                </small>
+                                {% if form.niveau.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.niveau.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Contenu du rappel -->
+                        <div class="col-md-12 mt-3">
+                            <div class="form-group{% if form.contenu.errors %} has-error{% endif %}">
+                                {{ form.contenu.label_tag }}
+                                <div class="mb-2">
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'Modèles de rappel' %}">
+                                        <button type="button" class="btn btn-outline-secondary" id="templateDefault">{% trans "Modèle standard" %}</button>
+                                        <button type="button" class="btn btn-outline-secondary" id="templateUrgent">{% trans "Modèle urgent" %}</button>
+                                        <button type="button" class="btn btn-outline-secondary" id="templateFormal">{% trans "Modèle formel" %}</button>
+                                    </div>
+                                </div>
+                                {{ form.contenu }}
+                                {% if form.contenu.help_text %}
+                                <small class="form-text text-muted">{{ form.contenu.help_text }}</small>
+                                {% endif %}
+                                <small class="form-text text-muted">
+                                    {% trans "Variables disponibles" %}:
+                                    <ul class="list-inline mt-1">
+                                        <li class="list-inline-item"><code>{prenom}</code> - {% trans "prénom du membre" %}</li>
+                                        <li class="list-inline-item"><code>{nom}</code> - {% trans "nom du membre" %}</li>
+                                        <li class="list-inline-item"><code>{reference}</code> - {% trans "référence de cotisation" %}</li>
+                                        <li class="list-inline-item"><code>{montant}</code> - {% trans "montant restant dû" %}</li>
+                                        <li class="list-inline-item"><code>{date_echeance}</code> - {% trans "date d'échéance" %}</li>
+                                        <li class="list-inline-item"><code>{date_limite}</code> - {% trans "date limite de paiement" %}</li>
+                                    </ul>
+                                </small>
+                                {% if form.contenu.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.contenu.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Options d'envoi -->
+                        <div class="col-md-12 mt-4">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h5 class="card-title">{% trans "Options d'envoi" %}</h5>
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" id="envoyerImmediatement" checked>
+                                        <label class="form-check-label" for="envoyerImmediatement">
+                                            {% trans "Envoyer immédiatement" %}
+                                        </label>
+                                    </div>
+                                    <div id="optionsPlanification" style="display: none;">
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <label for="datePlanification" class="form-label">{% trans "Date d'envoi" %}</label>
+                                                <input type="date" class="form-control" id="datePlanification" min="{{ today|date:'Y-m-d' }}">
+                                                <div class="form-text">
+                                                    {% trans "Suggestions" %}:
+                                                    <a href="#" class="set-date" data-date="{{ today|add_days:1|date:'Y-m-d' }}">{% trans "Demain" %}</a>,
+                                                    <a href="#" class="set-date" data-date="{{ today|add_days:7|date:'Y-m-d' }}">{% trans "+7 jours" %}</a>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="heurePlanification" class="form-label">{% trans "Heure d'envoi" %}</label>
+                                                <input type="time" class="form-control" id="heurePlanification" value="09:00">
+                                                <div class="form-text">
+                                                    {% trans "Suggestions" %}:
+                                                    <a href="#" class="set-time" data-time="09:00">9:00</a>,
+                                                    <a href="#" class="set-time" data-time="12:00">12:00</a>,
+                                                    <a href="#" class="set-time" data-time="18:00">18:00</a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Boutons -->
+                        <div class="col-12 mt-4 d-flex justify-content-between">
+                            {% if cotisation %}
+                            <a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> {% trans "Annuler" %}
+                            </a>
+                            {% else %}
+                            <a href="{% url 'cotisations:rappel_liste' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> {% trans "Annuler" %}
+                            </a>
+                            {% endif %}
+                            
+                            {% if form.instance.pk %}
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> {% trans "Enregistrer les modifications" %}
+                            </button>
+                            {% else %}
+                            <button type="submit" class="btn btn-warning">
+                                <i class="fas fa-bell"></i> {% trans "Créer le rappel" %}
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/cotisations/form-validation.js' %}"></script>
+<script>
+// JavaScript modifié pour rappel_form.html - Version avec templates externalisés
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Variables globales
+    const rappelForm = document.getElementById('rappelForm');
+    const contenuTextarea = document.getElementById('id_contenu');
+    const typeRappelSelect = document.getElementById('id_type_rappel');
+    const niveauInput = document.getElementById('id_niveau');
+    const datePlanification = document.getElementById('datePlanification');
+    const heurePlanification = document.getElementById('heurePlanification');
+    
+    // Cache pour les templates
+    let templatesCache = {};
+    let currentCotisationId = null;
+    
+    // Récupérer l'ID de la cotisation depuis l'URL ou un élément caché
+    const urlParts = window.location.pathname.split('/');
+    const cotisationIndex = urlParts.indexOf('cotisations');
+    if (cotisationIndex !== -1 && urlParts[cotisationIndex + 1]) {
+        currentCotisationId = urlParts[cotisationIndex + 1];
+    }
+    
+    // Ajouter des styles pour les boutons
+    const style = document.createElement('style');
+    style.textContent = `
+        .btn-template {
+            transition: all 0.3s ease;
+        }
+        .btn-template-active {
+            background-color: #28a745 !important;
+            color: white !important;
+            border-color: #28a745 !important;
+            box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+        }
+        .btn-template-inactive {
+            background-color: #f8f9fa;
+            color: #6c757d;
+            border-color: #ced4da;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // === CORRECTION DES SUGGESTIONS DE DATE/HEURE ===
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    
+    const formatDate = (date) => {
+        return date.getFullYear() + '-' + 
+               String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+               String(date.getDate()).padStart(2, '0');
+    };
+    
+    // Mettre à jour les liens de suggestion avec les vraies dates
+    const dateSuggestions = document.querySelectorAll('.set-date');
+    if (dateSuggestions.length >= 2) {
+        dateSuggestions[0].setAttribute('data-date', formatDate(tomorrow));
+        dateSuggestions[1].setAttribute('data-date', formatDate(nextWeek));
+    }
+    
+    if (datePlanification) {
+        datePlanification.min = formatDate(today);
+    }
+    
+    // Créer ou récupérer les champs cachés pour la planification
+    let envoi_immediat_input = document.getElementById('id_envoi_immediat');
+    let date_planifiee_input = document.getElementById('id_date_planifiee');
+    let heure_planifiee_input = document.getElementById('id_heure_planifiee');
+    
+    if (!envoi_immediat_input) {
+        envoi_immediat_input = document.createElement('input');
+        envoi_immediat_input.type = 'hidden';
+        envoi_immediat_input.name = 'envoi_immediat';
+        envoi_immediat_input.id = 'id_envoi_immediat';
+        rappelForm.appendChild(envoi_immediat_input);
+    }
+    
+    if (!date_planifiee_input) {
+        date_planifiee_input = document.createElement('input');
+        date_planifiee_input.type = 'hidden';
+        date_planifiee_input.name = 'date_planifiee';
+        date_planifiee_input.id = 'id_date_planifiee';
+        rappelForm.appendChild(date_planifiee_input);
+    }
+    
+    if (!heure_planifiee_input) {
+        heure_planifiee_input = document.createElement('input');
+        heure_planifiee_input.type = 'hidden';
+        heure_planifiee_input.name = 'heure_planifiee';
+        heure_planifiee_input.id = 'id_heure_planifiee';
+        rappelForm.appendChild(heure_planifiee_input);
+    }
+    
+    // Fonction pour ajouter un effet visuel lors de la sélection
+    function highlightInput(input) {
+        if (!input) return;
+        input.style.backgroundColor = '#e8f5e8';
+        setTimeout(() => {
+            input.style.backgroundColor = '';
+        }, 1000);
+    }
+    
+    // Gérer les liens de date rapide
+    document.querySelectorAll('.set-date').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const dateValue = this.getAttribute('data-date');
+            if (datePlanification && dateValue) {
+                datePlanification.value = dateValue;
+                date_planifiee_input.value = dateValue;
+                highlightInput(datePlanification);
+                console.log('Date sélectionnée:', dateValue);
+            }
+        });
+    });
+    
+    // Gérer les liens d'heure rapide
+    document.querySelectorAll('.set-time').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const timeValue = this.getAttribute('data-time');
+            if (heurePlanification && timeValue) {
+                heurePlanification.value = timeValue;
+                heure_planifiee_input.value = timeValue;
+                highlightInput(heurePlanification);
+                console.log('Heure sélectionnée:', timeValue);
+            }
+        });
+    });
+    
+    // Mettre à jour les champs cachés lorsque les valeurs de date/heure changent
+    if (datePlanification) {
+        datePlanification.addEventListener('change', function() {
+            date_planifiee_input.value = this.value;
+        });
+    }
+    
+    if (heurePlanification) {
+        heurePlanification.addEventListener('change', function() {
+            heure_planifiee_input.value = this.value;
+        });
+    }
+    
+    // === GESTION DES TEMPLATES AVEC API ===
+    
+    /**
+     * Charge les templates depuis l'API
+     */
+    function loadTemplates() {
+        if (!typeRappelSelect || !niveauInput) return;
+        
+        const typeRappel = typeRappelSelect.value || 'email';
+        const niveau = niveauInput.value || 1;
+        
+        // Vérifier le cache
+        const cacheKey = `${typeRappel}_${niveau}`;
+        if (templatesCache[cacheKey]) {
+            updateTemplateButtons(templatesCache[cacheKey]);
+            return;
+        }
+        
+        // Construire l'URL avec les paramètres
+        const params = new URLSearchParams({
+            type_rappel: typeRappel,
+            niveau: niveau
+        });
+        
+        // Ajouter l'ID de cotisation si disponible
+        if (currentCotisationId) {
+            params.append('cotisation_id', currentCotisationId);
+        }
+        
+        console.log('Chargement des templates:', params.toString());
+        
+        // Appel API
+        fetch(`/cotisations/api/rappel-templates/?${params}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('Templates chargés:', data.templates.length);
+                    // Mettre en cache
+                    templatesCache[cacheKey] = data.templates;
+                    
+                    // Mettre à jour l'interface
+                    updateTemplateButtons(data.templates);
+                } else {
+                    console.error('Erreur lors du chargement des templates:', data.message);
+                    showFallbackTemplates();
+                }
+            })
+            .catch(error => {
+                console.error('Erreur réseau lors du chargement des templates:', error);
+                showFallbackTemplates();
+            });
+    }
+    
+    /**
+     * Met à jour l'état des boutons de template selon les templates disponibles
+     */
+    function updateTemplateButtons(templates) {
+        const templateButtons = {
+            'standard': document.getElementById('templateDefault'),
+            'urgent': document.getElementById('templateUrgent'),
+            'formal': document.getElementById('templateFormal')
+        };
+        
+        // Réinitialiser tous les boutons
+        Object.values(templateButtons).forEach(btn => {
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.remove('btn-template-active');
+                btn.classList.add('btn-template-inactive');
+                btn.title = 'Template non disponible pour ce type/niveau';
+            }
+        });
+        
+        // Activer les boutons pour lesquels on a des templates
+        templates.forEach(template => {
+            const button = templateButtons[template.type_template];
+            if (button) {
+                button.disabled = false;
+                button.classList.remove('btn-template-inactive');
+                button.title = template.nom;
+                
+                // Stocker l'ID du template sur le bouton pour l'utiliser
+                button.dataset.templateId = template.id;
+                
+                console.log(`Bouton ${template.type_template} activé:`, template.nom);
+            }
+        });
+        
+        // Activer le premier template disponible par défaut si aucun template n'est encore sélectionné
+        if (templates.length > 0 && contenuTextarea && !contenuTextarea.value.trim()) {
+            const firstTemplateType = templates[0].type_template;
+            const firstButton = templateButtons[firstTemplateType];
+            if (firstButton) {
+                loadAndApplyTemplate(firstTemplateType);
+            }
+        }
+    }
+    
+    /**
+     * Charge et applique un template spécifique
+     */
+    function loadAndApplyTemplate(templateType) {
+        if (!typeRappelSelect || !niveauInput) return;
+        
+        const typeRappel = typeRappelSelect.value || 'email';
+        const niveau = niveauInput.value || 1;
+        const cacheKey = `${typeRappel}_${niveau}`;
+        
+        const templates = templatesCache[cacheKey];
+        if (!templates) {
+            console.error('Templates non chargés');
+            loadTemplates();
+            return;
+        }
+        
+        // Trouver le template correspondant
+        const template = templates.find(t => t.type_template === templateType);
+        if (!template) {
+            console.error(`Template ${templateType} non trouvé`);
+            return;
+        }
+        
+        // Appliquer le template
+        if (contenuTextarea) {
+            // Utiliser le contenu généré si disponible, sinon le contenu brut
+            contenuTextarea.value = template.contenu_genere || template.contenu;
+        }
+        
+        // Mettre à jour le style des boutons
+        const templateButtons = {
+            'standard': document.getElementById('templateDefault'),
+            'urgent': document.getElementById('templateUrgent'),
+            'formal': document.getElementById('templateFormal')
+        };
+        
+        const activeButton = templateButtons[templateType];
+        if (activeButton) {
+            updateTemplateButtonStyles(activeButton);
+        }
+        
+        console.log(`Template ${templateType} appliqué:`, template.nom);
+    }
+    
+    /**
+     * Affiche des templates par défaut en cas d'erreur de chargement
+     */
+    function showFallbackTemplates() {
+        console.warn('Utilisation des templates de fallback');
+        
+        // Templates de secours basiques
+        const fallbackTemplates = [
+            {
+                id: 'fallback_standard',
+                nom: 'Template Standard (Fallback)',
+                type_template: 'standard',
+                contenu: `Cher/Chère Membre,
+
+Nous vous rappelons que votre cotisation est arrivée à échéance.
+
+Nous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.
+
+Cordialement,
+L'équipe de l'association`
+            },
+            {
+                id: 'fallback_urgent',
+                nom: 'Template Urgent (Fallback)', 
+                type_template: 'urgent',
+                contenu: `RAPPEL URGENT
+
+Votre cotisation est en retard de paiement.
+
+Merci de régulariser cette situation rapidement.
+
+Cordialement,
+L'équipe de l'association`
+            },
+            {
+                id: 'fallback_formal',
+                nom: 'Template Formel (Fallback)', 
+                type_template: 'formal',
+                contenu: `Madame, Monsieur,
+
+Malgré nos précédents rappels, nous constatons que votre cotisation demeure impayée.
+
+Nous vous mettons en demeure de procéder au règlement dans les plus brefs délais.
+
+Cordialement,
+La Direction`
+            }
+        ];
+        
+        // Mise à jour avec les templates de fallback
+        updateTemplateButtons(fallbackTemplates);
+        setupFallbackHandlers(fallbackTemplates);
+    }
+    
+    /**
+     * Configure les gestionnaires pour les templates de fallback
+     */
+    function setupFallbackHandlers(fallbackTemplates) {
+        const templateButtons = {
+            'standard': document.getElementById('templateDefault'),
+            'urgent': document.getElementById('templateUrgent'),
+            'formal': document.getElementById('templateFormal')
+        };
+        
+        fallbackTemplates.forEach(template => {
+            const button = templateButtons[template.type_template];
+            if (button && contenuTextarea) {
+                button.onclick = function() {
+                    contenuTextarea.value = template.contenu;
+                    updateTemplateButtonStyles(this);
+                };
+            }
+        });
+    }
+    
+    /**
+     * Met à jour les styles des boutons de template
+     */
+    function updateTemplateButtonStyles(activeButton) {
+        const templateButtons = [
+            document.getElementById('templateDefault'),
+            document.getElementById('templateUrgent'),
+            document.getElementById('templateFormal')
+        ];
+        
+        templateButtons.forEach(button => {
+            if (!button) return;
+            
+            button.classList.add('btn-template');
+            
+            if (button === activeButton) {
+                button.classList.add('btn-template-active');
+                button.classList.remove('btn-template-inactive');
+                button.classList.remove('btn-outline-secondary');
+            } else {
+                button.classList.remove('btn-template-active');
+                button.classList.add('btn-template-inactive');
+                button.classList.remove('btn-outline-secondary');
+            }
+        });
+    }
+    
+    // === INITIALISATION DES TEMPLATES ===
+    
+    // Charger les templates au changement de type ou niveau
+    if (typeRappelSelect) {
+        typeRappelSelect.addEventListener('change', function() {
+            loadTemplates();
+            
+            // Adapter l'interface selon le type
+            const type = this.value;
+            const templateButtons = [
+                document.getElementById('templateDefault'),
+                document.getElementById('templateUrgent'),
+                document.getElementById('templateFormal')
+            ];
+            
+            if (type === 'sms') {
+                // Pour SMS, désactiver le template formel
+                const formalBtn = document.getElementById('templateFormal');
+                if (formalBtn) {
+                    formalBtn.disabled = true;
+                    formalBtn.title = 'Template non adapté pour SMS';
+                }
+            }
+            
+            // Réinitialiser les styles des boutons
+            templateButtons.forEach(button => {
+                if (button && !button.disabled) {
+                    button.classList.remove('btn-template-active', 'btn-template-inactive');
+                    button.classList.add('btn-outline-secondary');
+                }
+            });
+        });
+    }
+    
+    if (niveauInput) {
+        niveauInput.addEventListener('change', loadTemplates);
+    }
+    
+    // Gestionnaires pour les boutons de template
+    const templateDefaultBtn = document.getElementById('templateDefault');
+    const templateUrgentBtn = document.getElementById('templateUrgent');
+    const templateFormalBtn = document.getElementById('templateFormal');
+    
+    if (templateDefaultBtn) {
+        templateDefaultBtn.addEventListener('click', function() {
+            loadAndApplyTemplate('standard');
+        });
+    }
+    
+    if (templateUrgentBtn) {
+        templateUrgentBtn.addEventListener('click', function() {
+            loadAndApplyTemplate('urgent');
+        });
+    }
+    
+    if (templateFormalBtn) {
+        templateFormalBtn.addEventListener('click', function() {
+            loadAndApplyTemplate('formal');
+        });
+    }
+    
+    // Charger les templates initiaux
+    loadTemplates();
+    
+    // === GESTION DE L'ENVOI IMMÉDIAT VS PLANIFIÉ ===
+    
+    const envoyerImmediatementSwitch = document.getElementById('envoyerImmediatement');
+    const optionsPlanification = document.getElementById('optionsPlanification');
+    
+    if (envoyerImmediatementSwitch && optionsPlanification) {
+        envoi_immediat_input.value = envoyerImmediatementSwitch.checked ? 'true' : 'false';
+        
+        if (envoyerImmediatementSwitch.checked) {
+            optionsPlanification.style.display = 'none';
+        } else {
+            optionsPlanification.style.display = 'block';
+            
+            if (!datePlanification.value) {
+                datePlanification.value = formatDate(tomorrow);
+                date_planifiee_input.value = datePlanification.value;
+            }
+            
+            if (!heurePlanification.value) {
+                heurePlanification.value = '09:00';
+                heure_planifiee_input.value = heurePlanification.value;
+            }
+        }
+        
+        envoyerImmediatementSwitch.addEventListener('change', function() {
+            envoi_immediat_input.value = this.checked ? 'true' : 'false';
+            
+            if (this.checked) {
+                optionsPlanification.style.display = 'none';
+            } else {
+                optionsPlanification.style.display = 'block';
+                
+                if (!datePlanification.value) {
+                    datePlanification.value = formatDate(tomorrow);
+                    date_planifiee_input.value = datePlanification.value;
+                }
+                
+                if (!heurePlanification.value) {
+                    heurePlanification.value = '09:00';
+                    heure_planifiee_input.value = heurePlanification.value;
+                }
+            }
+        });
+    }
+    
+    // === VALIDATION DU FORMULAIRE ===
+    
+    if (rappelForm) {
+        rappelForm.addEventListener('submit', function(event) {
+            let isValid = true;
+            
+            // Nettoyer les erreurs précédentes
+            document.querySelectorAll('.is-invalid').forEach(el => {
+                el.classList.remove('is-invalid');
+            });
+            document.querySelectorAll('.invalid-feedback').forEach(el => {
+                el.remove();
+            });
+            
+            // Validation du type de rappel
+            if (typeRappelSelect && !typeRappelSelect.value) {
+                isValid = false;
+                highlightField(typeRappelSelect, 'Veuillez sélectionner un type de rappel.');
+            }
+            
+            // Validation du contenu
+            if (contenuTextarea && !contenuTextarea.value.trim()) {
+                isValid = false;
+                highlightField(contenuTextarea, 'Le contenu du rappel ne peut pas être vide.');
+            }
+            
+            // Validation du niveau
+            if (niveauInput) {
+                const niveau = parseInt(niveauInput.value);
+                if (isNaN(niveau) || niveau < 1) {
+                    isValid = false;
+                    highlightField(niveauInput, 'Le niveau doit être un nombre positif (1 ou plus).');
+                }
+            }
+            
+            // Validation de la planification
+            if (envoyerImmediatementSwitch && !envoyerImmediatementSwitch.checked) {
+                if (datePlanification && !datePlanification.value) {
+                    isValid = false;
+                    highlightField(datePlanification, 'Veuillez sélectionner une date d\'envoi.');
+                } else {
+                    date_planifiee_input.value = datePlanification.value;
+                }
+                
+                if (heurePlanification && !heurePlanification.value) {
+                    isValid = false;
+                    highlightField(heurePlanification, 'Veuillez sélectionner une heure d\'envoi.');
+                } else {
+                    heure_planifiee_input.value = heurePlanification.value;
+                }
+                
+                // Validation que la date/heure est dans le futur
+                if (datePlanification && datePlanification.value && heurePlanification && heurePlanification.value) {
+                    const now = new Date();
+                    const planifiedDate = new Date(`${datePlanification.value}T${heurePlanification.value}`);
+                    
+                    if (planifiedDate <= now) {
+                        isValid = false;
+                        highlightField(datePlanification, 'La date et l\'heure d\'envoi doivent être dans le futur.');
+                    }
+                }
+            }
+            
+            // Protection XSS basique
+            if (contenuTextarea) {
+                contenuTextarea.value = contenuTextarea.value
+                    .replace(/<script/gi, "&lt;script")
+                    .replace(/<\/script>/gi, "&lt;/script&gt;");
+            }
+            
+            if (!isValid) {
+                event.preventDefault();
+                
+                const errorAlert = document.createElement('div');
+                errorAlert.className = 'alert alert-danger mb-4';
+                errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Veuillez corriger les erreurs ci-dessous.';
+                
+                if (rappelForm && !rappelForm.querySelector('.alert-danger')) {
+                    rappelForm.prepend(errorAlert);
+                }
+            }
+        });
+    }
+    
+    // Fonction pour mettre en évidence un champ en erreur
+    function highlightField(field, message) {
+        if (!field) return;
+        
+        field.classList.add('is-invalid');
+        
+        const errorElem = field.parentNode.querySelector('.invalid-feedback');
+        if (!errorElem) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'invalid-feedback d-block';
+            errorDiv.textContent = message;
+            field.parentNode.appendChild(errorDiv);
+        }
+    }
+    
+    // Si l'un des modèles est déjà dans le contenu, mettre en surbrillance le bouton correspondant
+    function checkExistingTemplateContent() {
+        if (!contenuTextarea || !contenuTextarea.value) return;
+        
+        const content = contenuTextarea.value;
+        
+        if (content.includes('RAPPEL URGENT')) {
+            updateTemplateButtonStyles(document.getElementById('templateUrgent'));
+        } else if (content.includes('Veuillez agréer, Madame, Monsieur,')) {
+            updateTemplateButtonStyles(document.getElementById('templateFormal'));
+        } else if (content.includes('Nous vous rappelons que votre cotisation')) {
+            updateTemplateButtonStyles(document.getElementById('templateDefault'));
+        }
+    }
+    
+    // Exécuter la vérification initiale pour mettre en surbrillance le bon bouton au chargement
+    setTimeout(checkExistingTemplateContent, 500);
+    
+    console.log('Gestion des templates de rappel initialisée avec API');
+});
+</script>
+{% endblock %}

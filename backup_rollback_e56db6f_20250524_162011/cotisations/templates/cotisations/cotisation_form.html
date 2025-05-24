@@ -1,0 +1,1827 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+{% load static %}
+{% load custom_filters %}
+
+{% block head_extra %}
+{{ block.super }}
+<!-- Styles pour les améliorations UI -->
+<style>
+.loading-indicator {
+    position: relative;
+}
+.loading-indicator::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 10px;
+    width: 20px;
+    height: 100%;
+    background: url('/static/img/spinner.gif') no-repeat center center;
+    background-size: 20px;
+}
+.tooltip-icon {
+    display: inline-block;
+    margin-left: 5px;
+    color: #007bff;
+    cursor: help;
+}
+.help-popover {
+    position: absolute;
+    z-index: 1000;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    max-width: 300px;
+}
+.recent-selections {
+    margin-bottom: 15px;
+    padding: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background-color: #f9f9f9;
+}
+
+.recent-item {
+    display: inline-block;
+    margin: 4px 8px;
+    padding: 6px 12px;
+    background: #e9f0f7;
+    border: 1px solid #c0d8ea;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    font-size: 0.9rem;
+}
+
+.recent-item:hover {
+    background-color: #d1e2f2;
+    transform: translateY(-1px);
+}
+</style>
+{% endblock %}
+
+{% block breadcrumb %}
+{% if form.instance.pk %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_detail' pk=form.instance.pk %}">{{ form.instance.reference }}</a></li>
+<li class="breadcrumb-item active">{% trans "Modifier" %}</li>
+{% else %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item active">{% trans "Nouvelle cotisation" %}</li>
+{% endif %}
+{% endblock %}
+
+{% block page_title %}
+{% if form.instance.pk %}
+{% trans "Modifier la cotisation" %} {{ form.instance.reference }}
+{% else %}
+{% trans "Nouvelle cotisation" %}
+{% endif %}
+{% endblock %}
+
+{% block cotisations_content %}
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" id="cotisationForm" novalidate>
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        {% trans "Veuillez corriger les erreurs ci-dessous." %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row g-3">
+                        <!-- Première section - Informations de base -->
+                        <div class="col-12">
+                            <h5 class="border-bottom pb-2">{% trans "Informations de base" %}</h5>
+                        </div>
+                        
+                        <!-- Zone pour les sélections récentes -->
+                        <div class="col-12" id="recent-selections-container" style="display: none;">
+                            <div class="recent-selections">
+                                <strong>{% trans "Sélections récentes" %}</strong>
+                                <div id="recent-selections-list"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Membre -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.membre.errors %} is-invalid{% endif %}">
+                                {{ form.membre.label_tag }}
+                                {{ form.membre }}
+                                {% if form.membre.help_text %}
+                                <small class="form-text text-muted">{{ form.membre.help_text }}</small>
+                                {% endif %}
+                                {% if form.membre.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.membre.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Type de membre -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.type_membre.errors %} is-invalid{% endif %}">
+                                {{ form.type_membre.label_tag }}
+                                {{ form.type_membre }}
+                                {% if form.type_membre.help_text %}
+                                <small class="form-text text-muted">{{ form.type_membre.help_text }}</small>
+                                {% endif %}
+                                {% if form.type_membre.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.type_membre.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Deuxième section - Montant et barème -->
+                        <div class="col-12 mt-4">
+                            <h5 class="border-bottom pb-2">{% trans "Montant et barème" %}</h5>
+                        </div>
+                        
+                        {% if not form.instance.pk %}
+                        <!-- Utiliser barème (seulement pour la création) -->
+                        <div class="col-md-12">
+                            <div class="form-check mb-3">
+                                {{ form.utiliser_bareme }}
+                                {{ form.utiliser_bareme.label_tag }}
+                                {% if form.utiliser_bareme.help_text %}
+                                <small class="form-text text-muted d-block">{{ form.utiliser_bareme.help_text }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Barème -->
+                        <div class="col-md-6" id="baremeContainer">
+                            <div class="form-group{% if form.bareme.errors %} is-invalid{% endif %}">
+                                {{ form.bareme.label_tag }}
+                                {{ form.bareme }}
+                                {% if form.bareme.help_text %}
+                                <small class="form-text text-muted">{{ form.bareme.help_text }}</small>
+                                {% endif %}
+                                {% if form.bareme.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.bareme.errors }}
+                                </div>
+                                {% endif %}
+                                <!-- Élément pour afficher les alertes concernant le barème -->
+                                <div id="alerte-bareme" class="alert alert-danger mt-2" style="display: none;"></div>
+                                <!-- Élément pour afficher les informations de périodicité -->
+                                <div id="periodicite-info" class="form-text text-info mt-1" style="display: none;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Montant -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.montant.errors %} is-invalid{% endif %}">
+                                {{ form.montant.label_tag }}
+                                <div class="input-group">
+                                    {{ form.montant }}
+                                    <span class="input-group-text">€</span>
+                                </div>
+                                {% if form.montant.help_text %}
+                                <small class="form-text text-muted">{{ form.montant.help_text }}</small>
+                                {% endif %}
+                                <div id="calcul-prorata-info" class="text-info small mt-2" style="display: none;">
+                                    <i class="fas fa-info-circle"></i> <span id="calcul-prorata-texte"></span>
+                                </div>
+                                {% if form.montant.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.montant.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Calcul au prorata -->
+                        {% if not form.instance.pk %}
+                        <div class="col-md-12">
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="calculer_prorata" name="calculer_prorata" checked>
+                                <label class="form-check-label" for="calculer_prorata">
+                                    {% trans "Calculer le montant au prorata de la période" %}
+                                </label>
+                                <small class="form-text text-muted d-block">
+                                    {% trans "Le montant sera ajusté proportionnellement à la durée de la période." %}
+                                </small>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Troisième section - Référence -->
+                        <div class="col-12 mt-4">
+                            <h5 class="border-bottom pb-2">{% trans "Référence" %}</h5>
+                        </div>
+                        
+                        <!-- Référence -->
+                        <div class="col-md-12" id="referenceContainer">
+                            <div class="form-group{% if form.reference.errors %} is-invalid{% endif %}">
+                                {{ form.reference.label_tag }}
+                                {% if form.instance.pk %}
+                                    <div class="form-control-plaintext">{{ form.instance.reference }}</div>
+                                    {{ form.reference.as_hidden }}
+                                {% else %}
+                                    <div class="form-control-plaintext">
+                                        <em>{% trans "La référence sera générée automatiquement à la création" %}</em>
+                                    </div>
+                                    <input type="hidden" name="reference" value="auto_generate">
+                                {% endif %}
+                                <small class="form-text text-muted">
+                                    {% trans "Format: COT-YYYYMM-XXXXX (année, mois, identifiant unique)" %}
+                                </small>
+                                {% if form.reference.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.reference.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Quatrième section - Dates -->
+                        <div class="col-12 mt-4">
+                            <h5 class="border-bottom pb-2">{% trans "Dates" %}</h5>
+                        </div>
+                        
+                        <!-- Date d'émission -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.date_emission.errors %} is-invalid{% endif %}">
+                                {{ form.date_emission.label_tag }}
+                                {{ form.date_emission }}
+                                {% if form.date_emission.help_text %}
+                                <small class="form-text text-muted">{{ form.date_emission.help_text }}</small>
+                                {% endif %}
+                                {% if form.date_emission.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.date_emission.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Date d'échéance -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.date_echeance.errors %} is-invalid{% endif %}">
+                                {{ form.date_echeance.label_tag }}
+                                {{ form.date_echeance }}
+                                {% if form.date_echeance.help_text %}
+                                <small class="form-text text-muted">{{ form.date_echeance.help_text }}</small>
+                                {% endif %}
+                                {% if form.date_echeance.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.date_echeance.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Période début -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.periode_debut.errors %} is-invalid{% endif %}">
+                                {{ form.periode_debut.label_tag }}
+                                {{ form.periode_debut }}
+                                {% if form.periode_debut.help_text %}
+                                <small class="form-text text-muted">{{ form.periode_debut.help_text }}</small>
+                                {% endif %}
+                                {% if form.periode_debut.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.periode_debut.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Période fin -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.periode_fin.errors %} is-invalid{% endif %}">
+                                {{ form.periode_fin.label_tag }}
+                                {{ form.periode_fin }}
+                                {% if form.periode_fin.help_text %}
+                                <small class="form-text text-muted">{{ form.periode_fin.help_text }}</small>
+                                {% endif %}
+                                {% if form.periode_fin.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.periode_fin.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Cinquième section - Statut et commentaire -->
+                        <div class="col-12 mt-4">
+                            <h5 class="border-bottom pb-2">{% trans "Informations complémentaires" %}</h5>
+                        </div>
+                        
+                        <!-- Statut -->
+                        <div class="col-md-6">
+                            <div class="form-group{% if form.statut.errors %} is-invalid{% endif %}">
+                                {{ form.statut.label_tag }}
+                                {{ form.statut }}
+                                {% if form.statut.help_text %}
+                                <small class="form-text text-muted">{{ form.statut.help_text }}</small>
+                                {% endif %}
+                                {% if form.statut.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.statut.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Commentaire -->
+                        <div class="col-md-12 mt-3">
+                            <div class="form-group{% if form.commentaire.errors %} is-invalid{% endif %}">
+                                {{ form.commentaire.label_tag }}
+                                {{ form.commentaire }}
+                                {% if form.commentaire.help_text %}
+                                <small class="form-text text-muted">{{ form.commentaire.help_text }}</small>
+                                {% endif %}
+                                {% if form.commentaire.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.commentaire.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Boutons -->
+                        <div class="col-12 mt-4 d-flex justify-content-between">
+                            {% if form.instance.pk %}
+                            <a href="{% url 'cotisations:cotisation_detail' pk=form.instance.pk %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> {% trans "Annuler" %}
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> {% trans "Enregistrer les modifications" %}
+                            </button>
+                            {% else %}
+                            <a href="{% url 'cotisations:cotisation_liste' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> {% trans "Annuler" %}
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> {% trans "Créer la cotisation" %}
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+
+<!-- Commentez temporairement ces scripts pour le débogage -->
+
+<script src="{% static 'js/cotisations/form-validation.js' %}"></script>
+<script src="{% static 'js/cotisations/cotisations.js' %}"></script>
+<script src="{% static 'js/cotisations/cotisation_forms.js' %}"></script>
+
+<script>
+/**
+ * Script JavaScript amélioré pour le formulaire de cotisation
+ * 
+ * Ce script:
+ * - Isole complètement son propre code pour éviter les conflits
+ * - Utilise une approche défensive pour la sélection et manipulation des éléments DOM
+ * - Implémente un système de journalisation avancé pour faciliter le débogage
+ * - Gère correctement les événements de cascade entre les sélecteurs
+ * - Garantit que seuls les types de membre liés au membre sélectionné sont affichés
+ */
+ (function() {
+    // Configuration globale
+    // Remplacer cette section dans votre fichier JavaScript
+    const CONFIG = {
+        debugMode: true,         // Activer les logs de débogage détaillés
+        logColors: {             // Couleurs pour le débogage dans la console
+            info: 'color: #007bff',
+            success: 'color: #28a745',
+            warning: 'color: #ffc107',
+            error: 'color: #dc3545',
+            event: 'color: #17a2b8',
+            api: 'color: #6610f2'
+        },
+        apiUrls: {
+            // Corriger les URLs pour qu'elles correspondent exactement à celles configurées dans urls.py
+            // Utilisation des underscores au lieu des tirets
+            typesMembre: '/cotisations/api/types-membre-par-membre/',
+            baremes: '/cotisations/api/baremes-par-type/',
+            calculMontant: '/cotisations/api/calculer-montant/',
+        },
+        selectors: {
+            form: '#cotisationForm',
+            membre: '#id_membre',
+            typeMembre: '#id_type_membre',
+            bareme: '#id_bareme',
+            montant: '#id_montant',
+            utiliserBareme: '#id_utiliser_bareme',
+            calculerProrata: '#calculer_prorata',
+            alerteBareme: '#alerte-bareme',
+            periodeDebut: '#id_periode_debut',
+            periodeFin: '#id_periode_fin',
+            dateEmission: '#id_date_emission',
+            dateEcheance: '#id_date_echeance',
+            recentSelectionsContainer: '#recent-selections-container',
+            recentSelectionsList: '#recent-selections-list'
+        }
+    };
+
+    // Ajouter cette fonction au début du script, après la déclaration de CONFIG
+    // Elle va tester toutes les URLs avant même d'initialiser le formulaire
+    function diagnoseApiUrls() {
+        console.log('%c=== DIAGNOSTIC DES URLS API ===', 'color: #ff5722; font-weight: bold; font-size: 14px;');
+        
+        // Liste des variantes d'URL à tester
+        const urlVariants = {
+            'types_membre': [
+                '/cotisations/api/types_membre_par_membre/',
+                '/cotisations/api/types-membre-par-membre/',
+                '/api/cotisations/types_membre_par_membre/',
+                '/api/cotisations/types-membre-par-membre/',
+                '/cotisations/api_types_membre_par_membre/',
+            ],
+            'baremes': [
+                '/cotisations/api/baremes_par_type/',
+                '/cotisations/api/baremes-par-type/',
+                '/api/cotisations/baremes_par_type/',
+                '/api/cotisations/baremes-par-type/',
+                '/cotisations/api_baremes_par_type/',
+            ]
+        };
+        
+        // Extraire un CSRF token pour les requêtes
+        const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value;
+        
+        // Créer un petit wrapper pour fetch avec timeout
+        function testUrl(url, options = {}) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+            
+            const defaultOptions = { 
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'same-origin',
+                signal: controller.signal
+            };
+            
+            const fetchOptions = {...defaultOptions, ...options};
+            
+            return fetch(url, fetchOptions)
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    return {
+                        url,
+                        status: response.status,
+                        ok: response.ok,
+                        headers: Array.from(response.headers.entries())
+                    };
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
+                    return {
+                        url,
+                        error: error.name === 'AbortError' ? 'Timeout' : error.message,
+                        ok: false
+                    };
+                });
+        }
+        
+        // Fonction pour afficher les résultats du test
+        function showResults(results) {
+            console.log('%c=== RÉSULTATS DU DIAGNOSTIC ===', 'color: #2196f3; font-weight: bold;');
+            
+            // Organiser par type d'endpoint
+            const byEndpoint = {};
+            
+            results.forEach(result => {
+                const urlParts = result.url.split('/').filter(Boolean);
+                const endpoint = urlParts[urlParts.length - 1];
+                
+                if (!byEndpoint[endpoint]) byEndpoint[endpoint] = [];
+                byEndpoint[endpoint].push(result);
+            });
+            
+            // Afficher les résultats par endpoint
+            Object.entries(byEndpoint).forEach(([endpoint, results]) => {
+                console.group(`Endpoint: ${endpoint}`);
+                
+                // Trier par statut (fonctionnel en premier)
+                results.sort((a, b) => {
+                    if (a.ok && !b.ok) return -1;
+                    if (!a.ok && b.ok) return 1;
+                    return 0;
+                });
+                
+                results.forEach(result => {
+                    if (result.ok) {
+                        console.log(
+                            `%c✓ ${result.url} - Status: ${result.status}`,
+                            'color: #4caf50; font-weight: bold;'
+                        );
+                    } else if (result.error) {
+                        console.log(
+                            `%c✗ ${result.url} - Erreur: ${result.error}`,
+                            'color: #f44336;'
+                        );
+                    } else {
+                        console.log(
+                            `%c✗ ${result.url} - Status: ${result.status}`,
+                            'color: #ff9800;'
+                        );
+                    }
+                });
+                
+                // Suggestion d'URL à utiliser
+                const workingUrl = results.find(r => r.ok);
+                if (workingUrl) {
+                    console.log(
+                        `%c→ URL recommandée: ${workingUrl.url}`,
+                        'color: #2196f3; font-weight: bold;'
+                    );
+                } else {
+                    console.log(
+                        '%c→ Aucune URL fonctionnelle trouvée pour cet endpoint',
+                        'color: #f44336; font-weight: bold;'
+                    );
+                }
+                
+                console.groupEnd();
+            });
+            
+            // Recommandations finales
+            console.log('%c=== RECOMMANDATIONS ===', 'color: #673ab7; font-weight: bold;');
+            
+            const anyWorking = results.some(r => r.ok);
+            if (anyWorking) {
+                console.log(
+                    '%c→ Certaines URLs fonctionnent. Veuillez mettre à jour votre CONFIG.apiUrls avec les URLs recommandées ci-dessus.',
+                    'color: #4caf50;'
+                );
+            } else {
+                console.log(
+                    '%c→ Aucune URL testée ne fonctionne. Veuillez vérifier les points suivants:',
+                    'color: #f44336;'
+                );
+                console.log('  1. Les URLs sont correctement configurées dans urls.py');
+                console.log('  2. Le serveur Django est en cours d\'exécution');
+                console.log('  3. Vous avez les permissions nécessaires (session active)');
+                console.log('  4. Il n\'y a pas d\'erreurs côté serveur (vérifiez les logs Django)');
+            }
+        }
+
+        // Exécuter les tests
+        console.log('Diagnostic en cours, veuillez patienter...');
+        
+        // Créer une liste plate de toutes les URLs à tester
+        const allUrls = [];
+        Object.values(urlVariants).forEach(variants => {
+            variants.forEach(url => allUrls.push(url));
+        });
+        
+        // Tester toutes les URLs et collecter les résultats
+        Promise.all(allUrls.map(url => testUrl(url)))
+            .then(results => {
+                showResults(results);
+                
+                // Mise à jour automatique de CONFIG si possible
+                const workingUrls = {};
+                
+                Object.entries(urlVariants).forEach(([key, variants]) => {
+                    const working = results.find(r => 
+                        variants.includes(r.url) && r.ok
+                    );
+                    
+                    if (working) {
+                        workingUrls[key] = working.url;
+                    }
+                });
+                
+                if (Object.keys(workingUrls).length > 0) {
+                    console.log('%c=== MISE À JOUR AUTOMATIQUE ===', 'color: #009688; font-weight: bold;');
+                    console.log('URLs fonctionnelles détectées:');
+                    
+                    // Mettre à jour CONFIG si possible
+                    if (workingUrls.types_membre) {
+                        console.log(`typesMembre: "${workingUrls.types_membre}"`);
+                        CONFIG.apiUrls.typesMembre = workingUrls.types_membre;
+                    }
+                    
+                    if (workingUrls.baremes) {
+                        console.log(`baremes: "${workingUrls.baremes}"`);
+                        CONFIG.apiUrls.baremes = workingUrls.baremes;
+                    }
+                    
+                    console.log('%cCONFIG a été mis à jour automatiquement avec les URLs fonctionnelles!', 'color: #009688; font-weight: bold;');
+                }
+            });
+    }
+
+    // Système de journalisation amélioré
+    const Logger = {
+        log(type, message, data = null) {
+            if (!CONFIG.debugMode) return;
+
+            const style = CONFIG.logColors[type] || '';
+            const timestamp = new Date().toISOString().slice(11, 19);
+            
+            if (data) {
+                console.groupCollapsed(`%c[${timestamp}] ${message}`, style);
+                console.log('Données:', data);
+                console.groupEnd();
+            } else {
+                console.log(`%c[${timestamp}] ${message}`, style);
+            }
+        },
+        info(message, data) { this.log('info', message, data); },
+        success(message, data) { this.log('success', message, data); },
+        warning(message, data) { this.log('warning', message, data); },
+        error(message, data) { this.log('error', message, data); },
+        event(message, data) { this.log('event', message, data); },
+        api(message, data) { this.log('api', message, data); }
+    };
+
+    // Gestionnaire principal du formulaire
+    const FormManager = {
+        elements: {},
+        
+        // 1.1 Mise en cache des options - Ajout du cache
+        cache: {
+            typesMembre: {},  // Cache par ID de membre
+            baremes: {}       // Cache par ID de type de membre
+        },
+        
+        // 4.1 Historique des sélections récentes
+        recentSelections: {
+            membres: [],
+            typesParMembre: {}
+        },
+
+        // Initialisation
+        init() {
+            Logger.info('Initialisation du gestionnaire de formulaire');
+            
+            this.resetDomCache();
+            // 4.1 Chargement des sélections récentes
+            this.loadRecentSelections();
+            this.setupEventListeners();
+            this.initializeForm();
+            
+            Logger.success('Formulaire initialisé avec succès');
+        },
+
+        // Réinitialise le cache DOM et garantit des références propres
+        resetDomCache() {
+            Logger.info('Réinitialisation du cache DOM');
+            
+            // Remplacer tous les éléments importants pour supprimer les gestionnaires existants
+            this.replaceElements();
+            
+            // Cache des éléments DOM après remplacement
+            this.elements = {};
+            
+            // Sélection sécurisée des éléments
+            for (const [key, selector] of Object.entries(CONFIG.selectors)) {
+                this.elements[key] = document.querySelector(selector);
+                if (!this.elements[key]) {
+                    Logger.warning(`Élément non trouvé: ${key} (${selector})`);
+                }
+            }
+            
+            Logger.info('Éléments DOM chargés', this.elements);
+        },
+        
+        // Remplace les éléments principaux par des clones pour supprimer les gestionnaires d'événements
+        replaceElements() {
+            Logger.info('Remplacement des éléments DOM pour nettoyage');
+            
+            const elementsToClean = [
+                CONFIG.selectors.membre, 
+                CONFIG.selectors.typeMembre, 
+                CONFIG.selectors.bareme
+            ];
+            
+            elementsToClean.forEach(selector => {
+                const element = document.querySelector(selector);
+                if (element) {
+                    const clone = element.cloneNode(true);
+                    element.parentNode.replaceChild(clone, element);
+                    Logger.info(`Élément remplacé: ${selector}`);
+                }
+            });
+        },
+
+        // Configuration des écouteurs d'événements
+        setupEventListeners() {
+            Logger.info('Configuration des écouteurs d\'événements');
+            
+            // 1. Changement de membre
+            if (this.elements.membre) {
+                this.elements.membre.addEventListener('change', this.handleMembreChange.bind(this));
+                Logger.info('Écouteur ajouté: changement de membre');
+            }
+            
+            // 2. Changement de type de membre
+            if (this.elements.typeMembre) {
+                this.elements.typeMembre.addEventListener('change', this.handleTypeMembreChange.bind(this));
+                Logger.info('Écouteur ajouté: changement de type de membre');
+            }
+            
+            // 3. Changement de barème
+            if (this.elements.bareme) {
+                this.elements.bareme.addEventListener('change', this.handleBaremeChange.bind(this));
+                Logger.info('Écouteur ajouté: changement de barème');
+            }
+            
+            // 4. Option "utiliser barème"
+            if (this.elements.utiliserBareme) {
+                this.elements.utiliserBareme.addEventListener('change', this.handleUtiliserBaremeChange.bind(this));
+                Logger.info('Écouteur ajouté: utiliser barème');
+            }
+            
+            // 2.2 Ajout des écouteurs pour les dates et le calcul au prorata
+            if (this.elements.periodeDebut) {
+                this.elements.periodeDebut.addEventListener('change', () => {
+                    this.calculateProratedAmount();
+                });
+                Logger.info('Écouteur ajouté: changement date début');
+            }
+            
+            if (this.elements.periodeFin) {
+                this.elements.periodeFin.addEventListener('change', () => {
+                    this.calculateProratedAmount();
+                });
+                Logger.info('Écouteur ajouté: changement date fin');
+            }
+            
+            if (this.elements.calculerProrata) {
+                this.elements.calculerProrata.addEventListener('change', () => {
+                    this.calculateProratedAmount();
+                });
+                Logger.info('Écouteur ajouté: calcul prorata');
+            }
+            
+            // 3.1 Validation du formulaire
+            if (this.elements.form) {
+                this.elements.form.addEventListener('submit', (event) => {
+                    // Valider le formulaire avant soumission
+                    if (!this.validateForm()) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        
+                        // Afficher un message d'erreur global
+                        const errorAlert = document.createElement('div');
+                        errorAlert.className = 'alert alert-danger mb-4';
+                        errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i> Veuillez corriger les erreurs ci-dessous.';
+                        
+                        // Ajouter l'alerte en haut du formulaire s'il n'y en a pas déjà une
+                        if (!this.elements.form.querySelector('.alert-danger')) {
+                            this.elements.form.prepend(errorAlert);
+                        }
+                        
+                        // Faire défiler jusqu'au premier champ en erreur
+                        const firstInvalidField = document.querySelector('.is-invalid');
+                        if (firstInvalidField) {
+                            firstInvalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            firstInvalidField.focus();
+                        }
+                    }
+                });
+                Logger.info('Écouteur ajouté: soumission formulaire avec validation');
+            }
+        },
+
+        // Initialisation du formulaire au chargement
+        initializeForm() {
+            Logger.info('Initialisation de l\'état du formulaire');
+            
+            // Initialiser l'état lecture seule du montant
+            if (this.elements.utiliserBareme) {
+                this.toggleMontantReadOnly(this.elements.utiliserBareme.checked);
+            }
+            
+            // Si un membre est déjà sélectionné, charger ses types
+            if (this.elements.membre && this.elements.membre.value) {
+                Logger.info(`Membre déjà sélectionné: ${this.elements.membre.value}`);
+                this.loadTypesMembre(this.elements.membre.value);
+            } else {
+                // Désactiver le sélecteur de type si aucun membre sélectionné
+                this.resetTypeMembreOptions();
+                this.resetBaremeOptions();
+            }
+            
+            // Vérifier s'il y a des erreurs de formulaire et les traiter
+            this.checkForFormErrors();
+            
+            // 4.1 Afficher les sélections récentes
+            this.updateRecentSelectionsDisplay();
+            
+            // 4.2 Initialiser le système d'aide contextuelle
+            HelpSystem.init();
+        },
+        
+        // Vérifie la présence d'erreurs de validation Django et les traite
+        checkForFormErrors() {
+            const formErrors = document.querySelectorAll('.invalid-feedback');
+            if (formErrors.length > 0) {
+                Logger.warning(`${formErrors.length} erreurs de formulaire détectées`);
+                // Ici on pourrait ajouter du code pour traiter ces erreurs
+            }
+        },
+
+        // Gestionnaires d'événements
+        
+        // Gestion du changement de membre
+        handleMembreChange(event) {
+            const membreId = event.target.value;
+            Logger.event(`Membre changé: ${membreId}`);
+            
+            // 4.1 Récupérer le nom du membre depuis l'option sélectionnée
+            let membreNom = '';
+            if (event.target.selectedIndex >= 0) {
+                membreNom = event.target.options[event.target.selectedIndex].text;
+            }
+            
+            // 4.1 Ajouter aux sélections récentes
+            if (membreId && membreNom) {
+                this.addRecentMembre(membreId, membreNom);
+            }
+            
+            // Réinitialiser les éléments en cascade
+            this.resetTypeMembreOptions();
+            this.resetBaremeOptions();
+            this.resetMontant();
+            
+            // Charger les types de membre si un membre est sélectionné
+            if (membreId) {
+                this.loadTypesMembre(membreId);
+            }
+        },
+        
+        // Gestion du changement de type de membre
+        handleTypeMembreChange(event) {
+            const typeMembreId = event.target.value;
+            Logger.event(`Type de membre changé: ${typeMembreId}`);
+            
+            // Réinitialiser les éléments suivants
+            this.resetBaremeOptions();
+            this.resetMontant();
+            
+            // Charger les barèmes si un type est sélectionné
+            if (typeMembreId) {
+                this.loadBaremes(typeMembreId);
+            }
+        },
+        
+        // Gestion du changement de barème
+        handleBaremeChange(event) {
+            const baremeId = event.target.value;
+            Logger.event(`Barème changé: ${baremeId}`);
+            
+            // Calculer le montant si un barème est sélectionné
+            if (baremeId) {
+                this.calculateMontant(baremeId);
+                
+                // 2.2 Déclencher le calcul au prorata si nécessaire
+                if (this.elements.calculerProrata && this.elements.calculerProrata.checked) {
+                    this.calculateProratedAmount();
+                }
+            } else {
+                this.resetMontant();
+            }
+        },
+        
+        // Gestion du changement d'option "utiliser barème"
+        handleUtiliserBaremeChange(event) {
+            const useBareme = event.target.checked;
+            Logger.event(`Utiliser barème: ${useBareme}`);
+            
+            this.toggleMontantReadOnly(useBareme);
+        },
+
+        // Fonctions de chargement des données
+        
+        // 1.1 Mise en cache - Version modifiée pour utiliser le cache
+        loadTypesMembre(membreId) {
+            Logger.info(`Chargement des types pour le membre ${membreId}`);
+            
+            // 1.1 Vérifier si les données sont en cache
+            if (this.cache.typesMembre[membreId]) {
+                Logger.info(`Utilisation du cache pour les types du membre ${membreId}`);
+                this.updateTypeMembreOptions(this.cache.typesMembre[membreId]);
+                return;
+            }
+            
+            // 2.1 Ajout du visuel de chargement
+            if (this.elements.typeMembre) {
+                this.elements.typeMembre.disabled = true;
+                this.elements.typeMembre.innerHTML = '<option value="">Chargement...</option>';
+                this.showLoading(this.elements.typeMembre.parentNode);
+            }
+            
+            // Construire l'URL avec l'ID du membre
+            const url = `${CONFIG.apiUrls.typesMembre}?membre_id=${encodeURIComponent(membreId)}`;
+            Logger.api(`Appel API: ${url}`);
+            
+            // Effectuer la requête
+            this.fetchData(url)
+                .then(data => {
+                    Logger.api('Réponse API Types Membre', data);
+                    
+                    // 1.1 Mettre en cache les données pour une utilisation future
+                    if (data.success) {
+                        this.cache.typesMembre[membreId] = data;
+                    }
+                    
+                    this.updateTypeMembreOptions(data);
+                })
+                .catch(error => {
+                    Logger.error('Erreur lors du chargement des types de membre', error);
+                    this.showError("Erreur lors du chargement des types de membre.");
+                    this.resetTypeMembreOptions(true); // true = erreur
+                })
+                .finally(() => {
+                    // 2.1 Masquer l'indicateur de chargement
+                    if (this.elements.typeMembre) {
+                        this.hideLoading(this.elements.typeMembre.parentNode);
+                    }
+                });
+        },
+        
+        // 1.1 Mise en cache - Version modifiée pour les barèmes
+        loadBaremes(typeMembreId) {
+            Logger.info(`Chargement des barèmes pour le type ${typeMembreId}`);
+            
+            // 1.1 Vérifier si les données sont en cache
+            if (this.cache.baremes[typeMembreId]) {
+                Logger.info(`Utilisation du cache pour les barèmes du type ${typeMembreId}`);
+                this.updateBaremeOptions(this.cache.baremes[typeMembreId]);
+                return;
+            }
+            
+            // 2.1 Ajout du visuel de chargement
+            if (this.elements.bareme) {
+                this.elements.bareme.disabled = true;
+                this.elements.bareme.innerHTML = '<option value="">Chargement...</option>';
+                this.showLoading(this.elements.bareme.parentNode);
+            }
+            
+            // Construire l'URL avec l'ID du type de membre
+            const url = `${CONFIG.apiUrls.baremes}?type_membre=${encodeURIComponent(typeMembreId)}`;
+            Logger.api(`Appel API: ${url}`);
+            
+            // Effectuer la requête
+            this.fetchData(url)
+                .then(data => {
+                    Logger.api('Réponse API Barèmes', data);
+                    
+                    // 1.1 Mettre en cache les données pour une utilisation future
+                    if (data.success) {
+                        this.cache.baremes[typeMembreId] = data;
+                    }
+                    
+                    this.updateBaremeOptions(data);
+                })
+                .catch(error => {
+                    Logger.error('Erreur lors du chargement des barèmes', error);
+                    this.showError("Erreur lors du chargement des barèmes.");
+                    this.resetBaremeOptions(true); // true = erreur
+                })
+                .finally(() => {
+                    // 2.1 Masquer l'indicateur de chargement
+                    if (this.elements.bareme) {
+                        this.hideLoading(this.elements.bareme.parentNode);
+                    }
+                });
+        },
+        
+        // Calcule le montant à partir d'un barème
+        calculateMontant(baremeId) {
+            Logger.info(`Calcul du montant pour le barème ${baremeId}`);
+            
+            // Vérifier si on utilise le barème
+            if (this.elements.utiliserBareme && !this.elements.utiliserBareme.checked) {
+                Logger.info('Calcul ignoré: utilisation du barème désactivée');
+                return;
+            }
+            
+            // 2.1 Ajout du visuel de chargement
+            if (this.elements.montant) {
+                this.showLoading(this.elements.montant.parentNode);
+            }
+            
+            // Essayer d'abord de récupérer le montant depuis l'option sélectionnée
+            if (this.elements.bareme && this.elements.bareme.selectedIndex > 0) {
+                const selectedOption = this.elements.bareme.options[this.elements.bareme.selectedIndex];
+                if (selectedOption && selectedOption.dataset && selectedOption.dataset.montant) {
+                    const montant = parseFloat(selectedOption.dataset.montant);
+                    Logger.info(`Montant trouvé dans l'option: ${montant}`);
+                    
+                    if (this.elements.montant) {
+                        this.elements.montant.value = montant.toFixed(2);
+                        // 2.1 Masquer l'indicateur de chargement
+                        this.hideLoading(this.elements.montant.parentNode);
+                    }
+                    return;
+                }
+            }
+            
+            // Si non disponible dans l'option, faire une requête API
+            const url = `${CONFIG.apiUrls.calculMontant}?bareme_id=${encodeURIComponent(baremeId)}`;
+            Logger.api(`Appel API: ${url}`);
+            
+            // Effectuer la requête
+            this.fetchData(url)
+                .then(data => {
+                    Logger.api('Réponse API Calcul Montant', data);
+                    
+                    if (data.success && this.elements.montant) {
+                        const montant = parseFloat(data.montant);
+                        this.elements.montant.value = montant.toFixed(2);
+                        Logger.success(`Montant calculé: ${montant}`);
+                    } else {
+                        this.showError("Erreur lors du calcul du montant.");
+                    }
+                })
+                .catch(error => {
+                    Logger.error('Erreur lors du calcul du montant', error);
+                    this.showError("Erreur lors du calcul du montant.");
+                })
+                .finally(() => {
+                    // 2.1 Masquer l'indicateur de chargement
+                    if (this.elements.montant) {
+                        this.hideLoading(this.elements.montant.parentNode);
+                    }
+                });
+        },
+        
+        // 2.2 Calcul au prorata amélioré
+        calculateProratedAmount() {
+            Logger.info('Calcul du montant au prorata');
+            
+            // Vérifier si les éléments nécessaires existent
+            const periodeDebut = this.elements.periodeDebut;
+            const periodeFin = this.elements.periodeFin;
+            const calculerProrata = this.elements.calculerProrata;
+            const montant = this.elements.montant;
+            
+            if (!periodeDebut || !periodeFin || !calculerProrata || !montant) {
+                Logger.warning('Éléments manquants pour le calcul au prorata');
+                return;
+            }
+            
+            // Si le calcul au prorata n'est pas activé, sortir
+            if (!calculerProrata.checked) {
+                Logger.info('Calcul au prorata désactivé');
+                return;
+            }
+            
+            // Vérifier si les dates sont valides
+            const dateDebut = new Date(periodeDebut.value);
+            const dateFin = new Date(periodeFin.value);
+            
+            if (isNaN(dateDebut.getTime()) || isNaN(dateFin.getTime())) {
+                Logger.warning('Dates invalides pour le calcul au prorata');
+                return;
+            }
+            
+            // Récupérer le barème sélectionné
+            const bareme = this.elements.bareme;
+            if (!bareme || !bareme.selectedIndex) {
+                Logger.warning('Aucun barème sélectionné');
+                return;
+            }
+            
+            const selectedOption = bareme.options[bareme.selectedIndex];
+            if (!selectedOption || !selectedOption.dataset.montant || !selectedOption.dataset.periodicite) {
+                Logger.warning('Données de barème incomplètes');
+                return;
+            }
+            
+            // Récupérer les données du barème
+            const montantBase = parseFloat(selectedOption.dataset.montant);
+            const periodicite = selectedOption.dataset.periodicite;
+            
+            // Calculer la durée standard selon la périodicité
+            let dureeStandard = 365;  // Par défaut annuelle
+            switch (periodicite) {
+                case 'mensuelle': dureeStandard = 30; break;
+                case 'trimestrielle': dureeStandard = 91; break;
+                case 'semestrielle': dureeStandard = 182; break;
+                case 'unique': return;  // Pas de prorata pour un barème unique
+            }
+            
+            // Calculer la durée effective en jours
+            const diffTime = dateFin.getTime() - dateDebut.getTime();
+            const dureeEffective = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            
+            // Vérifier si la durée est valide
+            if (dureeEffective <= 0) {
+                this.showError('La période est invalide (date de fin antérieure à date de début)');
+                return;
+            }
+            
+            // Calculer le montant au prorata
+            const ratio = dureeEffective / dureeStandard;
+            const montantProrata = montantBase * ratio;
+            
+            // Appliquer le montant calculé
+            montant.value = montantProrata.toFixed(2);
+            
+            // Afficher les informations de calcul
+            this.displayProrataInfo(montantBase, dureeEffective, dureeStandard, montantProrata, periodicite);
+            
+            Logger.success(`Montant proratisé calculé: ${montantProrata.toFixed(2)}€`);
+        },
+        
+        // 2.2 Affichage des informations de prorata
+        displayProrataInfo(montantBase, dureeEffective, dureeStandard, montantProrata, periodicite) {
+            const container = document.getElementById('calcul-prorata-info');
+            const textContainer = document.getElementById('calcul-prorata-texte');
+            
+            if (!container || !textContainer) return;
+            
+            // Traduire la périodicité
+            const periodiciteLabels = {
+                'mensuelle': 'mois',
+                'trimestrielle': 'trimestre',
+                'semestrielle': 'semestre',
+                'annuelle': 'année',
+                'unique': 'période'
+            };
+            
+            const periodiciteLabel = periodiciteLabels[periodicite] || 'période';
+            
+            // Construire le message explicatif de manière sécurisée
+            textContainer.innerHTML = '';
+            
+            const line1 = document.createElement('div');
+            line1.appendChild(document.createTextNode(
+                `Calcul au prorata : ${montantBase.toFixed(2)}€ × (${dureeEffective} jours / ${dureeStandard} jours) = ${montantProrata.toFixed(2)}€`
+            ));
+            
+            const line2 = document.createElement('div');
+            line2.appendChild(document.createTextNode(
+                `Durée standard d'un ${periodiciteLabel} : ${dureeStandard} jours`
+            ));
+            
+            const line3 = document.createElement('div');
+            line3.appendChild(document.createTextNode(
+                `Durée effective : ${dureeEffective} jours`
+            ));
+            
+            textContainer.appendChild(line1);
+            textContainer.appendChild(line2);
+            textContainer.appendChild(line3);
+            
+            container.style.display = 'block';
+        },
+
+        // Méthodes pour mettre à jour l'interface
+        
+        // Met à jour les options du sélecteur de type de membre
+        updateTypeMembreOptions(data) {
+            Logger.info('Mise à jour des options de type de membre');
+            
+            // Vérifier la disponibilité du sélecteur
+            if (!this.elements.typeMembre) {
+                Logger.error('Sélecteur de type de membre non disponible');
+                return;
+            }
+            
+            // Vider et réactiver le sélecteur
+            this.elements.typeMembre.innerHTML = '';
+            this.elements.typeMembre.disabled = false;
+            
+            // Option par défaut
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Sélectionnez un type de membre';
+            this.elements.typeMembre.appendChild(defaultOption);
+            
+            // Ajouter les options si des données sont disponibles
+            if (data.success && data.types_membre && data.types_membre.length > 0) {
+                Logger.info(`Types de membres disponibles: ${data.types_membre.length}`);
+                
+                // Ajouter chaque type de membre comme option
+                data.types_membre.forEach(type => {
+                    const option = document.createElement('option');
+                    option.value = type.id;
+                    option.textContent = type.libelle;
+                    this.elements.typeMembre.appendChild(option);
+                    Logger.info(`Type ajouté: ${type.id} - ${type.libelle}`);
+                });
+                
+                // Sélection automatique si un seul type
+                if (data.single_type && data.types_membre.length === 1) {
+                    try {
+                        // Sélectionner directement par la valeur
+                        this.elements.typeMembre.value = data.types_membre[0].id;
+                        Logger.success(`Type sélectionné automatiquement: ${data.types_membre[0].id}`);
+                        
+                        // Vérifier si la sélection a réussi
+                        if (this.elements.typeMembre.value != data.types_membre[0].id) {
+                            // Méthode alternative: sélectionner par index
+                            Logger.warning('Échec de la sélection par value, tentative par index');
+                            this.elements.typeMembre.selectedIndex = 1; // L'index 0 est l'option vide
+                        }
+                        
+                        // Déclencher l'événement change
+                        this.triggerChangeEvent(this.elements.typeMembre);
+                    } catch (err) {
+                        Logger.error('Erreur lors de la sélection automatique', err);
+                    }
+                }
+            } else {
+                Logger.warning('Aucun type de membre disponible');
+                
+                // Option indiquant qu'aucun type n'est disponible
+                const emptyOption = document.createElement('option');
+                emptyOption.disabled = true;
+                emptyOption.textContent = 'Aucun type de membre disponible';
+                this.elements.typeMembre.appendChild(emptyOption);
+            }
+        },
+        
+        // Met à jour les options du sélecteur de barème
+        updateBaremeOptions(data) {
+            Logger.info('Mise à jour des options de barème');
+            
+            // Vérifier la disponibilité du sélecteur
+            if (!this.elements.bareme) {
+                Logger.error('Sélecteur de barème non disponible');
+                return;
+            }
+            
+            // Vider et réactiver le sélecteur
+            this.elements.bareme.innerHTML = '';
+            this.elements.bareme.disabled = false;
+            
+            // Option par défaut
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Sélectionnez un barème';
+            this.elements.bareme.appendChild(defaultOption);
+            
+            // Ajouter les options si des données sont disponibles
+            if (data.success && data.baremes && data.baremes.length > 0) {
+                Logger.info(`Barèmes disponibles: ${data.baremes.length}`);
+                
+                // Stocker l'ID du barème actif s'il existe
+                let baremeActifId = null;
+                
+                // Ajouter chaque barème comme option
+                data.baremes.forEach(bareme => {
+                    const option = document.createElement('option');
+                    option.value = bareme.id;
+                    
+                    // Construire le libellé avec les informations pertinentes
+                    let label = `${bareme.montant} € (${bareme.periodicite_display})`;
+                    if (bareme.est_actif) {
+                        label += ' - Actif';
+                        baremeActifId = bareme.id;
+                    } else if (bareme.est_futur) {
+                        label += ' - Futur';
+                    }
+                    
+                    option.textContent = label;
+                    
+                    // Stocker les données pour utilisation ultérieure
+                    option.dataset.montant = bareme.montant;
+                    option.dataset.periodicite = bareme.periodicite;
+                    
+                    this.elements.bareme.appendChild(option);
+                    Logger.info(`Barème ajouté: ${bareme.id} - ${label}`);
+                });
+                
+                // Sélection automatique du barème actif ou du premier si un seul
+                if (baremeActifId) {
+                    // Sélectionner le barème actif
+                    this.elements.bareme.value = baremeActifId;
+                    Logger.success(`Barème actif sélectionné: ${baremeActifId}`);
+                } else if (data.baremes.length === 1) {
+                    // S'il n'y a qu'un seul barème, le sélectionner
+                    this.elements.bareme.value = data.baremes[0].id;
+                    Logger.success(`Barème unique sélectionné: ${data.baremes[0].id}`);
+                }
+                
+                // Déclencher l'événement change si une sélection a été faite
+                if (this.elements.bareme.value) {
+                    this.triggerChangeEvent(this.elements.bareme);
+                }
+            } else {
+                Logger.warning('Aucun barème disponible');
+                
+                // Option indiquant qu'aucun barème n'est disponible
+                const emptyOption = document.createElement('option');
+                emptyOption.disabled = true;
+                emptyOption.textContent = 'Aucun barème disponible';
+                this.elements.bareme.appendChild(emptyOption);
+            }
+        },
+        
+        // 2.1 Indicateur visuel de chargement
+        showLoading(element) {
+            if (!element) return;
+            element.classList.add('loading-indicator');
+            element.setAttribute('aria-busy', 'true');
+        },
+        
+        hideLoading(element) {
+            if (!element) return;
+            element.classList.remove('loading-indicator');
+            element.setAttribute('aria-busy', 'false');
+        },
+        
+        // Active/désactive le mode lecture seule du montant
+        toggleMontantReadOnly(readOnly) {
+            Logger.info(`Mode lecture seule du montant: ${readOnly}`);
+            
+            if (!this.elements.montant) return;
+            
+            this.elements.montant.readOnly = readOnly;
+            
+            if (readOnly) {
+                // Ajouter une classe visuelle
+                this.elements.montant.classList.add('bg-light');
+                
+                // Recalculer le montant si un barème est sélectionné
+                if (this.elements.bareme && this.elements.bareme.value) {
+                    this.calculateMontant(this.elements.bareme.value);
+                }
+            } else {
+                // Retirer la classe visuelle
+                this.elements.montant.classList.remove('bg-light');
+            }
+        },
+        
+        // Affiche un message d'erreur
+        showError(message, duration = 5000) {
+            Logger.error(`Affichage d'erreur: ${message}`);
+            
+            // Afficher dans la console en mode développement
+            if (CONFIG.debugMode) {
+                console.error(message);
+            }
+            
+            // Afficher dans l'élément d'alerte si disponible
+            if (this.elements.alerteBareme) {
+                // Échapper le HTML pour éviter les injections XSS
+                this.elements.alerteBareme.textContent = message;
+                this.elements.alerteBareme.style.display = 'block';
+                
+                // Masquer après un délai
+                setTimeout(() => {
+                    this.elements.alerteBareme.style.display = 'none';
+                }, duration);
+            }
+        },
+
+        // Méthodes de réinitialisation
+        
+        // Réinitialise les options du sélecteur de type de membre
+        resetTypeMembreOptions(isError = false) {
+            Logger.info('Réinitialisation des options de type de membre');
+            
+            if (!this.elements.typeMembre) return;
+            
+            // Vider le sélecteur
+            this.elements.typeMembre.innerHTML = '';
+            
+            // Ajouter une option par défaut
+            const option = document.createElement('option');
+            option.value = '';
+            
+            if (isError) {
+                option.textContent = 'Erreur - Veuillez réessayer';
+            } else {
+                option.textContent = 'Sélectionnez d\'abord un membre';
+            }
+            
+            this.elements.typeMembre.appendChild(option);
+            this.elements.typeMembre.disabled = true;
+        },
+        
+        // Réinitialise les options du sélecteur de barème
+        resetBaremeOptions(isError = false) {
+            Logger.info('Réinitialisation des options de barème');
+            
+            if (!this.elements.bareme) return;
+            
+            // Vider le sélecteur
+            this.elements.bareme.innerHTML = '';
+            
+            // Ajouter une option par défaut
+            const option = document.createElement('option');
+            option.value = '';
+            
+            if (isError) {
+                option.textContent = 'Erreur - Veuillez réessayer';
+            } else {
+                option.textContent = 'Sélectionnez d\'abord un type de membre';
+            }
+            
+            this.elements.bareme.appendChild(option);
+            this.elements.bareme.disabled = true;
+        },
+        
+        // Réinitialise le champ montant
+        resetMontant() {
+            Logger.info('Réinitialisation du montant');
+            
+            if (!this.elements.montant) return;
+            
+            // Ne réinitialiser que si le barème est utilisé
+            if (this.elements.utiliserBareme && this.elements.utiliserBareme.checked) {
+                this.elements.montant.value = '';
+            }
+        },
+        
+        // 3.1 Validation du formulaire améliorée
+        validateForm() {
+            Logger.info('Validation du formulaire');
+            
+            let isValid = true;
+            const errors = [];
+            
+            // Réinitialiser les erreurs précédentes
+            document.querySelectorAll('.is-invalid').forEach(el => {
+                el.classList.remove('is-invalid');
+            });
+            
+            // 1. Valider le membre
+            if (!this.elements.membre || !this.elements.membre.value) {
+                this.highlightError(this.elements.membre, 'Un membre doit être sélectionné');
+                errors.push('Membre manquant');
+                isValid = false;
+            }
+            
+            // 2. Valider le type de membre
+            if (!this.elements.typeMembre || !this.elements.typeMembre.value) {
+                this.highlightError(this.elements.typeMembre, 'Un type de membre doit être sélectionné');
+                errors.push('Type de membre manquant');
+                isValid = false;
+            }
+            
+            // 3. Valider le barème si utilisation du barème activée
+            if (this.elements.utiliserBareme && this.elements.utiliserBareme.checked) {
+                if (!this.elements.bareme || !this.elements.bareme.value) {
+                    this.highlightError(this.elements.bareme, 'Un barème doit être sélectionné');
+                    errors.push('Barème manquant');
+                    isValid = false;
+                }
+            }
+            
+            // 4. Valider le montant
+            if (!this.elements.montant || !this.elements.montant.value || parseFloat(this.elements.montant.value) <= 0) {
+                this.highlightError(this.elements.montant, 'Le montant doit être supérieur à zéro');
+                errors.push('Montant invalide');
+                isValid = false;
+            }
+            
+            // 5. Valider les dates
+            if (!this.elements.dateEmission || !this.elements.dateEmission.value) {
+                this.highlightError(this.elements.dateEmission, 'La date d\'émission est requise');
+                errors.push('Date d\'émission manquante');
+                isValid = false;
+            }
+            
+            if (!this.elements.dateEcheance || !this.elements.dateEcheance.value) {
+                this.highlightError(this.elements.dateEcheance, 'La date d\'échéance est requise');
+                errors.push('Date d\'échéance manquante');
+                isValid = false;
+            } else if (this.elements.dateEmission && this.elements.dateEmission.value && 
+                      new Date(this.elements.dateEcheance.value) < new Date(this.elements.dateEmission.value)) {
+                this.highlightError(this.elements.dateEcheance, 'La date d\'échéance doit être postérieure à la date d\'émission');
+                errors.push('Date d\'échéance invalide');
+                isValid = false;
+            }
+            
+            if (!this.elements.periodeDebut || !this.elements.periodeDebut.value) {
+                this.highlightError(this.elements.periodeDebut, 'La date de début de période est requise');
+                errors.push('Date de début manquante');
+                isValid = false;
+            }
+            
+            if (this.elements.periodeFin && this.elements.periodeFin.value && this.elements.periodeDebut && 
+                this.elements.periodeDebut.value && 
+                new Date(this.elements.periodeFin.value) < new Date(this.elements.periodeDebut.value)) {
+                this.highlightError(this.elements.periodeFin, 'La date de fin de période doit être postérieure à la date de début');
+                errors.push('Date de fin invalide');
+                isValid = false;
+            }
+            
+            // Journaliser les résultats de la validation
+            if (isValid) {
+                Logger.success('Validation du formulaire réussie');
+            } else {
+                Logger.error('Validation du formulaire échouée', errors);
+            }
+            
+            return isValid;
+        },
+        
+        // 3.1 Mise en évidence des champs en erreur
+        highlightError(element, message) {
+            if (!element) return;
+            
+            // Ajouter la classe d'erreur
+            element.classList.add('is-invalid');
+            
+            // Trouver le conteneur parent
+            let container = element.closest('.form-group');
+            if (!container) {
+                container = element.parentNode;
+            }
+            
+            // Créer ou mettre à jour le message d'erreur
+            let errorElement = container.querySelector('.invalid-feedback');
+            if (!errorElement) {
+                errorElement = document.createElement('div');
+                errorElement.className = 'invalid-feedback d-block';
+                
+                // Placer après le champ ou après le groupe d'input
+                if (element.parentNode.classList.contains('input-group')) {
+                    element.parentNode.parentNode.appendChild(errorElement);
+                } else {
+                    container.appendChild(errorElement);
+                }
+            }
+            
+            // Définir le message d'erreur de manière sécurisée
+            errorElement.textContent = message;
+        },
+        
+        // 4.1 Gestion des sélections récentes
+        addRecentMembre(membreId, membreNom) {
+            if (!membreId || !membreNom) return;
+            
+            // Ajouter à l'historique
+            const existingIndex = this.recentSelections.membres.findIndex(m => m.id === membreId);
+            if (existingIndex >= 0) {
+                // Déplacer au début de la liste s'il existe déjà
+                this.recentSelections.membres.splice(existingIndex, 1);
+            }
+            
+            // Ajouter au début
+            this.recentSelections.membres.unshift({
+                id: membreId,
+                nom: membreNom
+            });
+            
+            // Limiter à 5 entrées
+            if (this.recentSelections.membres.length > 3) {
+                this.recentSelections.membres.pop();
+            }
+            
+            // Enregistrer dans le localStorage
+            try {
+                localStorage.setItem('cotisation_recent_membres', JSON.stringify(this.recentSelections.membres));
+            } catch (e) {
+                Logger.error('Erreur lors de l\'enregistrement des sélections récentes', e);
+            }
+            
+            // Mettre à jour l'affichage
+            this.updateRecentSelectionsDisplay();
+        },
+        
+        loadRecentSelections() {
+            try {
+                // Charger depuis localStorage
+                const savedMembres = localStorage.getItem('cotisation_recent_membres');
+                if (savedMembres) {
+                    this.recentSelections.membres = JSON.parse(savedMembres);
+                }
+            } catch (e) {
+                Logger.error('Erreur lors du chargement des sélections récentes', e);
+            }
+        },
+        
+        updateRecentSelectionsDisplay() {
+            const container = this.elements.recentSelectionsContainer;
+            const list = this.elements.recentSelectionsList;
+            
+            if (!container || !list) return;
+            
+            // Masquer le conteneur s'il n'y a pas de sélections récentes
+            if (!this.recentSelections.membres.length) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            // Vider la liste
+            list.innerHTML = '';
+            
+            // Créer un conteneur pour la liste formatée
+            const textContainer = document.createElement('div');
+            textContainer.style.marginTop = '5px';
+            
+            // Parcourir les membres et créer les éléments cliquables séparés par des virgules
+            this.recentSelections.membres.forEach((membre, index) => {
+                // Créer l'élément cliquable pour chaque membre
+                const item = document.createElement('span');
+                item.textContent = membre.nom;
+                item.dataset.id = membre.id;
+                item.style.fontWeight = 'bold';
+                item.style.cursor = 'pointer';
+                item.style.color = '#0056b3';
+                
+                // Ajouter un gestionnaire de clic
+                item.addEventListener('click', () => {
+                    if (this.elements.membre) {
+                        this.elements.membre.value = membre.id;
+                        this.triggerChangeEvent(this.elements.membre);
+                    }
+                });
+                
+                // Ajouter l'élément au conteneur
+                textContainer.appendChild(item);
+                
+                // Ajouter une virgule et un espace après chaque élément sauf le dernier
+                if (index < this.recentSelections.membres.length - 1) {
+                    const separator = document.createTextNode(', ');
+                    textContainer.appendChild(separator);
+                }
+            });
+            
+            // Ajouter le conteneur de texte à la liste
+            list.appendChild(textContainer);
+            
+            // Style simplifié pour le conteneur principal
+            container.style.display = 'block';
+            container.style.padding = '10px';
+            container.style.backgroundColor = '#f8f9fa';
+            container.style.borderRadius = '4px';
+            container.style.border = '1px solid #e2e8f0';
+
+        },
+
+        // Méthodes utilitaires
+        
+        // Effectue une requête AJAX standard
+        fetchData(url) {
+            return fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP: ${response.status}`);
+                }
+                return response.json();
+            });
+        },
+        
+        // Déclenche un événement change de manière compatible avec tous les navigateurs
+        triggerChangeEvent(element) {
+            if (!element) return;
+            
+            try {
+                // Méthode moderne
+                const event = new Event('change', { bubbles: true });
+                element.dispatchEvent(event);
+            } catch (e) {
+                // Méthode compatible avec les anciens navigateurs
+                const event = document.createEvent('HTMLEvents');
+                event.initEvent('change', true, false);
+                element.dispatchEvent(event);
+            }
+            
+            Logger.info(`Événement change déclenché sur ${element.id || 'élément'}`);
+        }
+    };
+    
+    // 4.2 Système d'aide contextuelle
+    const HelpSystem = {
+        init() {
+            this.addHelpIcons();
+            this.setupEventListeners();
+        },
+        
+        // Ajoute des icônes d'aide aux éléments qui en ont besoin
+        addHelpIcons() {
+            // Définir les aides contextuelles pour différents champs
+            const helpTexts = {
+                'id_membre_label': 'Sélectionnez le membre pour lequel vous créez cette cotisation.',
+                'id_type_membre_label': 'Type d\'adhésion associé au membre sélectionné.',
+                'id_utiliser_bareme_label': 'Activer pour calculer automatiquement le montant selon le barème.',
+                'id_bareme_label': 'Barème tarifaire applicable à ce type de membre.',
+                'calculer_prorata': 'Ajuste le montant proportionnellement à la durée effective de la période.',
+                'id_montant_label': 'Montant total de la cotisation.'
+            };
+            
+            // Ajouter une icône d'aide à chaque élément
+            Object.entries(helpTexts).forEach(([id, text]) => {
+                const element = document.getElementById(id);
+                if (!element) return;
+                
+                const helpIcon = document.createElement('i');
+                helpIcon.className = 'fas fa-question-circle tooltip-icon';
+                helpIcon.setAttribute('data-help', text);
+                helpIcon.setAttribute('tabindex', '0');
+                helpIcon.setAttribute('role', 'button');
+                helpIcon.setAttribute('aria-label', 'Aide contextuelle');
+                
+                element.appendChild(helpIcon);
+            });
+        },
+        
+        // Configure les écouteurs d'événements
+        setupEventListeners() {
+            // Écouteur global pour les bulles d'aide
+            document.addEventListener('click', (event) => {
+                if (event.target.classList.contains('tooltip-icon')) {
+                    this.toggleHelpPopover(event.target);
+                } else {
+                    // Fermer tous les popovers si on clique ailleurs
+                    this.closeAllPopovers();
+                }
+            });
+            
+            // Support clavier
+            document.addEventListener('keydown', (event) => {
+                if (event.target.classList.contains('tooltip-icon')) {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        this.toggleHelpPopover(event.target);
+                    }
+                }
+                
+                // Fermer avec Escape
+                if (event.key === 'Escape') {
+                    this.closeAllPopovers();
+                }
+            });
+        },
+        
+        // Affiche ou masque une bulle d'aide
+        toggleHelpPopover(icon) {
+            // Fermer d'abord toutes les bulles ouvertes
+            this.closeAllPopovers();
+            
+            // Vérifier si l'icône a déjà une bulle ouverte
+            const existingPopover = icon.nextElementSibling;
+            if (existingPopover && existingPopover.classList.contains('help-popover')) {
+                existingPopover.remove();
+                return;
+            }
+            
+            // Créer la bulle d'aide
+            const helpText = icon.getAttribute('data-help');
+            if (!helpText) return;
+            
+            const popover = document.createElement('div');
+            popover.className = 'help-popover';
+            popover.textContent = helpText;
+            
+            // Positionner la bulle
+            icon.parentNode.insertBefore(popover, icon.nextSibling);
+            
+            // Ajuster la position si nécessaire
+            const rect = popover.getBoundingClientRect();
+            if (rect.right > window.innerWidth) {
+                popover.style.right = '0';
+            }
+        },
+        
+        // Ferme toutes les bulles d'aide
+        closeAllPopovers() {
+            document.querySelectorAll('.help-popover').forEach(popover => {
+                popover.remove();
+            });
+        }
+    };
+
+    // Pour appeler l'outil de diagnostic avant l'initialisation
+    document.addEventListener('DOMContentLoaded', function() {
+        // Exécuter le diagnostic des URLs
+        diagnoseApiUrls();
+        
+        // Continue avec l'initialisation normale
+        console.log('%c=== Formulaire de Cotisation - Initialisation ===', 'color: #28a745; font-weight: bold;');
+        
+        // Initialiser le gestionnaire de formulaire
+        FormManager.init();
+    });
+})();
+</script>
+{% endblock %}

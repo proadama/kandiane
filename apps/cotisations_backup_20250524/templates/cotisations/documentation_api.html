@@ -1,0 +1,88 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+
+{% block page_title %}Documentation des APIs{% endblock %}
+
+{% block cotisations_content %}
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-body">
+                <h1>Documentation des APIs</h1>
+                
+                <h2>API pour les types de membre</h2>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <tr>
+                            <th>URL</th>
+                            <td><code>{% url 'cotisations:api_types_membre_par_membre' %}</code></td>
+                        </tr>
+                        <tr>
+                            <th>Méthode</th>
+                            <td>GET</td>
+                        </tr>
+                        <tr>
+                            <th>Paramètres</th>
+                            <td><code>membre_id</code> - ID du membre</td>
+                        </tr>
+                        <tr>
+                            <th>Réponse</th>
+                            <td>
+<pre>{
+    "success": true,
+    "types_membre": [
+        {
+            "id": 1,
+            "libelle": "Membre actif"
+        }
+    ],
+    "single_type": true,
+    "membre_nom": "John Doe"
+}</pre>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <h2>API pour les barèmes</h2>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <tr>
+                            <th>URL</th>
+                            <td><code>{% url 'cotisations:api_baremes_par_type' %}</code></td>
+                        </tr>
+                        <tr>
+                            <th>Méthode</th>
+                            <td>GET</td>
+                        </tr>
+                        <tr>
+                            <th>Paramètres</th>
+                            <td><code>type_membre</code> - ID du type de membre</td>
+                        </tr>
+                        <tr>
+                            <th>Réponse</th>
+                            <td>
+<pre>{
+    "success": true,
+    "baremes": [
+        {
+            "id": 1,
+            "montant": 100.0,
+            "periodicite": "annuelle",
+            "periodicite_display": "Annuelle",
+            "est_actif": true,
+            "est_futur": false
+        }
+    ],
+    "type_membre_id": 1,
+    "type_membre_libelle": "Membre actif"
+}</pre>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

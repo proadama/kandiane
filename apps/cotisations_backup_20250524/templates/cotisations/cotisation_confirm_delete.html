@@ -1,0 +1,66 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}">{{ cotisation.reference }}</a></li>
+<li class="breadcrumb-item active">{% trans "Supprimer" %}</li>
+{% endblock %}
+
+{% block page_title %}
+{% trans "Confirmer la suppression" %}
+{% endblock %}
+
+{% block cotisations_content %}
+<div class="card">
+    <div class="card-body">
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            {% trans "Êtes-vous sûr de vouloir supprimer cette cotisation?" %}
+        </div>
+        
+        <div class="mb-4">
+            <h5>{% trans "Détails de la cotisation" %}</h5>
+            <ul class="list-group">
+                <li class="list-group-item">
+                    <strong>{% trans "Référence" %}:</strong> {{ cotisation.reference }}
+                </li>
+                <li class="list-group-item">
+                    <strong>{% trans "Membre" %}:</strong> {{ cotisation.membre.prenom }} {{ cotisation.membre.nom }}
+                </li>
+                <li class="list-group-item">
+                    <strong>{% trans "Montant" %}:</strong> {{ cotisation.montant }} €
+                </li>
+                <li class="list-group-item">
+                    <strong>{% trans "Date d'émission" %}:</strong> {{ cotisation.date_emission|date:"d/m/Y" }}
+                </li>
+                <li class="list-group-item">
+                    <strong>{% trans "Date d'échéance" %}:</strong> {{ cotisation.date_echeance|date:"d/m/Y" }}
+                </li>
+                <li class="list-group-item">
+                    <strong>{% trans "Statut de paiement" %}:</strong> {{ cotisation.get_statut_paiement_display }}
+                </li>
+            </ul>
+        </div>
+        
+        {% if cotisation.paiements.exists %}
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-circle me-2"></i>
+            {% trans "Attention : Cette cotisation a des paiements associés qui seront également supprimés." %}
+        </div>
+        {% endif %}
+        
+        <form method="post">
+            {% csrf_token %}
+            <div class="d-flex justify-content-between">
+                <a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> {% trans "Annuler" %}
+                </a>
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-trash"></i> {% trans "Confirmer la suppression" %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,219 @@
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:bareme_liste' %}">{% trans "Liste des barèmes" %}</a></li>
+<li class="breadcrumb-item active">{{ bareme.type_membre.libelle }} - {{ bareme.montant }} €</li>
+{% endblock %}
+
+{% block page_title %}
+{% trans "Détails du barème de cotisation" %}
+{% endblock %}
+
+{% block cotisations_content %}
+<div class="row">
+    <!-- Informations générales du barème -->
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">{% trans "Informations du barème" %}</h5>
+                    <div>
+                        <a href="{% url 'cotisations:bareme_modifier' pk=bareme.pk %}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-edit"></i> {% trans "Modifier" %}
+                        </a>
+                        <a href="{% url 'cotisations:bareme_supprimer' pk=bareme.pk %}" class="btn btn-sm btn-danger">
+                            <i class="fas fa-trash"></i> {% trans "Supprimer" %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">{% trans "Type de membre" %}</dt>
+                    <dd class="col-sm-8">{{ bareme.type_membre.libelle }}</dd>
+                    
+                    <dt class="col-sm-4">{% trans "Montant" %}</dt>
+                    <dd class="col-sm-8">{{ bareme.montant|floatformat:2 }} €</dd>
+                    
+                    <dt class="col-sm-4">{% trans "Périodicité" %}</dt>
+                    <dd class="col-sm-8">{{ bareme.get_periodicite_display }}</dd>
+                    
+                    <dt class="col-sm-4">{% trans "Date de début de validité" %}</dt>
+                    <dd class="col-sm-8">{{ bareme.date_debut_validite|date:"d/m/Y" }}</dd>
+                    
+                    <dt class="col-sm-4">{% trans "Date de fin de validité" %}</dt>
+                    <dd class="col-sm-8">
+                        {% if bareme.date_fin_validite %}
+                            {{ bareme.date_fin_validite|date:"d/m/Y" }}
+                        {% else %}
+                            <span class="text-muted">{% trans "Pas de date de fin (validité illimitée)" %}</span>
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-4">{% trans "Statut" %}</dt>
+                    <dd class="col-sm-8">
+                        {% if bareme.est_actif %}
+                            <span class="badge bg-success">{% trans "Actif" %}</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{% trans "Inactif" %}</span>
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-4">{% trans "Date de création" %}</dt>
+                    <dd class="col-sm-8">{{ bareme.created_at|date:"d/m/Y H:i" }}</dd>
+                    
+                    <dt class="col-sm-4">{% trans "Dernière mise à jour" %}</dt>
+                    <dd class="col-sm-8">{{ bareme.updated_at|date:"d/m/Y H:i" }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        {% if bareme.description %}
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">{% trans "Description" %}</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">{{ bareme.description|linebreaks }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Statistiques d'utilisation -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">{% trans "Utilisation du barème" %}</h5>
+            </div>
+            <div class="card-body">
+                {% with count=bareme.cotisations.count %}
+                <div class="text-center mb-3">
+                    <h2 class="display-4">{{ count }}</h2>
+                    <p class="text-muted">{% trans "cotisation(s) utilise(nt) ce barème" %}</p>
+                </div>
+                
+                {% if count > 0 %}
+                <a href="{% url 'cotisations:cotisation_liste' %}?bareme={{ bareme.id }}" class="btn btn-outline-primary w-100">
+                    <i class="fas fa-list"></i> {% trans "Voir les cotisations associées" %}
+                </a>
+                {% else %}
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    {% trans "Ce barème n'est pas encore utilisé par des cotisations." %}
+                </div>
+                {% endif %}
+                {% endwith %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Liste des cotisations récentes utilisant ce barème -->
+{% with cotisations=bareme.cotisations.all|slice:":5" %}
+{% if cotisations %}
+<div class="card">
+    <div class="card-header bg-light">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">{% trans "Cotisations récentes utilisant ce barème" %}</h5>
+            <a href="{% url 'cotisations:cotisation_liste' %}?bareme={{ bareme.id }}" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-search"></i> {% trans "Voir toutes" %}
+            </a>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover table-striped mb-0">
+            <thead>
+                <tr>
+                    <th>{% trans "Référence" %}</th>
+                    <th>{% trans "Membre" %}</th>
+                    <th>{% trans "Montant" %}</th>
+                    <th>{% trans "Date d'émission" %}</th>
+                    <th>{% trans "Statut" %}</th>
+                    <th>{% trans "Actions" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cotisation in cotisations %}
+                <tr>
+                    <td>{{ cotisation.reference }}</td>
+                    <td>{{ cotisation.membre.prenom }} {{ cotisation.membre.nom }}</td>
+                    <td>{{ cotisation.montant|floatformat:2 }} €</td>
+                    <td>{{ cotisation.date_emission|date:"d/m/Y" }}</td>
+                    <td>
+                        {% if cotisation.statut_paiement == 'non_payee' %}
+                        <span class="badge bg-danger">{% trans "Non payée" %}</span>
+                        {% elif cotisation.statut_paiement == 'partiellement_payee' %}
+                        <span class="badge bg-warning">{% trans "Partiellement payée" %}</span>
+                        {% else %}
+                        <span class="badge bg-success">{% trans "Payée" %}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'cotisations:cotisation_detail' pk=cotisation.pk %}" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-eye"></i> {% trans "Voir" %}
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endwith %}
+
+<!-- Autres barèmes pour ce type de membre -->
+{% with autres_baremes=bareme.type_membre.baremes.all %}
+{% if autres_baremes.count > 1 %}
+<div class="card mt-4">
+    <div class="card-header bg-light">
+        <h5 class="card-title mb-0">{% trans "Autres barèmes pour" %} {{ bareme.type_membre.libelle }}</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>{% trans "Montant" %}</th>
+                    <th>{% trans "Périodicité" %}</th>
+                    <th>{% trans "Période de validité" %}</th>
+                    <th>{% trans "Statut" %}</th>
+                    <th>{% trans "Actions" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for autre in autres_baremes %}
+                {% if autre.id != bareme.id %}
+                <tr>
+                    <td>{{ autre.montant|floatformat:2 }} €</td>
+                    <td>{{ autre.get_periodicite_display }}</td>
+                    <td>
+                        {{ autre.date_debut_validite|date:"d/m/Y" }}
+                        {% if autre.date_fin_validite %}
+                            - {{ autre.date_fin_validite|date:"d/m/Y" }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if autre.est_actif %}
+                            <span class="badge bg-success">{% trans "Actif" %}</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{% trans "Inactif" %}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'cotisations:bareme_detail' pk=autre.pk %}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-eye"></i> {% trans "Voir" %}
+                        </a>
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endwith %}
+
+{% endblock %}

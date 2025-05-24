@@ -1,0 +1,815 @@
+/**
+ * Gestion AJAX des rappels pour l'application Cotisations
+ * Version améliorée avec mise en évidence visuelle des boutons de modèle
+ */
+class RappelManager {
+    constructor(options = {}) {
+        // Options par défaut fusionnées avec les options fournies
+        this.options = Object.assign({
+            formSelector: '#rappelAjaxForm',
+            rappelsListSelector: '#rappelsList',
+            submitButtonSelector: '#submitRappel',
+            modalSelector: '#rappelModal',
+            alertsContainerSelector: '#alertsContainer',
+            cotisationId: null,
+            typesRappel: ['email', 'sms', 'courrier', 'appel'],
+            templates: {
+                standard: null,
+                urgent: null,
+                formel: null
+            }
+        }, options);
+        
+        // Récupérer les références DOM principales
+        this.form = document.querySelector(this.options.formSelector);
+        this.rappelsList = document.querySelector(this.options.rappelsListSelector);
+        this.submitButton = document.querySelector(this.options.submitButtonSelector);
+        this.modal = document.querySelector(this.options.modalSelector);
+        this.alertsContainer = document.querySelector(this.options.alertsContainerSelector);
+        
+        // Initialiser le modal Bootstrap si disponible
+        this.bootstrapModal = null;
+        if (this.modal) {
+            this.bootstrapModal = new bootstrap.Modal(this.modal);
+        }
+        
+        // Initialiser les autres propriétés
+        this.validator = null;
+        this.memberInfo = {};
+        this.templateButtons = {
+            standard: null,
+            urgent: null,
+            formel: null
+        };
+        
+        // Initialiser le gestionnaire
+        this.init();
+    }
+    
+    /**
+     * Initialisation du gestionnaire de rappels
+     */
+    init() {
+        if (!this.form) {
+            console.error('Formulaire de rappel non trouvé');
+            return;
+        }
+        
+        // Ajouter les styles CSS pour les boutons de modèle
+        this.addTemplateStyles();
+        
+        // Récupérer les informations du membre et de la cotisation
+        this.extractMemberInfo();
+        
+        // Initialiser les templates de rappel
+        this.initTemplates();
+        
+        // Initialiser la validation
+        this.setupValidation();
+        
+        // Gérer la soumission du formulaire
+        this.form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            if (this.validator && !this.validator.validateAll()) {
+                return;
+            }
+            
+            this.envoyerRappel();
+        });
+        
+        // Réinitialiser le formulaire lors de l'ouverture du modal
+        if (this.modal) {
+            this.modal.addEventListener('show.bs.modal', () => {
+                this.resetForm();
+            });
+        }
+        
+        // Récupérer et configurer les boutons de template
+        this.initTemplateButtons();
+        
+        // Gérer le changement de type de rappel
+        const typeRappelSelect = this.form.querySelector('[name="type_rappel"]');
+        if (typeRappelSelect) {
+            typeRappelSelect.addEventListener('change', () => {
+                this.updateUIBasedOnType(typeRappelSelect.value);
+            });
+        }
+        
+        // Gestionnaire pour envoi immédiat vs planifié
+        const envoyerImmediatementSwitch = this.form.querySelector('#envoyerImmediatement');
+        const optionsPlanification = this.form.querySelector('#optionsPlanification');
+        
+        if (envoyerImmediatementSwitch && optionsPlanification) {
+            envoyerImmediatementSwitch.addEventListener('change', function() {
+                optionsPlanification.style.display = this.checked ? 'none' : 'block';
+            });
+        }
+    }
+    
+    /**
+     * Ajoute les styles CSS pour les boutons de modèle
+     */
+    addTemplateStyles() {
+        if (document.getElementById('template-buttons-style')) {
+            return; // Les styles existent déjà
+        }
+        
+        const style = document.createElement('style');
+        style.id = 'template-buttons-style';
+        style.textContent = `
+            .btn-template {
+                transition: all 0.3s ease;
+            }
+            .btn-template-active {
+                background-color: #28a745 !important;
+                color: white !important;
+                border-color: #28a745 !important;
+                box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+            }
+            .btn-template-inactive {
+                background-color: #f8f9fa;
+                color: #6c757d;
+                border-color: #ced4da;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    /**
+     * Extrait les informations du membre et de la cotisation
+     */
+    extractMemberInfo() {
+        // Extraire les informations du membre et de la cotisation depuis la page
+        const cotisationElement = document.getElementById('cotisationDetail');
+        if (!cotisationElement) return;
+        
+        // Récupérer l'ID de la cotisation depuis l'élément
+        this.options.cotisationId = cotisationElement.dataset.cotisationId || this.options.cotisationId;
+        
+        // Essayer de récupérer les infos du membre
+        const nomElement = document.querySelector('.membre-nom');
+        const prenomElement = document.querySelector('.membre-prenom');
+        const emailElement = document.querySelector('.membre-email');
+        const montantElement = document.querySelector('#montantRestant');
+        const dateElement = document.querySelector('.cotisation-echeance');
+        const referenceElement = document.querySelector('.cotisation-reference');
+        
+        // Stocker les informations trouvées
+        this.memberInfo = {
+            nom: nomElement ? nomElement.textContent.trim() : 'NOM',
+            prenom: prenomElement ? prenomElement.textContent.trim() : 'PRENOM',
+            email: emailElement ? emailElement.textContent.trim() : 'EMAIL',
+            montant: montantElement ? montantElement.textContent.trim() : 'MONTANT',
+            date_echeance: dateElement ? dateElement.textContent.trim() : 'DATE',
+            reference: referenceElement ? referenceElement.textContent.trim() : 'REFERENCE'
+        };
+    }
+    
+    /**
+     * Initialise les templates de rappel
+     */
+    initTemplates() {
+        // Initialiser les templates de rappel selon le type
+        this.options.templates.standard = 
+`Cher/Chère ${this.memberInfo.prenom},
+
+Nous vous rappelons que votre cotisation (réf. ${this.memberInfo.reference}) d'un montant restant dû de ${this.memberInfo.montant} est arrivée à échéance le ${this.memberInfo.date_echeance}.
+
+Nous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.
+
+Cordialement,
+L'équipe de l'association`;
+
+        this.options.templates.urgent = 
+`Cher/Chère ${this.memberInfo.prenom},
+
+RAPPEL URGENT : Votre cotisation (réf. ${this.memberInfo.reference}) d'un montant de ${this.memberInfo.montant} est en retard de paiement depuis le ${this.memberInfo.date_echeance}.
+
+Afin d'éviter toute procédure supplémentaire, nous vous invitons à régulariser cette situation sous 7 jours.
+
+Pour toute question ou difficulté, n'hésitez pas à nous contacter rapidement.
+
+Cordialement,
+L'équipe de l'association`;
+
+        this.options.templates.formel = 
+`Madame, Monsieur,
+
+Nous constatons qu'à ce jour, votre cotisation référencée ${this.memberInfo.reference}, d'un montant de ${this.memberInfo.montant} et échue le ${this.memberInfo.date_echeance}, demeure impayée.
+
+Conformément à nos statuts, nous vous prions de bien vouloir procéder au règlement de cette somme dans un délai de 15 jours à compter de la réception du présent courrier.
+
+À défaut de paiement dans le délai imparti, nous nous verrons contraints d'appliquer les mesures prévues par le règlement intérieur.
+
+Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées.
+
+Le Trésorier
+Association XYZ`;
+    }
+    
+    /**
+     * Configure la validation du formulaire
+     */
+    setupValidation() {
+        // Créer un validateur pour le formulaire
+        this.validator = new FormValidator(this.form.id, {
+            validateOnInput: true,
+            validateOnBlur: true
+        });
+        
+        // Ajouter les règles de validation
+        this.validator
+            .addValidator('formTypeRappel', [
+                ValidationRules.required('Veuillez sélectionner un type de rappel')
+            ])
+            .addValidator('formNiveau', [
+                ValidationRules.required('Veuillez indiquer un niveau de rappel'),
+                ValidationRules.numeric('Le niveau doit être un nombre'),
+                ValidationRules.positiveNumber('Le niveau doit être supérieur à zéro')
+            ])
+            .addValidator('formContenu', [
+                ValidationRules.required('Le contenu du rappel ne peut pas être vide'),
+                ValidationRules.minLength(10, 'Le contenu est trop court')
+            ]);
+        
+        // Validation conditionnelle pour les dates planifiées
+        const envoyerImmediatementSwitch = this.form.querySelector('#envoyerImmediatement');
+        
+        if (envoyerImmediatementSwitch) {
+            this.validator
+                .addValidator('formDatePlanification', [
+                    // ... validations existantes
+                    
+                    // Validation pour s'assurer que la date est dans le futur
+                    ValidationRules.custom(
+                        value => {
+                            // Ignorer si envoi immédiat
+                            if (envoyerImmediatementSwitch.checked) return true;
+                            
+                            // Vérifier si la date est dans le futur
+                            if (!value) return true; // D'autres validations vérifieront si c'est vide
+                            
+                            const heurePlanification = this.form.querySelector('#formHeurePlanification');
+                            const datePlanifiee = new Date(`${value}T${heurePlanification?.value || '00:00'}`);
+                            const maintenant = new Date();
+                            
+                            return datePlanifiee > maintenant;
+                        },
+                        "La date d'envoi planifiée doit être dans le futur"
+                    )
+                ]);
+                
+            // Mettre à jour la validation lorsque la case à cocher change
+            envoyerImmediatementSwitch.addEventListener('change', () => {
+                this.validator.validateField('formDatePlanification');
+                this.validator.validateField('formHeurePlanification');
+            });
+        }
+        
+    }
+    
+    /**
+     * Initialise et configure les boutons de modèle
+     */
+    initTemplateButtons() {
+        // Récupérer les boutons de template
+        const templateDefaultBtn = this.form.querySelector('#templateDefault') || document.getElementById('templateDefault');
+        const templateUrgentBtn = this.form.querySelector('#templateUrgent') || document.getElementById('templateUrgent');
+        const templateFormalBtn = this.form.querySelector('#templateFormal') || document.getElementById('templateFormal');
+        const contenuTextarea = this.form.querySelector('[name="contenu"]');
+        
+        // Stocker les références pour une utilisation ultérieure
+        this.templateButtons = {
+            standard: templateDefaultBtn,
+            urgent: templateUrgentBtn, 
+            formel: templateFormalBtn
+        };
+        
+        // Pas de contenu de textarea, pas de configuration de boutons
+        if (!contenuTextarea) return;
+        
+        // Configurer les boutons de modèle
+        this.setupTemplateButton(templateDefaultBtn, 'standard', 7, contenuTextarea);
+        this.setupTemplateButton(templateUrgentBtn, 'urgent', 5, contenuTextarea);
+        this.setupTemplateButton(templateFormalBtn, 'formel', 15, contenuTextarea);
+        
+        // Détecter le modèle actuel et mettre en évidence le bouton correspondant
+        this.highlightActiveTemplateButton();
+        
+        // Gérer les changements de type de rappel
+        const typeRappelSelect = this.form.querySelector('[name="type_rappel"]');
+        if (typeRappelSelect) {
+            typeRappelSelect.addEventListener('change', () => this.resetTemplateButtonStyles());
+        }
+    }
+    
+    /**
+     * Configure un bouton de modèle spécifique
+     */
+    setupTemplateButton(button, templateType, delayDays, textarea) {
+        if (!button || !textarea) return;
+        
+        // Supprimer les gestionnaires existants en remplaçant le bouton
+        const newButton = button.cloneNode(true);
+        button.parentNode.replaceChild(newButton, button);
+        
+        // Mettre à jour la référence
+        this.templateButtons[templateType] = newButton;
+        
+        // Ajouter le nouveau gestionnaire d'événement
+        newButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            // Calculer la date limite
+            const dateLimite = new Date();
+            dateLimite.setDate(dateLimite.getDate() + delayDays);
+            const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
+            
+            // Appliquer le modèle avec la date limite
+            textarea.value = this.formatTemplate(this.options.templates[templateType], dateLimiteStr);
+            
+            // Mettre en évidence ce bouton et désactiver les autres
+            this.updateTemplateButtonStyles(newButton);
+            
+            // Valider le champ si nécessaire
+            if (this.validator) {
+                this.validator.validateField('formContenu');
+            }
+        });
+    }
+    
+    /**
+     * Met à jour les styles des boutons de modèle
+     */
+    updateTemplateButtonStyles(activeButton) {
+        const buttons = Object.values(this.templateButtons).filter(btn => btn !== null);
+        
+        buttons.forEach(button => {
+            // Ajouter la classe de base pour tous les boutons
+            button.classList.add('btn-template');
+            
+            // Appliquer la classe active/inactive selon le bouton cliqué
+            if (button === activeButton) {
+                button.classList.add('btn-template-active');
+                button.classList.remove('btn-template-inactive', 'btn-outline-secondary');
+            } else {
+                button.classList.remove('btn-template-active', 'btn-outline-secondary');
+                button.classList.add('btn-template-inactive');
+            }
+        });
+    }
+    
+    /**
+     * Réinitialise les styles des boutons de modèle
+     */
+    resetTemplateButtonStyles() {
+        const buttons = Object.values(this.templateButtons).filter(btn => btn !== null);
+        
+        buttons.forEach(button => {
+            button.classList.remove('btn-template-active', 'btn-template-inactive');
+            button.classList.add('btn-outline-secondary');
+        });
+    }
+    
+    /**
+     * Détecte le modèle actif et met en évidence le bouton correspondant
+     */
+    highlightActiveTemplateButton() {
+        const contenuTextarea = this.form.querySelector('[name="contenu"]');
+        if (!contenuTextarea || !contenuTextarea.value) return;
+        
+        const content = contenuTextarea.value;
+        
+        // Vérifier quel modèle est actuellement utilisé
+        if (content.includes('RAPPEL URGENT')) {
+            this.updateTemplateButtonStyles(this.templateButtons.urgent);
+        } else if (content.includes('Veuillez agréer')) {
+            this.updateTemplateButtonStyles(this.templateButtons.formel);
+        } else if (content.includes('Nous vous rappelons')) {
+            this.updateTemplateButtonStyles(this.templateButtons.standard);
+        }
+    }
+    
+    /**
+     * Personnalise un template avec la date limite
+     */
+    formatTemplate(template, dateLimite) {
+        if (!template) return '';
+        
+        let formattedTemplate = template;
+        
+        // Remplacer les phrases génériques par des versions avec date limite
+        if (template.includes("procéder au règlement dans les meilleurs délais")) {
+            formattedTemplate = template.replace(
+                "procéder au règlement dans les meilleurs délais", 
+                `procéder au règlement avant le ${dateLimite}`
+            );
+        } else if (template.includes("sous 7 jours")) {
+            formattedTemplate = template.replace(
+                "sous 7 jours", 
+                `avant le ${dateLimite}`
+            );
+        } else if (template.includes("dans un délai de 15 jours")) {
+            formattedTemplate = template.replace(
+                "dans un délai de 15 jours", 
+                `dans un délai de 15 jours, soit au plus tard le ${dateLimite}`
+            );
+        }
+        
+        return formattedTemplate;
+    }
+    
+    /**
+     * Met à jour l'interface en fonction du type de rappel
+     */
+    updateUIBasedOnType(type) {
+        const contenuTextarea = this.form.querySelector('[name="contenu"]');
+        
+        if (!contenuTextarea) return;
+        
+        // Adapter l'interface selon le type de rappel
+        switch (type) {
+            case 'sms':
+                // Limiter la longueur pour les SMS
+                contenuTextarea.setAttribute('maxlength', '160');
+                
+                // Désactiver le template formel (trop long pour un SMS)
+                if (this.templateButtons.formel) {
+                    this.templateButtons.formel.disabled = true;
+                }
+                
+                // Proposer un contenu plus court si vide
+                if (!contenuTextarea.value.trim()) {
+                    contenuTextarea.value = `Rappel: Votre cotisation (ref. ${this.memberInfo.reference}) de ${this.memberInfo.montant} est due. Merci de régulariser rapidement.`;
+                    if (this.validator) {
+                        this.validator.validateField('formContenu');
+                    }
+                }
+                break;
+                
+            case 'appel':
+                // Pour les appels, suggérer une liste de points à aborder
+                if (!contenuTextarea.value.trim()) {
+                    contenuTextarea.value = `Points à aborder lors de l'appel:
+- Rappeler la référence: ${this.memberInfo.reference}
+- Montant restant dû: ${this.memberInfo.montant}
+- Échéance dépassée depuis le: ${this.memberInfo.date_echeance}
+- Proposer des facilités de paiement si nécessaire
+- Noter les commentaires du membre`;
+                    if (this.validator) {
+                        this.validator.validateField('formContenu');
+                    }
+                }
+                
+                // Réactiver tous les boutons
+                if (this.templateButtons.formel) {
+                    this.templateButtons.formel.disabled = false;
+                }
+                break;
+                
+            default:
+                // Pour email et courrier, pas de restrictions
+                contenuTextarea.removeAttribute('maxlength');
+                
+                // Réactiver tous les boutons
+                if (this.templateButtons.formel) {
+                    this.templateButtons.formel.disabled = false;
+                }
+                break;
+        }
+        
+        // Réinitialiser l'apparence des boutons
+        this.resetTemplateButtonStyles();
+    }
+    
+    /**
+     * Envoie le rappel via AJAX
+     */
+    envoyerRappel() {
+        if (!this.form) return;
+        
+        // Afficher un indicateur de chargement
+        this.submitButton.disabled = true;
+        const originalText = this.submitButton.innerHTML;
+        this.submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Traitement...';
+        
+        // Récupérer les données du formulaire
+        const formData = new FormData(this.form);
+        const cotisationId = this.options.cotisationId || this.form.dataset.cotisationId;
+        
+        // Gérer les données de planification
+        const envoyerImmediatementSwitch = this.form.querySelector('#envoyerImmediatement');
+        const datePlanification = this.form.querySelector('#formDatePlanification');
+        const heurePlanification = this.form.querySelector('#formHeurePlanification');
+        
+        // Ajouter les infos de planification si nécessaire
+        if (envoyerImmediatementSwitch && !envoyerImmediatementSwitch.checked && 
+            datePlanification && datePlanification.value && 
+            heurePlanification && heurePlanification.value) {
+            formData.append('planifie', 'true');
+            formData.append('date_planifiee', `${datePlanification.value}T${heurePlanification.value}`);
+        }
+        
+        // Convertir en objet
+        const data = Object.fromEntries(formData.entries());
+        
+        // Appeler l'API pour créer le rappel
+        CotisationsAPI.creerRappel(cotisationId, data)
+            .then(response => {
+                if (response.success) {
+                    // Ajouter le nouveau rappel à la liste
+                    this.ajouterRappelAListe(response.rappel);
+                    
+                    // Afficher un message de succès
+                    this.afficherMessage('success', response.message || 'Rappel créé avec succès');
+                    
+                    // Fermer le modal
+                    if (this.bootstrapModal) {
+                        this.bootstrapModal.hide();
+                    }
+                } else {
+                    // Afficher l'erreur
+                    this.afficherMessage('danger', response.message || 'Erreur lors de la création du rappel');
+                    console.error('Erreurs:', response.errors);
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                this.afficherMessage('danger', 'Une erreur s\'est produite lors de la communication avec le serveur');
+            })
+            .finally(() => {
+                // Réinitialiser le bouton
+                this.submitButton.disabled = false;
+                this.submitButton.innerHTML = originalText;
+            });
+    }
+    
+    /**
+     * Ajoute un nouveau rappel à la liste
+     */
+    ajouterRappelAListe(rappel) {
+        if (!this.rappelsList || !rappel) return;
+        
+        // Créer une nouvelle ligne pour le rappel
+        const tr = document.createElement('tr');
+        tr.id = `rappel-${rappel.id}`;
+        
+        // Classe pour les nouveaux éléments (pour animation)
+        tr.classList.add('new-item');
+        
+        // Formater la date
+        const dateEnvoi = new Date(rappel.date_envoi);
+        const dateFormatee = dateEnvoi.toLocaleDateString('fr-FR') + ' ' + 
+                             dateEnvoi.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
+        
+        // Classe pour le niveau
+        let niveauClass = 'bg-info';
+        if (rappel.niveau === 2) {
+            niveauClass = 'bg-warning';
+        } else if (rappel.niveau >= 3) {
+            niveauClass = 'bg-danger';
+        }
+        
+        // Classe pour l'état
+        let etatClass = 'bg-secondary'; // Pour planifié
+        if (rappel.etat === 'envoye') {
+            etatClass = 'bg-success';
+        } else if (rappel.etat === 'echoue') {
+            etatClass = 'bg-danger';
+        } else if (rappel.etat === 'lu') {
+            etatClass = 'bg-info';
+        }
+        
+        // Construire le contenu HTML
+        tr.innerHTML = `
+            <td>${dateFormatee}</td>
+            <td>${rappel.type_rappel}</td>
+            <td><span class="badge ${niveauClass}">${rappel.niveau}</span></td>
+            <td><span class="badge ${etatClass}">${rappel.etat}</span></td>
+            <td>
+                <button type="button" class="btn btn-sm btn-link voir-contenu" 
+                        data-contenu="${escapeHtml(rappel.contenu)}"
+                        data-bs-toggle="modal" data-bs-target="#contenuModal">
+                    Voir le contenu
+                </button>
+            </td>
+            <td class="text-center">
+                <div class="btn-group">
+                    ${rappel.etat === 'planifie' ? `
+                    <a href="/cotisations/rappels/${rappel.id}/envoyer/" class="btn btn-sm btn-outline-success">
+                        <i class="fas fa-paper-plane"></i> Envoyer
+                    </a>
+                    ` : ''}
+                    <a href="/cotisations/rappels/${rappel.id}/" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                </div>
+            </td>
+        `;
+        
+        // Ajouter au début de la liste
+        if (this.rappelsList.querySelector('tbody')) {
+            this.rappelsList.querySelector('tbody').prepend(tr);
+        } else {
+            this.rappelsList.prepend(tr);
+        }
+        
+        // Mettre à jour le message si la liste était vide
+        const emptyMessage = document.querySelector('#noRappelsMessage');
+        if (emptyMessage) {
+            emptyMessage.style.display = 'none';
+        }
+        
+        // Animer l'entrée
+        setTimeout(() => {
+            tr.classList.add('show');
+        }, 10);
+        
+        // Supprimer la classe d'animation après un délai
+        setTimeout(() => {
+            tr.classList.remove('new-item', 'show');
+        }, 3000);
+        
+        // Ajouter l'événement pour voir le contenu
+        const voirContenuBtn = tr.querySelector('.voir-contenu');
+        const contenuModal = document.getElementById('contenuRappel');
+        
+        if (voirContenuBtn && contenuModal) {
+            voirContenuBtn.addEventListener('click', function() {
+                contenuModal.textContent = this.getAttribute('data-contenu');
+            });
+        }
+    }
+    
+    /**
+     * Réinitialise le formulaire de rappel
+     */
+    resetForm() {
+        if (!this.form) return;
+        
+        // Réinitialiser les champs du formulaire
+        this.form.reset();
+        
+        // Récupérer à nouveau les informations du membre (au cas où elles ont changé)
+        this.extractMemberInfo();
+        this.initTemplates();
+        
+        // Réinitialiser les validations
+        if (this.validator) {
+            this.validator.reset();
+        }
+        
+        // Réinitialiser les styles des boutons
+        this.resetTemplateButtonStyles();
+        
+        // Définir les valeurs par défaut
+        
+        // 1. Type de rappel - sélectionner email par défaut
+        const typeRappelSelect = this.form.querySelector('[name="type_rappel"]');
+        if (typeRappelSelect) {
+            typeRappelSelect.value = 'email';
+            this.updateUIBasedOnType('email');
+        }
+        
+        // 2. Niveau - déterminer le niveau approprié
+        const niveauInput = this.form.querySelector('[name="niveau"]');
+        if (niveauInput) {
+            // Chercher le dernier niveau de rappel pour cette cotisation
+            const dernierNiveau = Array.from(document.querySelectorAll('#rappelsList tr'))
+                .filter(tr => tr.id.startsWith('rappel-'))
+                .map(tr => {
+                    const niveauBadge = tr.querySelector('td:nth-child(3) .badge');
+                    return niveauBadge ? parseInt(niveauBadge.textContent, 10) : 0;
+                })
+                .reduce((max, niveau) => Math.max(max, niveau), 0);
+            
+            // Niveau suivant
+            niveauInput.value = dernierNiveau + 1;
+        }
+        
+        // 3. Contenu - utiliser le template standard
+        const contenuTextarea = this.form.querySelector('[name="contenu"]');
+        if (contenuTextarea) {
+            contenuTextarea.value = this.options.templates.standard;
+            
+            // Mettre en évidence le bouton standard
+            this.updateTemplateButtonStyles(this.templateButtons.standard);
+        }
+        
+        // 4. Date de planification - demain à 9h00
+        const datePlanificationInput = this.form.querySelector('#formDatePlanification');
+        const heurePlanificationInput = this.form.querySelector('#formHeurePlanification');
+        
+        if (datePlanificationInput && heurePlanificationInput) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            const year = tomorrow.getFullYear();
+            const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+            const day = String(tomorrow.getDate()).padStart(2, '0');
+            
+            datePlanificationInput.value = `${year}-${month}-${day}`;
+            heurePlanificationInput.value = '09:00';
+        }
+        
+        // 5. Envoi immédiat - activer par défaut
+        const envoyerImmediatementSwitch = this.form.querySelector('#envoyerImmediatement');
+        const optionsPlanification = this.form.querySelector('#optionsPlanification');
+        
+        if (envoyerImmediatementSwitch && optionsPlanification) {
+            envoyerImmediatementSwitch.checked = true;
+            optionsPlanification.style.display = 'none';
+        }
+    }
+    
+    /**
+     * Affiche un message d'alerte
+     */
+    afficherMessage(type, message) {
+        if (!this.alertsContainer) {
+            // Créer un container pour les alertes si nécessaire
+            this.alertsContainer = document.createElement('div');
+            this.alertsContainer.id = 'alertsContainer';
+            this.alertsContainer.className = 'mb-4';
+            
+            // Insérer avant le premier enfant du conteneur principal
+            const mainContainer = document.querySelector('.container-fluid');
+            if (mainContainer && mainContainer.firstChild) {
+                mainContainer.insertBefore(this.alertsContainer, mainContainer.firstChild);
+            }
+        }
+        
+        // Créer l'alerte
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type} alert-dismissible fade show`;
+        alert.role = 'alert';
+        
+        // Ajouter l'icône appropriée
+        let icon = 'info-circle';
+        if (type === 'success') icon = 'check-circle';
+        if (type === 'danger') icon = 'exclamation-triangle';
+        if (type === 'warning') icon = 'exclamation-circle';
+        
+        alert.innerHTML = `
+            <i class="fas fa-${icon} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        // Ajouter l'alerte au container
+        this.alertsContainer.appendChild(alert);
+        
+        // Faire défiler jusqu'à l'alerte
+        window.scrollTo({
+            top: this.alertsContainer.offsetTop - 20,
+            behavior: 'smooth'
+        });
+        
+        // Supprimer l'alerte après un délai
+        setTimeout(() => {
+            if (alert.parentNode) {
+                // Ajouter la classe pour l'animation de sortie
+                alert.classList.remove('show');
+                
+                // Supprimer après l'animation
+                setTimeout(() => {
+                    if (alert.parentNode) {
+                        alert.parentNode.removeChild(alert);
+                    }
+                }, 150);
+            }
+        }, 5000);
+    }
+}
+
+/**
+ * Fonction utilitaire pour échapper le HTML
+ */
+function escapeHtml(unsafe) {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// Initialiser le gestionnaire de rappels quand le DOM est chargé
+document.addEventListener('DOMContentLoaded', function() {
+    const cotisationDetailElement = document.getElementById('cotisationDetail');
+    
+    if (cotisationDetailElement) {
+        const cotisationId = cotisationDetailElement.dataset.cotisationId;
+        
+        if (cotisationId) {
+            // Initialiser le gestionnaire de rappels
+            const rappelManager = new RappelManager({
+                cotisationId: cotisationId
+            });
+            
+            // Rendre disponible globalement pour le débogage
+            window.rappelManager = rappelManager;
+        }
+    }
+});

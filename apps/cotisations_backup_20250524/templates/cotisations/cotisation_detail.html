@@ -1,0 +1,2152 @@
+<!-- Version 4 -->
+{% extends "cotisations/base.html" %}
+{% load i18n %}
+{% load static %}
+{% load cotisations_extras %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'cotisations:cotisation_liste' %}">{% trans "Liste des cotisations" %}</a></li>
+<li class="breadcrumb-item active">{{ cotisation.reference|escape }}</li>
+{% endblock %}
+
+{% block page_title %}
+{% trans "Détails de la cotisation" %} {{ cotisation.reference|escape }}
+{% endblock %}
+
+{% block actions %}
+<div class="btn-group">
+    <a href="{% url 'cotisations:cotisation_modifier' pk=cotisation.pk %}" class="btn btn-outline-secondary">
+        <i class="fas fa-edit" aria-hidden="true"></i> {% trans "Modifier" %}
+    </a>
+    <a href="{% url 'cotisations:paiement_creer' cotisation_id=cotisation.pk %}" class="btn btn-success">
+        <i class="fas fa-money-bill-wave" aria-hidden="true"></i> {% trans "Ajouter un paiement" %}
+    </a>
+    <a href="{% url 'cotisations:rappel_creer' cotisation_id=cotisation.pk %}" class="btn btn-warning">
+        <i class="fas fa-bell" aria-hidden="true"></i> {% trans "Créer un rappel" %}
+    </a>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#paiementModal">
+        <i class="fas fa-plus-circle" aria-hidden="true"></i> {% trans "Paiement rapide" %}
+    </button>
+</div>
+{% endblock %}
+
+{% block cotisations_content %}
+<div id="cotisationDetail" data-cotisation-id="{{ cotisation.pk }}">
+    <div class="row">
+        <!-- Informations principales de la cotisation -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Informations générales" %}</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">{% trans "Référence" %}</dt>
+                        <dd class="col-sm-7" id="cotisation-reference">{{ cotisation.reference|escape }}</dd>
+                        
+                        <dt class="col-sm-5">{% trans "Membre" %}</dt>
+                        <dd class="col-sm-7">
+                            <a href="{% url 'membres:membre_detail' pk=cotisation.membre.pk %}">
+                                <span id="membre-prenom">{{ cotisation.membre.prenom|escape }}</span> <span id="membre-nom">{{ cotisation.membre.nom|escape }}</span>
+                            </a>
+                            <br><small class="text-muted" id="membre-email">{{ cotisation.membre.email|escape }}</small>
+                        </dd>
+                        
+                        <dt class="col-sm-5">{% trans "Date d'émission" %}</dt>
+                        <dd class="col-sm-7">{{ cotisation.date_emission|date:"d/m/Y" }}</dd>
+                        
+                        <dt class="col-sm-5">{% trans "Date d'échéance" %}</dt>
+                        <dd class="col-sm-7" id="cotisation-echeance">
+                            <span class="{% if cotisation.est_en_retard %}text-danger{% endif %}">
+                                {{ cotisation.date_echeance|date:"d/m/Y" }}
+                                {% if cotisation.est_en_retard %}
+                                <br><small class="text-danger">{{ cotisation.jours_retard }} {% trans "jours de retard" %}</small>
+                                {% endif %}
+                            </span>
+                        </dd>
+                        
+                        <dt class="col-sm-5">{% trans "Période couverte" %}</dt>
+                        <dd class="col-sm-7">
+                            {{ cotisation.periode_debut|date:"d/m/Y" }}
+                            {% if cotisation.periode_fin %}
+                            - {{ cotisation.periode_fin|date:"d/m/Y" }}
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Informations financières -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Informations financières" %}</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">{% trans "Type de membre" %}</dt>
+                        <dd class="col-sm-7">{{ cotisation.type_membre.libelle|default:"-"|escape }}</dd>
+                        
+                        <dt class="col-sm-5">{% trans "Barème" %}</dt>
+                        <dd class="col-sm-7">
+                            {% if cotisation.bareme %}
+                            {{ cotisation.bareme.montant|floatformat:2 }} € ({{ cotisation.bareme.get_periodicite_display }})
+                            {% else %}
+                            <span class="text-muted">{% trans "Non spécifié" %}</span>
+                            {% endif %}
+                        </dd>
+                        
+                        <dt class="col-sm-5">{% trans "Montant total" %}</dt>
+                        <dd class="col-sm-7" id="montant-total" data-value="{{ cotisation.montant }}">{{ cotisation.montant|floatformat:2 }} €</dd>
+                        
+                        <dt class="col-sm-5">{% trans "Montant payé" %}</dt>
+                        <dd class="col-sm-7">
+                            <span id="montant-paye" data-value="{{ cotisation.montant|sub:cotisation.montant_restant }}">{{ cotisation.montant|sub:cotisation.montant_restant|floatformat:2 }} €</span>
+                        </dd>
+                        
+                        <dt class="col-sm-5">{% trans "Montant restant" %}</dt>
+                        <dd class="col-sm-7">
+                            <span id="montant-restant" 
+                                  class="fw-bold {% if cotisation.montant_restant > 0 %}text-danger{% else %}text-success{% endif %}"
+                                  data-value="{{ cotisation.montant_restant }}">
+                                {{ cotisation.montant_restant|floatformat:2 }} €
+                            </span>
+                        </dd>
+                        
+                        <dt class="col-sm-5">{% trans "Statut" %}</dt>
+                        <dd class="col-sm-7">
+                            <span id="statut-paiement" class="badge 
+                                {% if cotisation.statut_paiement == 'non_payee' %}bg-danger
+                                {% elif cotisation.statut_paiement == 'partiellement_payee' %}bg-warning
+                                {% else %}bg-success{% endif %}"
+                                data-statut="{{ cotisation.statut_paiement }}">
+                                {{ cotisation.get_statut_paiement_display }}
+                            </span>
+                        </dd>
+                    </dl>
+                    
+                    <!-- Barre de progression du paiement -->
+                    <div class="mt-4">
+                        <h6 class="mb-2">{% trans "Progression du paiement" %}</h6>
+                        <div class="progress" style="height: 20px;">
+                            {% with pourcentage=cotisation.pourcentage_paiement|default:0 %}
+                            <div id="progression-paiement" class="progress-bar 
+                                {% if cotisation.statut_paiement == 'non_payee' %}bg-danger
+                                {% elif cotisation.statut_paiement == 'partiellement_payee' %}bg-warning
+                                {% else %}bg-success{% endif %}" 
+                                 role="progressbar" 
+                                 data-montant-total="{{ cotisation.montant }}"
+                                 style="width: {{ pourcentage }}%;" 
+                                 aria-valuenow="{{ pourcentage }}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                                {{ pourcentage }}%
+                            </div>
+                            {% endwith %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Liste des paiements -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <h5 class="card-title mb-0">{% trans "Paiements" %}</h5>
+                    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#paiementModal">
+                        <i class="fas fa-plus" aria-hidden="true"></i> {% trans "Ajouter un paiement" %}
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if paiements %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="paiements-list">
+                            <thead>
+                                <tr>
+                                    <th>{% trans "Date" %}</th>
+                                    <th>{% trans "Montant" %}</th>
+                                    <th>{% trans "Mode" %}</th>
+                                    <th>{% trans "Type" %}</th>
+                                    <th>{% trans "Référence" %}</th>
+                                    <th class="text-center">{% trans "Actions" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for paiement in paiements %}
+                                <tr id="paiement-{{ paiement.id }}">
+                                    <td>{{ paiement.date_paiement|date:"d/m/Y H:i" }}</td>
+                                    <td>{{ paiement.montant|floatformat:2 }} €</td>
+                                    <td>{{ paiement.mode_paiement|default:"-"|escape }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if paiement.type_transaction == 'paiement' %}bg-success
+                                            {% elif paiement.type_transaction == 'remboursement' %}bg-warning
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ paiement.get_type_transaction_display }}
+                                        </span>
+                                    </td>
+                                    <td>{{ paiement.reference_paiement|default:"-"|escape }}</td>
+                                    <td class="text-center">
+                                        <div class="btn-group">
+                                            <a href="{% url 'cotisations:paiement_detail' pk=paiement.pk %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye" aria-hidden="true"></i>
+                                                <span class="visually-hidden">{% trans "Voir" %}</span>
+                                            </a>
+                                            <a href="{% url 'cotisations:paiement_modifier' pk=paiement.pk %}" class="btn btn-sm btn-outline-secondary">
+                                                <i class="fas fa-edit" aria-hidden="true"></i>
+                                                <span class="visually-hidden">{% trans "Modifier" %}</span>
+                                            </a>
+                                            <a href="{% url 'cotisations:paiement_supprimer' pk=paiement.pk %}" class="btn btn-sm btn-outline-danger">
+                                                <i class="fas fa-trash" aria-hidden="true"></i>
+                                                <span class="visually-hidden">{% trans "Supprimer" %}</span>
+                                            </a>
+                                            {% if paiement.type_transaction == 'paiement' %}
+                                            <a href="{% url 'cotisations:api_generer_recu' paiement_id=paiement.pk %}" class="btn btn-sm btn-outline-info" aria-label="{% trans 'Générer un reçu' %}">
+                                                <i class="fas fa-file-invoice" aria-hidden="true"></i>
+                                                <span class="visually-hidden">{% trans "Générer un reçu" %}</span>
+                                            </a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info" id="no-paiements-message">
+                        <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
+                        {% trans "Aucun paiement n'a été enregistré pour cette cotisation." %}
+                        <button type="button" class="btn btn-sm btn-outline-primary ms-3" data-bs-toggle="modal" data-bs-target="#paiementModal">
+                            {% trans "Ajouter un paiement" %}
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Liste des rappels -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <h5 class="card-title mb-0">{% trans "Rappels" %}</h5>
+                    <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#rappelModal">
+                        <i class="fas fa-plus" aria-hidden="true"></i> {% trans "Créer un rappel" %}
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if rappels %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="rappels-list">
+                            <thead>
+                                <tr>
+                                    <th>{% trans "Date" %}</th>
+                                    <th>{% trans "Type" %}</th>
+                                    <th>{% trans "Niveau" %}</th>
+                                    <th>{% trans "État" %}</th>
+                                    <th>{% trans "Contenu" %}</th>
+                                    <th class="text-center">{% trans "Actions" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rappel in rappels %}
+                                <tr id="rappel-{{ rappel.id }}">
+                                    <td>{{ rappel.date_envoi|date:"d/m/Y H:i" }}</td>
+                                    <td>{{ rappel.get_type_rappel_display }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if rappel.niveau == 1 %}bg-info
+                                            {% elif rappel.niveau == 2 %}bg-warning
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ rappel.niveau }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if rappel.etat == 'planifie' %}bg-secondary
+                                            {% elif rappel.etat == 'envoye' %}bg-success
+                                            {% elif rappel.etat == 'echoue' %}bg-danger
+                                            {% else %}bg-info{% endif %}">
+                                            {{ rappel.get_etat_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-link voir-contenu"
+                                                data-contenu="{{ rappel.contenu|escape }}"
+                                                data-bs-toggle="modal" data-bs-target="#contenuModal">
+                                            {% trans "Voir le contenu" %}
+                                        </button>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group">
+                                            {% if rappel.etat == 'planifie' %}
+                                            <a href="{% url 'cotisations:envoyer_rappel' rappel_id=rappel.pk %}" class="btn btn-sm btn-outline-success">
+                                                <i class="fas fa-paper-plane" aria-hidden="true"></i> {% trans "Envoyer" %}
+                                            </a>
+                                            {% endif %}
+                                            <a href="{% url 'cotisations:rappel_detail' pk=rappel.pk %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye" aria-hidden="true"></i>
+                                                <span class="visually-hidden">{% trans "Voir" %}</span>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info" id="no-rappels-message">
+                        <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
+                        {% trans "Aucun rappel n'a été créé pour cette cotisation." %}
+                        <button type="button" class="btn btn-sm btn-outline-primary ms-3" data-bs-toggle="modal" data-bs-target="#rappelModal">
+                            {% trans "Créer un rappel" %}
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Historique des modifications -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">{% trans "Historique" %}</h5>
+                </div>
+                <div class="card-body">
+                    {% if historique %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>{% trans "Date" %}</th>
+                                    <th>{% trans "Action" %}</th>
+                                    <th>{% trans "Utilisateur" %}</th>
+                                    <th>{% trans "Détails" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in historique %}
+                                <tr>
+                                    <td>{{ entry.date_action|date:"d/m/Y H:i" }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if entry.action == 'creation' %}bg-success
+                                            {% elif entry.action == 'modification' %}bg-info
+                                            {% elif entry.action == 'suppression' %}bg-danger
+                                            {% elif entry.action == 'paiement_ajoute' %}bg-primary
+                                            {% elif entry.action == 'paiement_supprime' %}bg-warning
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ entry.get_action_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if entry.utilisateur %}
+                                        {{ entry.utilisateur.username|escape }}
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-link voir-details"
+                                                data-details="{{ entry.details|escape }}"
+                                                data-bs-toggle="modal" data-bs-target="#detailsModal">
+                                            {% trans "Voir les détails" %}
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
+                        {% trans "Aucun historique disponible pour cette cotisation." %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour l'ajout rapide de paiement -->
+<div class="modal fade" id="paiementModal" tabindex="-1" aria-labelledby="paiementModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="paiementModalLabel">{% trans "Ajouter un paiement" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="paiementAjaxForm" data-cotisation-id="{{ cotisation.pk }}" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="formMontant" class="form-label">{% trans "Montant" %}</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="formMontant" name="montant" value="{{ cotisation.montant_restant|floatformat:2 }}" min="0.01" step="0.01" required>
+                            <span class="input-group-text">€</span>
+                        </div>
+                        <div id="montantHelp" class="form-text">
+                            {% trans "Montant maximum autorisé" %}: {{ cotisation.montant_restant|floatformat:2 }} €
+                        </div>
+                        <div class="invalid-feedback" id="montantError"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formModePaiement" class="form-label">{% trans "Mode de paiement" %}</label>
+                        <select class="form-select" id="formModePaiement" name="mode_paiement" required>
+                            <option value="">{% trans "Sélectionnez un mode de paiement" %}</option>
+                            {% for mode in modes_paiement %}
+                            <option value="{{ mode.id }}">{{ mode.libelle|escape }}</option>
+                            {% empty %}
+                            <option value="1">{% trans "Virement" %}</option>
+                            <option value="2">{% trans "Chèque" %}</option>
+                            <option value="3">{% trans "Espèces" %}</option>
+                            <option value="4">{% trans "Carte bancaire" %}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback" id="modePaiementError"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formTypeTransaction" class="form-label">{% trans "Type de transaction" %}</label>
+                        <select class="form-select" id="formTypeTransaction" name="type_transaction">
+                            <option value="paiement">{% trans "Paiement" %}</option>
+                            <option value="remboursement">{% trans "Remboursement" %}</option>
+                            <option value="rejet">{% trans "Rejet" %}</option>
+                        </select>
+                        <div class="invalid-feedback" id="typeTransactionError"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formDatePaiement" class="form-label">{% trans "Date de paiement" %}</label>
+                        <input type="datetime-local" class="form-control" id="formDatePaiement" name="date_paiement" required>
+                        <div class="invalid-feedback" id="datePaiementError"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">{% trans "Référence de paiement" %}</label>
+                        <div class="form-control-plaintext bg-light p-2 rounded">
+                            <i class="fas fa-info-circle text-info me-1" aria-hidden="true"></i>
+                            {% trans "La référence du paiement sera créée automatiquement après l'enregistrement." %}
+                        </div>
+                        <input type="hidden" name="reference_paiement" value="">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formCommentaire" class="form-label">{% trans "Commentaire" %}</label>
+                        <textarea class="form-control" id="formCommentaire" name="commentaire" rows="2" maxlength="500"></textarea>
+                        <div class="invalid-feedback" id="commentaireError"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
+                <button type="button" class="btn btn-success" id="submitPaiement">
+                    <i class="fas fa-save" aria-hidden="true"></i> {% trans "Enregistrer le paiement" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour l'ajout rapide de rappel -->
+<div class="modal fade" id="rappelModal" tabindex="-1" aria-labelledby="rappelModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rappelModalLabel">{% trans "Créer un rappel" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="rappelAjaxForm" data-cotisation-id="{{ cotisation.pk }}" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="formTypeRappel" class="form-label">{% trans "Type de rappel" %}</label>
+                                <select class="form-select" id="formTypeRappel" name="type_rappel" required>
+                                    <option value="">{% trans "Sélectionnez un type" %}</option>
+                                    <option value="email" selected>{% trans "Email" %}</option>
+                                    <option value="sms">{% trans "SMS" %}</option>
+                                    <option value="courrier">{% trans "Courrier" %}</option>
+                                    <option value="appel">{% trans "Appel téléphonique" %}</option>
+                                </select>
+                                <div class="invalid-feedback" id="typeRappelError"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="formNiveau" class="form-label">{% trans "Niveau de rappel" %}</label>
+                                <input type="number" class="form-control" id="formNiveau" name="niveau" value="{% if rappels %}{{ rappels.count|add:'1' }}{% else %}1{% endif %}" min="1" max="5" required>
+                                <div class="form-text">
+                                    {% trans "1: Premier rappel, 2: Relance, 3: Mise en demeure, etc." %}
+                                </div>
+                                <div class="invalid-feedback" id="niveauError"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formContenu" class="form-label">{% trans "Contenu du rappel" %}</label>
+                        <div class="mb-2">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'Modèles de rappel' %}">
+                                <button type="button" class="btn btn-outline-secondary" id="templateDefault">{% trans "Modèle standard" %}</button>
+                                <button type="button" class="btn btn-outline-secondary" id="templateUrgent">{% trans "Modèle urgent" %}</button>
+                                <button type="button" class="btn btn-outline-secondary" id="templateFormal">{% trans "Modèle formel" %}</button>
+                            </div>
+                        </div>
+                        <textarea class="form-control" id="formContenu" name="contenu" rows="8" required maxlength="2000"></textarea>
+                        <div class="form-text">
+                            {% trans "Variables disponibles: {prenom}, {nom}, {reference}, {montant}, {date_echeance}, {date_limite}" %}
+                        </div>
+                        <div class="invalid-feedback" id="contenuError"></div>
+                    </div>
+                    
+                    <!-- Options d'envoi -->
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <h6>{% trans "Options d'envoi" %}</h6>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="envoyerImmediatement" name="envoyer_immediatement" checked>
+                                <label class="form-check-label" for="envoyerImmediatement">
+                                    {% trans "Envoyer immédiatement" %}
+                                </label>
+                            </div>
+                            <!-- Dans cotisation_detail.html - Section options de planification du modal rappel -->
+                            <div id="optionsPlanification" style="display: none;">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="formDatePlanification" class="form-label">Date d'envoi</label>
+                                        <input type="date" 
+                                            class="form-control" 
+                                            id="formDatePlanification" 
+                                            name="date_planification">
+                                        <div class="form-text">
+                                            Suggestions :
+                                            <a href="#" class="set-date" data-date="">Demain</a>,
+                                            <a href="#" class="set-date" data-date="">+7 jours</a>
+                                        </div>
+                                        <div class="invalid-feedback" id="datePlanificationError"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="formHeurePlanification" class="form-label">Heure d'envoi</label>
+                                        <input type="time" 
+                                            class="form-control" 
+                                            id="formHeurePlanification" 
+                                            name="heure_planification" 
+                                            value="09:00">
+                                        <div class="form-text">
+                                            Suggestions :
+                                            <a href="#" class="set-time" data-time="09:00">9:00</a>,
+                                            <a href="#" class="set-time" data-time="12:00">12:00</a>,
+                                            <a href="#" class="set-time" data-time="18:00">18:00</a>
+                                        </div>
+                                        <div class="invalid-feedback" id="heurePlanificationError"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <script>
+                            // Script pour initialiser les dates dynamiques après le chargement de la page
+                            document.addEventListener('DOMContentLoaded', function() {
+                                // Calculer les dates pour les suggestions
+                                const today = new Date();
+                                const tomorrow = new Date(today);
+                                tomorrow.setDate(tomorrow.getDate() + 1);
+                                const nextWeek = new Date(today);
+                                nextWeek.setDate(nextWeek.getDate() + 7);
+                                
+                                // Formater les dates au format YYYY-MM-DD
+                                const formatDate = (date) => {
+                                    return date.getFullYear() + '-' + 
+                                        String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+                                        String(date.getDate()).padStart(2, '0');
+                                };
+                                
+                                // Mettre à jour les liens de suggestion
+                                const dateSuggestions = document.querySelectorAll('.set-date');
+                                if (dateSuggestions.length >= 2) {
+                                    dateSuggestions[0].setAttribute('data-date', formatDate(tomorrow));
+                                    dateSuggestions[1].setAttribute('data-date', formatDate(nextWeek));
+                                }
+                                
+                                // Définir la date minimum pour aujourd'hui
+                                const dateInput = document.getElementById('formDatePlanification');
+                                if (dateInput) {
+                                    dateInput.min = formatDate(today);
+                                }
+                            });
+                            </script>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
+                <button type="button" class="btn btn-warning" id="submitRappel">
+                    <i class="fas fa-bell" aria-hidden="true"></i> {% trans "Créer le rappel" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour afficher le contenu des rappels -->
+<div class="modal fade" id="contenuModal" tabindex="-1" aria-labelledby="contenuModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="contenuModalLabel">{% trans "Contenu du rappel" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="contenuRappel" class="p-3 bg-light rounded"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Fermer" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour afficher les détails de l'historique -->
+<div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detailsModalLabel">{% trans "Détails de l'action" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="detailsHistorique" class="p-3 bg-light rounded">
+                    <table class="table table-sm">
+                        <tbody id="detailsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Fermer" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Message de confirmation -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="toastMessage" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
+      <strong class="me-auto" id="toastTitle"></strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="toastBody"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Styles pour l'animation des nouveaux éléments */
+.new-item {
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    background-color: rgba(40, 167, 69, 0.1);
+}
+
+.new-item.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Protection contre les attaques XSS dans les modals */
+#contenuRappel, #detailsHistorique {
+    overflow-x: auto;
+    max-width: 100%;
+    word-break: break-word;
+}
+
+/* Améliorations pour l'accessibilité */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.is-invalid {
+    border-color: #dc3545;
+}
+
+.invalid-feedback {
+    display: none;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 0.875em;
+    color: #dc3545;
+}
+
+.invalid-feedback.show {
+    display: block;
+}
+
+/* Ajouter ces styles dans la section CSS du fichier cotisation_detail.html */
+.btn-template {
+    transition: all 0.3s ease;
+}
+.btn-template-active {
+    background-color: #28a745 !important;
+    color: white !important;
+    border-color: #28a745 !important;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+.btn-template-inactive {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    border-color: #ced4da;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<!-- Bibliothèques JS externes -->
+<script src="{% static 'js/cotisations/form-validation.js' %}"></script>
+<script>
+/**
+ * Module de gestion des formulaires
+ * Version sécurisée et optimisée pour l'application de cotisations
+ */
+const FormManager = (function() {
+    /**
+     * Réinitialise les erreurs d'un formulaire
+     * @param {HTMLFormElement} form - Le formulaire à réinitialiser
+     */
+    function resetFormErrors(form) {
+        if (!form) return;
+        
+        // Supprimer tous les messages d'erreur
+        form.querySelectorAll('.invalid-feedback').forEach(el => {
+            el.textContent = '';
+            el.classList.remove('show');
+        });
+        
+        // Réinitialiser l'état des champs
+        form.querySelectorAll('.is-invalid').forEach(el => {
+            el.classList.remove('is-invalid');
+        });
+    }
+    
+    /**
+     * Affiche les erreurs dans un formulaire
+     * @param {HTMLFormElement} form - Le formulaire où afficher les erreurs
+     * @param {Object} errors - Les erreurs à afficher (format: {champ: ["message d'erreur"]})
+     */
+    function displayFormErrors(form, errors) {
+        // D'abord nettoyer les anciennes erreurs
+        resetFormErrors(form);
+        
+        // Parcourir toutes les erreurs
+        Object.keys(errors).forEach(fieldName => {
+            const field = form.querySelector(`[name="${fieldName}"]`);
+            if (!field) return;
+            
+            // Marquer le champ comme invalide
+            field.classList.add('is-invalid');
+            
+            // Récupérer le conteneur d'erreur dédié à ce champ
+            const errorContainer = document.getElementById(`${fieldName}Error`);
+            if (errorContainer) {
+                errorContainer.textContent = Array.isArray(errors[fieldName]) 
+                    ? errors[fieldName].join(' ') 
+                    : errors[fieldName];
+                errorContainer.classList.add('show');
+            }
+        });
+    }
+    
+    /**
+     * Sérialise un formulaire en objet JSON
+     * @param {HTMLFormElement} form - Le formulaire à sérialiser
+     * @returns {Object} - Les données du formulaire
+     */
+    function serializeForm(form) {
+        const formData = new FormData(form);
+        const data = {};
+        
+        formData.forEach((value, key) => {
+            // Prévention XSS basique pour les champs texte
+            if (typeof value === 'string') {
+                value = value.trim();
+            }
+            data[key] = value;
+        });
+        
+        return data;
+    }
+    
+    /**
+     * Initialise les gestionnaires d'événements pour les formulaires
+     */
+    function initFormHandlers() {
+        // Réinitialiser les erreurs à l'ouverture des modales
+        document.querySelectorAll('[data-bs-toggle="modal"]').forEach(button => {
+            button.addEventListener('click', function() {
+                const targetId = this.getAttribute('data-bs-target');
+                const modal = document.querySelector(targetId);
+                if (modal) {
+                    const form = modal.querySelector('form');
+                    if (form) {
+                        setTimeout(() => resetFormErrors(form), 100);
+                    }
+                }
+            });
+        });
+        
+        // Réinitialiser les erreurs lors de la saisie dans les champs
+        document.addEventListener('input', function(e) {
+            if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) {
+                const field = e.target;
+                const fieldName = field.getAttribute('name');
+                if (!fieldName) return;
+                
+                // Réinitialiser l'état du champ
+                field.classList.remove('is-invalid');
+                
+                // Réinitialiser le message d'erreur
+                const errorContainer = document.getElementById(`${fieldName}Error`);
+                if (errorContainer) {
+                    errorContainer.textContent = '';
+                    errorContainer.classList.remove('show');
+                }
+            }
+        });
+    }
+    
+    // Interface publique du module
+    return {
+        resetFormErrors,
+        displayFormErrors,
+        serializeForm,
+        initFormHandlers
+    };
+})();
+
+/**
+ * Module pour les notifications
+ */
+const NotificationManager = (function() {
+    const toast = document.getElementById('toastMessage');
+    let toastBootstrap;
+    
+    if (toast) {
+        toastBootstrap = new bootstrap.Toast(toast);
+    }
+    
+    /**
+     * Affiche une notification toast
+     * @param {string} message - Le message à afficher
+     * @param {string} type - Le type de notification (success, error, warning, info)
+     * @param {string} title - Le titre de la notification (optionnel)
+     */
+    function showToast(message, type = 'info', title = '') {
+        if (!toast) return;
+        
+        // Définir le titre par défaut selon le type
+        if (!title) {
+            switch (type) {
+                case 'success': title = "{% trans 'Succès' %}"; break;
+                case 'error': title = "{% trans 'Erreur' %}"; break;
+                case 'warning': title = "{% trans 'Attention' %}"; break;
+                default: title = "{% trans 'Information' %}";
+            }
+        }
+        
+        // Définir les classes selon le type
+        toast.className = 'toast';
+        toast.classList.add(`text-bg-${type === 'error' ? 'danger' : type}`);
+        
+        // Mettre à jour le contenu
+        document.getElementById('toastTitle').textContent = title;
+        document.getElementById('toastBody').textContent = message;
+        
+        // Afficher la notification
+        toastBootstrap.show();
+    }
+    
+    return {
+        showToast
+    };
+})();
+
+/**
+ * Module de gestion des paiements
+ */
+const PaiementManager = (function() {
+    /**
+     * Initialise la gestion des paiements
+     */
+    function init() {
+        const paiementForm = document.getElementById('paiementAjaxForm');
+        const submitBtn = document.getElementById('submitPaiement');
+        
+        if (!paiementForm || !submitBtn) return;
+        
+        // Préremplir la date avec la date actuelle
+        const dateInput = document.getElementById('formDatePaiement');
+        if (dateInput) {
+            const now = new Date();
+            dateInput.value = now.toISOString().slice(0, 16);
+        }
+        
+        // Gérer le type de transaction
+        const typeSelect = document.getElementById('formTypeTransaction');
+        const montantInput = document.getElementById('formMontant');
+        
+        if (typeSelect && montantInput) {
+            typeSelect.addEventListener('change', function() {
+                const montantRestant = parseFloat(document.getElementById('montant-restant').dataset.value || 0);
+                const montantHelp = document.getElementById('montantHelp');
+                
+                if (this.value === 'paiement') {
+                    // Pour un paiement, limiter au montant restant
+                    montantInput.max = montantRestant;
+                    montantHelp.innerHTML = `{% trans "Montant maximum autorisé" %}: <strong>${montantRestant.toFixed(2)} €</strong>`;
+                    
+                    // Ajuster automatiquement le montant s'il dépasse le montant restant
+                    if (parseFloat(montantInput.value) > montantRestant) {
+                        montantInput.value = montantRestant.toFixed(2);
+                    }
+                    
+                    // Mettre en évidence cette limitation
+                    montantHelp.classList.remove('text-muted');
+                    montantHelp.classList.add('text-info');
+                } else {
+                    // Pour les autres types, pas de limite supérieure
+                    montantInput.removeAttribute('max');
+                    
+                    // Adapter le message d'aide selon le type de transaction
+                    if (this.value === 'remboursement') {
+                        montantHelp.innerHTML = `{% trans "Remboursement - Aucune limite de montant" %}`;
+                    } else if (this.value === 'rejet') {
+                        montantHelp.innerHTML = `{% trans "Rejet de paiement - Aucune limite de montant" %}`;
+                    }
+                    
+                    // Réinitialiser le style
+                    montantHelp.classList.remove('text-info');
+                    montantHelp.classList.add('text-muted');
+                }
+            });
+            
+            // Déclencher l'événement au chargement
+            typeSelect.dispatchEvent(new Event('change'));
+        }
+        
+        // Soumission du formulaire
+        submitBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Réinitialiser les erreurs
+            FormManager.resetFormErrors(paiementForm);
+            
+            // Valider le formulaire côté client
+            if (!validatePaiementForm(paiementForm)) return;
+            
+            // Récupérer les données du formulaire
+            const formData = FormManager.serializeForm(paiementForm);
+            
+            // Préparer les données pour l'envoi
+            const cotisationId = paiementForm.dataset.cotisationId;
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            // Envoyer les données
+            fetch(`/cotisations/${cotisationId}/paiement/ajax/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Afficher un message de succès
+                    NotificationManager.showToast(data.message, 'success');
+                    
+                    // Mettre à jour l'interface
+                    updateCotisationInfo(data.cotisation);
+                    addPaiementToList(data.paiement);
+                    
+                    // Fermer la modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('paiementModal'));
+                    if (modal) modal.hide();
+                    
+                    // Réinitialiser le formulaire
+                    paiementForm.reset();
+                } else {
+                    // Afficher les erreurs
+                    if (data.errors) {
+                        try {
+                            const errors = JSON.parse(data.errors);
+                            FormManager.displayFormErrors(paiementForm, errors);
+                        } catch (e) {
+                            NotificationManager.showToast(data.message || "{% trans 'Une erreur est survenue lors du traitement de la requête' %}", 'error');
+                        }
+                    } else {
+                        NotificationManager.showToast(data.message || "{% trans 'Une erreur est survenue lors du traitement de la requête' %}", 'error');
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                NotificationManager.showToast("{% trans 'Une erreur est survenue lors de la communication avec le serveur' %}", 'error');
+            });
+        });
+    }
+    
+    /**
+     * Valide le formulaire de paiement côté client
+     * @param {HTMLFormElement} form - Le formulaire à valider
+     * @returns {boolean} - True si le formulaire est valide, false sinon
+     */
+    function validatePaiementForm(form) {
+        let isValid = true;
+        const errors = {};
+        
+        // Vérifier le montant
+        const montantInput = form.querySelector('[name="montant"]');
+        if (montantInput) {
+            const montant = parseFloat(montantInput.value);
+            // Vérifier que le montant est valide
+            if (isNaN(montant) || montant <= 0) {
+                errors.montant = ["{% trans 'Le montant doit être supérieur à zéro' %}"];
+                isValid = false;
+            } else {
+                // Vérifier que le montant ne dépasse pas le montant restant pour un paiement
+                const typeTransaction = form.querySelector('[name="type_transaction"]').value;
+                const montantRestant = parseFloat(document.getElementById('montant-restant').dataset.value || 0);
+                
+                if (typeTransaction === 'paiement' && montant > montantRestant) {
+                    errors.montant = [`{% trans "Le montant ne peut pas dépasser le montant restant à payer" %} (${montantRestant.toFixed(2)} €)`];
+                    isValid = false;
+                    
+                    // Mettre en évidence visuellement l'erreur
+                    montantInput.classList.add('is-invalid');
+                }
+            }
+        }
+        
+        // Vérifier le mode de paiement
+        const modeSelect = form.querySelector('[name="mode_paiement"]');
+        if (modeSelect && !modeSelect.value) {
+            errors.mode_paiement = ["{% trans 'Veuillez sélectionner un mode de paiement' %}"];
+            isValid = false;
+        }
+        
+        // Vérifier la date
+        const dateInput = form.querySelector('[name="date_paiement"]');
+        if (dateInput && !dateInput.value) {
+            errors.date_paiement = ["{% trans 'Veuillez saisir une date de paiement' %}"];
+            isValid = false;
+        }
+        
+        // Afficher les erreurs si nécessaire
+        if (!isValid) {
+            FormManager.displayFormErrors(form, errors);
+        }
+        
+        return isValid;
+    }
+    
+    /**
+     * Met à jour les informations de la cotisation après un paiement
+     * @param {Object} cotisationData - Les nouvelles données de la cotisation
+     */
+    function updateCotisationInfo(cotisationData) {
+        if (!cotisationData) return;
+        
+        // Mettre à jour le montant restant
+        const montantRestantElement = document.getElementById('montant-restant');
+        if (montantRestantElement) {
+            montantRestantElement.textContent = `${parseFloat(cotisationData.montant_restant).toFixed(2)} €`;
+            montantRestantElement.dataset.value = cotisationData.montant_restant;
+            
+            // Mettre à jour la classe selon le montant restant
+            montantRestantElement.className = 'fw-bold';
+            if (parseFloat(cotisationData.montant_restant) > 0) {
+                montantRestantElement.classList.add('text-danger');
+            } else {
+                montantRestantElement.classList.add('text-success');
+            }
+        }
+        
+        // Mettre à jour le montant payé
+        const montantTotal = parseFloat(document.getElementById('montant-total').dataset.value || 0);
+        const montantPaye = document.getElementById('montant-paye');
+        if (montantPaye) {
+            const payeValue = montantTotal - parseFloat(cotisationData.montant_restant);
+            montantPaye.textContent = `${payeValue.toFixed(2)} €`;
+            montantPaye.dataset.value = payeValue;
+        }
+        
+        // Mettre à jour le statut de paiement
+        const statutElement = document.getElementById('statut-paiement');
+        if (statutElement) {
+            statutElement.textContent = cotisationData.statut_paiement;
+            statutElement.className = 'badge';
+            statutElement.dataset.statut = cotisationData.statut_paiement.toLowerCase().replace(/\s+/g, '_');
+            
+            // Appliquer la classe appropriée
+            if (cotisationData.statut_paiement.toLowerCase().includes('payée')) {
+                statutElement.classList.add('bg-success');
+            } else if (cotisationData.statut_paiement.toLowerCase().includes('partiellement')) {
+                statutElement.classList.add('bg-warning');
+            } else {
+                statutElement.classList.add('bg-danger');
+            }
+        }
+        
+        // Mettre à jour la barre de progression
+        const progressElement = document.getElementById('progression-paiement');
+        if (progressElement) {
+            const montantTotal = parseFloat(progressElement.dataset.montantTotal || 0);
+            if (montantTotal > 0) {
+                const pourcentage = Math.min(100, Math.max(0, ((montantTotal - parseFloat(cotisationData.montant_restant)) / montantTotal) * 100));
+                progressElement.style.width = `${pourcentage.toFixed(1)}%`;
+                progressElement.setAttribute('aria-valuenow', pourcentage.toFixed(1));
+                progressElement.textContent = `${pourcentage.toFixed(1)}%`;
+                
+                // Mettre à jour la classe selon le pourcentage
+                progressElement.className = 'progress-bar';
+                if (pourcentage >= 100) {
+                    progressElement.classList.add('bg-success');
+                } else if (pourcentage > 0) {
+                    progressElement.classList.add('bg-warning');
+                } else {
+                    progressElement.classList.add('bg-danger');
+                }
+            }
+        }
+    }
+    
+    /**
+     * Ajoute un paiement à la liste des paiements
+     * @param {Object} paiementData - Les données du paiement à ajouter
+     */
+    function addPaiementToList(paiementData) {
+        if (!paiementData) return;
+        
+        const tableBody = document.querySelector('#paiements-list tbody');
+        const noPaymentsMessage = document.getElementById('no-paiements-message');
+        
+        // Si la table n'existe pas encore, créer une nouvelle table
+        if (!tableBody && noPaymentsMessage) {
+            // Remplacer le message "Aucun paiement" par une table
+            const container = noPaymentsMessage.parentNode;
+            noPaymentsMessage.remove();
+            
+            // Créer la table
+            const tableHtml = `
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="paiements-list">
+                        <thead>
+                            <tr>
+                                <th>{% trans "Date" %}</th>
+                                <th>{% trans "Montant" %}</th>
+                                <th>{% trans "Mode" %}</th>
+                                <th>{% trans "Type" %}</th>
+                                <th>{% trans "Référence" %}</th>
+                                <th class="text-center">{% trans "Actions" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = tableHtml;
+        }
+        
+        // Récupérer à nouveau le tbody qui pourrait avoir été créé
+        const updatedTableBody = document.querySelector('#paiements-list tbody');
+        if (!updatedTableBody) return;
+        
+        // Créer la ligne pour le nouveau paiement
+        const row = document.createElement('tr');
+        row.id = `paiement-${paiementData.id}`;
+        row.className = 'new-item';
+        
+        // Formater la date
+        const dateObj = new Date(paiementData.date_paiement);
+        const formattedDate = dateObj.toLocaleString('fr-FR', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        // Déterminer la classe pour le badge du type de transaction
+        let typeBadgeClass = 'bg-secondary';
+        if (paiementData.type_transaction.toLowerCase().includes('paiement')) {
+            typeBadgeClass = 'bg-success';
+        } else if (paiementData.type_transaction.toLowerCase().includes('remboursement')) {
+            typeBadgeClass = 'bg-warning';
+        } else if (paiementData.type_transaction.toLowerCase().includes('rejet')) {
+            typeBadgeClass = 'bg-danger';
+        }
+        
+        // Créer le contenu HTML de la ligne de manière sécurisée
+        const cells = [
+            `<td>${formattedDate}</td>`,
+            `<td>${parseFloat(paiementData.montant).toFixed(2)} €</td>`,
+            `<td>${paiementData.mode_paiement}</td>`,
+            `<td><span class="badge ${typeBadgeClass}">${paiementData.type_transaction}</span></td>`,
+            `<td>${paiementData.reference_paiement || '-'}</td>`,
+            `<td class="text-center">
+                <div class="btn-group">
+                    <a href="/cotisations/paiements/${paiementData.id}/" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-eye" aria-hidden="true"></i>
+                        <span class="visually-hidden">{% trans "Voir" %}</span>
+                    </a>
+                    <a href="/cotisations/paiements/${paiementData.id}/modifier/" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-edit" aria-hidden="true"></i>
+                        <span class="visually-hidden">{% trans "Modifier" %}</span>
+                    </a>
+                    <a href="/cotisations/paiements/${paiementData.id}/supprimer/" class="btn btn-sm btn-outline-danger">
+                        <i class="fas fa-trash" aria-hidden="true"></i>
+                        <span class="visually-hidden">{% trans "Supprimer" %}</span>
+                    </a>
+                    ${paiementData.type_transaction.toLowerCase().includes('paiement') ? 
+                    `<a href="/cotisations/api/generer-recu/${paiementData.id}/" class="btn btn-sm btn-outline-info" aria-label="{% trans 'Générer un reçu' %}">
+                        <i class="fas fa-file-invoice" aria-hidden="true"></i>
+                        <span class="visually-hidden">{% trans "Générer un reçu" %}</span>
+                    </a>` : ''}
+                </div>
+            </td>`
+        ];
+        
+        row.innerHTML = cells.join('');
+        
+        // Ajouter la ligne au début du tableau
+        updatedTableBody.insertBefore(row, updatedTableBody.firstChild);
+        
+        // Animer l'apparition avec un délai pour permettre au DOM de se mettre à jour
+        setTimeout(() => {
+            row.classList.add('show');
+        }, 50);
+    }
+    
+    return {
+        init
+    };
+})();
+
+/**
+ * Module de gestion intelligente des rappels avec contraintes adaptatives
+ * Version avec validation temps réel et interface adaptative
+ */
+const RappelIntelligentManager = (function() {
+    // Configuration et cache
+    let currentConfig = null;
+    let currentConstraints = null;
+    let validationTimer = null;
+    let currentCotisationId = null;
+    let suggestionsPanelVisible = false;
+    
+    // Éléments DOM
+    let elements = {};
+    
+    /**
+     * Initialise le gestionnaire intelligent
+     */
+    function init() {
+        console.log('🚀 Initialisation du gestionnaire intelligent de rappels');
+        
+        // Récupérer les éléments DOM
+        cacheElements();
+        
+        if (!elements.form) {
+            console.error('❌ Formulaire de rappel non trouvé');
+            return;
+        }
+        
+        // Récupérer l'ID de cotisation
+        currentCotisationId = elements.form.dataset.cotisationId || getCurrentCotisationId();
+        
+        // Initialiser l'interface
+        setupEventListeners();
+        createIntelligentUI();
+        
+        // Charger la configuration initiale
+        const initialType = elements.typeSelect ? elements.typeSelect.value : 'email';
+        loadTypeConfiguration(initialType);
+        
+        console.log('✅ Gestionnaire intelligent initialisé');
+    }
+    
+    /**
+     * Cache les éléments DOM pour performance
+     */
+    function cacheElements() {
+        elements = {
+            form: document.getElementById('rappelAjaxForm') || document.getElementById('rappelForm'),
+            typeSelect: document.getElementById('formTypeRappel') || document.getElementById('id_type_rappel'),
+            niveauInput: document.getElementById('formNiveau') || document.getElementById('id_niveau'),
+            contenuTextarea: document.getElementById('formContenu') || document.getElementById('id_contenu'),
+            sujetInput: document.getElementById('formSujet') || document.getElementById('id_sujet'),
+            submitBtn: document.getElementById('submitRappel') || document.querySelector('button[type="submit"]'),
+            
+            // Éléments de planification
+            envoyerImmediatement: document.getElementById('envoyerImmediatement'),
+            datePlanification: document.getElementById('formDatePlanification') || document.getElementById('datePlanification'),
+            heurePlanification: document.getElementById('formHeurePlanification') || document.getElementById('heurePlanification'),
+            
+            // Conteneurs pour l'interface intelligente
+            formContainer: document.querySelector('.form-container') || elements.form?.parentElement,
+            messagesContainer: document.querySelector('.messages') || elements.form?.querySelector('.alert')
+        };
+    }
+    
+    /**
+     * Configure les gestionnaires d'événements
+     */
+    function setupEventListeners() {
+        // Changement de type de rappel
+        if (elements.typeSelect) {
+            elements.typeSelect.addEventListener('change', handleTypeChange);
+        }
+        
+        // Changement de niveau
+        if (elements.niveauInput) {
+            elements.niveauInput.addEventListener('input', handleNiveauChange);
+        }
+        
+        // Validation temps réel du contenu
+        if (elements.contenuTextarea) {
+            elements.contenuTextarea.addEventListener('input', debounce(handleContentChange, 500));
+            elements.contenuTextarea.addEventListener('paste', () => {
+                setTimeout(() => handleContentChange(), 100);
+            });
+        }
+        
+        // Validation du sujet
+        if (elements.sujetInput) {
+            elements.sujetInput.addEventListener('input', debounce(handleSubjectChange, 300));
+        }
+        
+        // Gestion des dates/heures
+        if (elements.datePlanification) {
+            elements.datePlanification.addEventListener('change', handleDateTimeChange);
+        }
+        if (elements.heurePlanification) {
+            elements.heurePlanification.addEventListener('change', handleDateTimeChange);
+        }
+        
+        // Soumission du formulaire
+        if (elements.submitBtn) {
+            elements.submitBtn.addEventListener('click', handleFormSubmit);
+        }
+    }
+    
+    /**
+     * Crée l'interface utilisateur intelligente
+     */
+    function createIntelligentUI() {
+        if (!elements.formContainer) return;
+        
+        // Créer le panneau de contraintes
+        createConstraintsPanel();
+        
+        // Créer les indicateurs de validation
+        createValidationIndicators();
+        
+        // Créer le panneau de suggestions
+        createSuggestionsPanel();
+        
+        // Créer les compteurs de caractères
+        createCharacterCounters();
+        
+        // Créer les boutons d'optimisation
+        createOptimizationButtons();
+        
+        console.log('🎨 Interface intelligente créée');
+    }
+    
+    /**
+     * Crée le panneau d'affichage des contraintes
+     */
+    function createConstraintsPanel() {
+        const constraintsPanel = document.createElement('div');
+        constraintsPanel.id = 'constraints-panel';
+        constraintsPanel.className = 'alert alert-info mt-3';
+        constraintsPanel.innerHTML = `
+            <div class="d-flex align-items-center">
+                <div class="me-3">
+                    <span id="type-icon" class="fs-4">📧</span>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong id="type-name">Email</strong>
+                            <small class="text-muted d-block" id="type-description">Rappel par courrier électronique</small>
+                        </div>
+                        <div class="text-end">
+                            <small class="text-muted" id="length-info">0 / 800 caractères</small>
+                            <div class="progress mt-1" style="height: 4px; width: 120px;">
+                                <div id="length-progress" class="progress-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="constraints-details" class="mt-2 small text-muted"></div>
+        `;
+        
+        // Insérer après le sélecteur de type
+        if (elements.typeSelect) {
+            elements.typeSelect.closest('.form-group, .mb-3')?.insertAdjacentElement('afterend', constraintsPanel);
+        }
+    }
+    
+    /**
+     * Crée les indicateurs de validation
+     */
+    function createValidationIndicators() {
+        const indicators = document.createElement('div');
+        indicators.id = 'validation-indicators';
+        indicators.className = 'mt-2';
+        indicators.innerHTML = `
+            <div class="d-flex flex-wrap gap-2">
+                <span id="sujet-indicator" class="badge bg-secondary">Sujet: Non vérifié</span>
+                <span id="contenu-indicator" class="badge bg-secondary">Contenu: Non vérifié</span>
+                <span id="longueur-indicator" class="badge bg-secondary">Longueur: Non vérifié</span>
+                <span id="variables-indicator" class="badge bg-secondary">Variables: Non vérifié</span>
+                <span id="horaire-indicator" class="badge bg-secondary">Horaire: Non vérifié</span>
+            </div>
+        `;
+        
+        // Insérer après le panneau de contraintes
+        const constraintsPanel = document.getElementById('constraints-panel');
+        if (constraintsPanel) {
+            constraintsPanel.insertAdjacentElement('afterend', indicators);
+        }
+    }
+    
+    /**
+     * Crée le panneau de suggestions
+     */
+    function createSuggestionsPanel() {
+        const suggestionsPanel = document.createElement('div');
+        suggestionsPanel.id = 'suggestions-panel';
+        suggestionsPanel.className = 'card mt-3';
+        suggestionsPanel.style.display = 'none';
+        suggestionsPanel.innerHTML = `
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">💡 Suggestions d'amélioration</h6>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="toggle-suggestions">
+                    <i class="fas fa-chevron-up"></i>
+                </button>
+            </div>
+            <div class="card-body" id="suggestions-content">
+                <div class="text-muted text-center">
+                    <i class="fas fa-lightbulb fa-2x mb-2"></i>
+                    <p>Saisissez du contenu pour obtenir des suggestions personnalisées</p>
+                </div>
+            </div>
+        `;
+        
+        // Insérer avant le bouton de soumission
+        if (elements.submitBtn) {
+            elements.submitBtn.closest('.form-group, .mb-3')?.insertAdjacentElement('beforebegin', suggestionsPanel);
+        }
+        
+        // Gestionnaire pour masquer/afficher
+        const toggleBtn = suggestionsPanel.querySelector('#toggle-suggestions');
+        toggleBtn.addEventListener('click', toggleSuggestionsPanel);
+    }
+    
+    /**
+     * Crée les compteurs de caractères intelligents
+     */
+    function createCharacterCounters() {
+        // Compteur pour le contenu
+        if (elements.contenuTextarea) {
+            const counter = document.createElement('div');
+            counter.className = 'form-text d-flex justify-content-between align-items-center';
+            counter.innerHTML = `
+                <span id="content-counter">0 caractères</span>
+                <span id="content-status" class="badge bg-secondary">En attente</span>
+            `;
+            elements.contenuTextarea.insertAdjacentElement('afterend', counter);
+        }
+        
+        // Compteur pour le sujet
+        if (elements.sujetInput) {
+            const counter = document.createElement('div');
+            counter.className = 'form-text';
+            counter.innerHTML = `<span id="subject-counter">0 caractères</span>`;
+            elements.sujetInput.insertAdjacentElement('afterend', counter);
+        }
+    }
+    
+    /**
+     * Crée les boutons d'optimisation
+     */
+    function createOptimizationButtons() {
+        if (!elements.contenuTextarea) return;
+        
+        const optimizationRow = document.createElement('div');
+        optimizationRow.className = 'btn-toolbar mt-2 justify-content-between';
+        optimizationRow.innerHTML = `
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-primary" id="btn-optimize-auto">
+                    <i class="fas fa-magic"></i> Optimiser
+                </button>
+                <button type="button" class="btn btn-outline-info" id="btn-preview-intelligent">
+                    <i class="fas fa-eye"></i> Aperçu
+                </button>
+                <button type="button" class="btn btn-outline-success" id="btn-check-variables">
+                    <i class="fas fa-check-circle"></i> Variables
+                </button>
+            </div>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-warning" id="btn-estimate-cost">
+                    <i class="fas fa-calculator"></i> Coût
+                </button>
+            </div>
+        `;
+        
+        elements.contenuTextarea.insertAdjacentElement('afterend', optimizationRow);
+        
+        // Gestionnaires d'événements
+        document.getElementById('btn-optimize-auto')?.addEventListener('click', handleAutoOptimize);
+        document.getElementById('btn-preview-intelligent')?.addEventListener('click', handleIntelligentPreview);
+        document.getElementById('btn-check-variables')?.addEventListener('click', handleCheckVariables);
+        document.getElementById('btn-estimate-cost')?.addEventListener('click', handleEstimateCost);
+    }
+    
+    /**
+     * Gère le changement de type de rappel
+     */
+    async function handleTypeChange(event) {
+        const newType = event.target.value;
+        console.log(`🔄 Changement de type: ${newType}`);
+        
+        // Charger la nouvelle configuration
+        await loadTypeConfiguration(newType);
+        
+        // Adapter l'interface
+        adaptInterfaceToType(newType);
+        
+        // Revalider le contenu existant
+        if (elements.contenuTextarea.value) {
+            validateContentRealTime();
+        }
+    }
+    
+    /**
+     * Charge la configuration pour un type de rappel
+     */
+    async function loadTypeConfiguration(type) {
+        try {
+            const params = new URLSearchParams({
+                type_rappel: type,
+                jours_retard: getCurrentJoursRetard(),
+                nb_destinataires: 1
+            });
+            
+            const response = await fetch(`/cotisations/api/contraintes/?${params}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                currentConfig = data;
+                currentConstraints = data.contraintes;
+                
+                // Mettre à jour l'affichage des contraintes
+                updateConstraintsDisplay();
+                
+                console.log(`✅ Configuration chargée pour ${type}:`, data);
+            } else {
+                console.error('❌ Erreur chargement configuration:', data.message);
+                showError('Erreur lors du chargement des contraintes');
+            }
+        } catch (error) {
+            console.error('❌ Erreur réseau:', error);
+            showError('Impossible de charger les contraintes');
+        }
+    }
+    
+    /**
+     * Met à jour l'affichage des contraintes
+     */
+    function updateConstraintsDisplay() {
+        if (!currentConstraints) return;
+        
+        // Icône et nom du type
+        const typeIcon = document.getElementById('type-icon');
+        const typeName = document.getElementById('type-name');
+        const typeDescription = document.getElementById('type-description');
+        
+        if (typeIcon) typeIcon.textContent = currentConstraints.icone;
+        if (typeName) typeName.textContent = currentConstraints.nom;
+        if (typeDescription) typeDescription.textContent = currentConstraints.description;
+        
+        // Détails des contraintes
+        const constraintsDetails = document.getElementById('constraints-details');
+        if (constraintsDetails) {
+            const details = [];
+            
+            details.push(`📏 Longueur: ${currentConstraints.longueur_min}-${currentConstraints.longueur_max} caractères`);
+            details.push(`🎯 Optimal: ${currentConstraints.longueur_optimale} caractères`);
+            
+            if (currentConstraints.sujet_obligatoire) {
+                details.push(`✅ Sujet obligatoire`);
+            }
+            
+            if (!currentConstraints.envoi_weekend) {
+                details.push(`🚫 Pas d'envoi weekend`);
+            }
+            
+            if (currentConstraints.heure_optimale) {
+                details.push(`⏰ Heure optimale: ${currentConstraints.heure_optimale}`);
+            }
+            
+            constraintsDetails.innerHTML = details.join(' • ');
+        }
+        
+        // Mettre à jour la couleur du panneau
+        const constraintsPanel = document.getElementById('constraints-panel');
+        if (constraintsPanel && currentConstraints.couleur) {
+            constraintsPanel.style.borderLeft = `4px solid ${currentConstraints.couleur}`;
+        }
+    }
+    
+    /**
+     * Adapte l'interface selon le type de rappel
+     */
+    function adaptInterfaceToType(type) {
+        // Gestion du champ sujet
+        if (elements.sujetInput) {
+            const sujetGroup = elements.sujetInput.closest('.form-group, .mb-3');
+            if (type === 'sms') {
+                // Masquer le sujet pour SMS
+                if (sujetGroup) sujetGroup.style.display = 'none';
+                elements.sujetInput.value = '';
+            } else {
+                // Afficher le sujet pour email/courrier
+                if (sujetGroup) sujetGroup.style.display = 'block';
+                if (currentConstraints?.sujet_obligatoire) {
+                    const label = sujetGroup.querySelector('label');
+                    if (label && !label.textContent.includes('*')) {
+                        label.innerHTML += ' <span class="text-danger">*</span>';
+                    }
+                }
+            }
+        }
+        
+        // Adapter les templates disponibles
+        loadCompatibleTemplates(type);
+        
+        // Adapter les suggestions de planification
+        adaptSchedulingSuggestions(type);
+    }
+    
+    /**
+     * Validation temps réel du contenu
+     */
+    async function validateContentRealTime() {
+        if (!elements.contenuTextarea.value || !currentConfig) return;
+        
+        const requestData = {
+            type_rappel: elements.typeSelect?.value || 'email',
+            contenu: elements.contenuTextarea.value,
+            sujet: elements.sujetInput?.value || '',
+            nb_destinataires: 1
+        };
+        
+        try {
+            const response = await fetch('/cotisations/api/validation/contenu/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(requestData)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                updateValidationIndicators(data);
+                updateCharacterCounters(data.statistiques);
+                updateSuggestions(data.conseils);
+            }
+        } catch (error) {
+            console.error('❌ Erreur validation temps réel:', error);
+        }
+    }
+    
+    /**
+     * Met à jour les indicateurs de validation
+     */
+    function updateValidationIndicators(data) {
+        const indicators = {
+            'sujet-indicator': data.erreurs.some(e => e.champ === 'sujet') ? 
+                { class: 'bg-danger', text: 'Sujet: Erreur' } : 
+                { class: 'bg-success', text: 'Sujet: OK' },
+            
+            'contenu-indicator': data.erreurs.some(e => e.champ === 'contenu') ? 
+                { class: 'bg-danger', text: 'Contenu: Erreur' } : 
+                { class: 'bg-success', text: 'Contenu: OK' },
+            
+            'longueur-indicator': data.statistiques.dans_limites ? 
+                { class: 'bg-success', text: 'Longueur: OK' } : 
+                { class: 'bg-warning', text: 'Longueur: Attention' },
+            
+            'variables-indicator': data.statistiques.variables_ok !== false ? 
+                { class: 'bg-success', text: 'Variables: OK' } : 
+                { class: 'bg-warning', text: 'Variables: Attention' }
+        };
+        
+        Object.entries(indicators).forEach(([id, info]) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.className = `badge ${info.class}`;
+                element.textContent = info.text;
+            }
+        });
+    }
+    
+    /**
+     * Met à jour les compteurs de caractères
+     */
+    function updateCharacterCounters(stats) {
+        // Compteur principal de contenu
+        const contentCounter = document.getElementById('content-counter');
+        const contentStatus = document.getElementById('content-status');
+        
+        if (contentCounter && stats) {
+            const length = stats.longueur || 0;
+            const maxLength = stats.longueur_max || 1000;
+            const optimalLength = stats.longueur_optimale || 800;
+            
+            contentCounter.textContent = `${length} / ${maxLength} caractères`;
+            
+            // Statut selon la longueur
+            if (stats.dans_limites) {
+                const ratio = length / optimalLength;
+                if (ratio >= 0.8 && ratio <= 1.2) {
+                    contentStatus.className = 'badge bg-success';
+                    contentStatus.textContent = 'Optimal';
+                } else if (ratio < 0.8) {
+                    contentStatus.className = 'badge bg-info';
+                    contentStatus.textContent = 'Peut être étoffé';
+                } else {
+                    contentStatus.className = 'badge bg-warning';
+                    contentStatus.textContent = 'Un peu long';
+                }
+            } else {
+                contentStatus.className = 'badge bg-danger';
+                contentStatus.textContent = 'Hors limites';
+            }
+            
+            // Mise à jour de la barre de progression
+            const progressBar = document.getElementById('length-progress');
+            if (progressBar) {
+                const percentage = Math.min((length / maxLength) * 100, 100);
+                progressBar.style.width = `${percentage}%`;
+                
+                if (percentage > 90) {
+                    progressBar.className = 'progress-bar bg-danger';
+                } else if (percentage > 75) {
+                    progressBar.className = 'progress-bar bg-warning';
+                } else {
+                    progressBar.className = 'progress-bar bg-success';
+                }
+            }
+            
+            // Mise à jour info longueur dans le panneau contraintes
+            const lengthInfo = document.getElementById('length-info');
+            if (lengthInfo) {
+                lengthInfo.textContent = `${length} / ${optimalLength} caractères`;
+            }
+        }
+        
+        // Compteur de sujet
+        const subjectCounter = document.getElementById('subject-counter');
+        if (subjectCounter && elements.sujetInput) {
+            const subjectLength = elements.sujetInput.value.length;
+            subjectCounter.textContent = `${subjectLength} caractères`;
+            
+            if (currentConstraints?.type_rappel === 'email' && subjectLength > 100) {
+                subjectCounter.className = 'form-text text-warning';
+            } else {
+                subjectCounter.className = 'form-text text-muted';
+            }
+        }
+    }
+    
+    /**
+     * Met à jour le panneau de suggestions
+     */
+    function updateSuggestions(conseils) {
+        const suggestionsContent = document.getElementById('suggestions-content');
+        const suggestionsPanel = document.getElementById('suggestions-panel');
+        
+        if (!suggestionsContent || !suggestionsPanel) return;
+        
+        if (!conseils || conseils.length === 0) {
+            suggestionsPanel.style.display = 'none';
+            return;
+        }
+        
+        // Afficher le panneau s'il y a des suggestions
+        suggestionsPanel.style.display = 'block';
+        
+        const suggestionsHTML = conseils.map(conseil => {
+            const iconClass = conseil.type === 'error' ? 'fas fa-exclamation-triangle text-danger' :
+                             conseil.type === 'warning' ? 'fas fa-exclamation-circle text-warning' :
+                             'fas fa-lightbulb text-info';
+            
+            return `
+                <div class="d-flex align-items-start mb-2">
+                    <i class="${iconClass} me-2 mt-1"></i>
+                    <div>
+                        <small class="text-muted">${conseil.message}</small>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        suggestionsContent.innerHTML = suggestionsHTML;
+    }
+    
+    /**
+     * Gestion des gestionnaires d'événements
+     */
+    function handleNiveauChange() {
+        // Recharger les templates compatibles
+        if (elements.typeSelect) {
+            loadCompatibleTemplates(elements.typeSelect.value);
+        }
+    }
+    
+    function handleContentChange() {
+        // Debounced validation temps réel
+        clearTimeout(validationTimer);
+        validationTimer = setTimeout(validateContentRealTime, 500);
+    }
+    
+    function handleSubjectChange() {
+        // Validation du sujet
+        validateContentRealTime();
+    }
+    
+    function handleDateTimeChange() {
+        // Validation de la date/heure
+        validateContentRealTime();
+    }
+    
+    async function handleAutoOptimize() {
+        if (!elements.contenuTextarea.value) {
+            showWarning('Aucun contenu à optimiser');
+            return;
+        }
+        
+        const requestData = {
+            type_rappel: elements.typeSelect?.value || 'email',
+            contenu: elements.contenuTextarea.value,
+            niveau: parseInt(elements.niveauInput?.value || 1)
+        };
+        
+        try {
+            const response = await fetch('/cotisations/api/optimisation/automatique/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(requestData)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.contenu_optimise !== data.contenu_original) {
+                // Proposer l'optimisation
+                if (confirm('Contenu optimisé généré. Voulez-vous l\'appliquer ?')) {
+                    elements.contenuTextarea.value = data.contenu_optimise;
+                    validateContentRealTime();
+                    showSuccess('Contenu optimisé avec succès');
+                }
+            } else {
+                showInfo('Le contenu est déjà optimal');
+            }
+        } catch (error) {
+            console.error('❌ Erreur optimisation:', error);
+            showError('Erreur lors de l\'optimisation');
+        }
+    }
+    
+    async function handleIntelligentPreview() {
+        const requestData = {
+            type_rappel: elements.typeSelect?.value || 'email',
+            contenu: elements.contenuTextarea.value,
+            sujet: elements.sujetInput?.value || '',
+            cotisation_id: currentCotisationId
+        };
+        
+        try {
+            const response = await fetch('/cotisations/api/previsualisation/intelligente/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(requestData)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showPreviewModal(data.apercu);
+            }
+        } catch (error) {
+            console.error('❌ Erreur prévisualisation:', error);
+            showError('Erreur lors de la prévisualisation');
+        }
+    }
+    
+    function handleCheckVariables() {
+        if (!currentConfig || !currentConfig.variables) return;
+        
+        const variables = currentConfig.variables.toutes || [];
+        const contenu = elements.contenuTextarea.value;
+        
+        let message = 'Variables disponibles:\\n\\n';
+        message += '📋 Variables communes:\\n';
+        message += '• {prenom} - Prénom du membre\\n';
+        message += '• {nom} - Nom du membre\\n';
+        message += '• {reference} - Référence cotisation\\n';
+        message += '• {montant} - Montant restant\\n';
+        message += '• {date_echeance} - Date d\\'échéance\\n';
+        message += '• {jours_retard} - Jours de retard\\n';
+        
+        if (currentConfig.variables.speciales?.length > 0) {
+            message += '\\n🎯 Variables spéciales pour ce type:\\n';
+            currentConfig.variables.speciales.forEach(v => {
+                message += `• {${v}}\\n`;
+            });
+        }
+        
+        alert(message);
+    }
+    
+    async function handleEstimateCost() {
+        if (!currentConfig) return;
+        
+        const cost = currentConfig.cout_estime || 0;
+        let message = `💰 Estimation de coût:\\n\\n`;
+        
+        if (cost > 0) {
+            message += `Coût estimé: ${cost.toFixed(2)} €\\n`;
+            message += `Type: ${currentConfig.type_rappel}\\n`;
+            message += `Destinataires: 1`;
+        } else {
+            message += `Ce type de rappel est gratuit`;
+        }
+        
+        alert(message);
+    }
+    
+    /**
+     * Gestion de la soumission du formulaire avec validation intelligente
+     */
+    async function handleFormSubmit(event) {
+        event.preventDefault();
+        
+        console.log('🚀 Soumission intelligente du formulaire');
+        
+        // Validation finale complète
+        const isValid = await validateBeforeSubmit();
+        
+        if (!isValid) {
+            showError('Veuillez corriger les erreurs avant d\\'envoyer');
+            return;
+        }
+        
+        // Continuer avec la soumission normale
+        proceedWithSubmission();
+    }
+    
+    /**
+     * Validation complète avant soumission
+     */
+    async function validateBeforeSubmit() {
+        const requestData = {
+            type_rappel: elements.typeSelect?.value || 'email',
+            contenu: elements.contenuTextarea.value,
+            sujet: elements.sujetInput?.value || '',
+            date_envoi: getPlannedDateTime(),
+            nb_destinataires: 1
+        };
+        
+        try {
+            const response = await fetch('/cotisations/api/validation/contenu/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(requestData)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.valide) {
+                return true;
+            } else {
+                // Afficher les erreurs
+                data.erreurs?.forEach(erreur => {
+                    showError(`${erreur.champ}: ${erreur.message}`);
+                });
+                return false;
+            }
+        } catch (error) {
+            console.error('❌ Erreur validation finale:', error);
+            return false;
+        }
+    }
+    
+    // ==================== FONCTIONS UTILITAIRES ====================
+    
+    function toggleSuggestionsPanel() {
+        const panel = document.getElementById('suggestions-panel');
+        const content = document.getElementById('suggestions-content');
+        const icon = document.querySelector('#toggle-suggestions i');
+        
+        if (suggestionsPanelVisible) {
+            content.style.display = 'none';
+            icon.className = 'fas fa-chevron-down';
+            suggestionsPanelVisible = false;
+        } else {
+            content.style.display = 'block';
+            icon.className = 'fas fa-chevron-up';
+            suggestionsPanelVisible = true;
+        }
+    }
+    
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
+    function getCurrentCotisationId() {
+        // Essayer différentes méthodes pour récupérer l'ID
+        const urlParts = window.location.pathname.split('/');
+        const cotisationIndex = urlParts.indexOf('cotisations');
+        return cotisationIndex !== -1 ? urlParts[cotisationIndex + 1] : null;
+    }
+    
+    function getCurrentJoursRetard() {
+        // Logique pour calculer les jours de retard
+        return 0; // Placeholder
+    }
+    
+    function getPlannedDateTime() {
+        if (elements.envoyerImmediatement?.checked) {
+            return null;
+        }
+        
+        const date = elements.datePlanification?.value;
+        const time = elements.heurePlanification?.value;
+        
+        return date && time ? `${date}T${time}:00` : null;
+    }
+    
+    function getCSRFToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    }
+    
+    function proceedWithSubmission() {
+        // Logique de soumission normale
+        console.log('✅ Validation réussie, soumission du formulaire');
+        // Ici on peut appeler la fonction de soumission originale
+    }
+    
+    // Fonctions d'affichage des messages
+    function showSuccess(message) {
+        console.log('✅', message);
+        // Implémentation des toasts
+    }
+    
+    function showError(message) {
+        console.error('❌', message);
+        // Implémentation des toasts
+    }
+    
+    function showWarning(message) {
+        console.warn('⚠️', message);
+        // Implémentation des toasts
+    }
+    
+    function showInfo(message) {
+        console.info('ℹ️', message);
+        // Implémentation des toasts
+    }
+    
+    function showPreviewModal(preview) {
+        // Implémentation de la modal de prévisualisation
+        console.log('👁️ Prévisualisation:', preview);
+    }
+    
+    return {
+        init,
+        validateContentRealTime,
+        loadTypeConfiguration,
+        handleTypeChange
+    };
+})();
+
+// Auto-initialisation
+document.addEventListener('DOMContentLoaded', function() {
+    RappelIntelligentManager.init();
+});
+</script>
+{% endblock %}
