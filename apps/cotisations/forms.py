@@ -432,8 +432,8 @@ class RappelForm(forms.ModelForm):
             rappel.membre = self.cotisation.membre
             
         # Définir la date de création si c'est un nouveau rappel
-        if not rappel.pk:
-            rappel.date_creation = timezone.now()
+        # if not rappel.pk:
+        #     rappel.date_creation = timezone.now()
         
         # Définir la date d'envoi en fonction du mode (immédiat ou planifié)
         if self.cleaned_data.get('envoi_immediat'):
