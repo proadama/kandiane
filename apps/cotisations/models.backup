@@ -686,7 +686,6 @@ class Paiement(BaseModel):
         if self.montant is not None and self.montant <= 0:
             raise ValidationError(_("Le montant doit être supérieur à zéro."))
 
-# Remplacer la classe Rappel dans apps/cotisations/models.py
 
 class Rappel(BaseModel):
     """
@@ -703,6 +702,10 @@ class Rappel(BaseModel):
         on_delete=models.CASCADE,
         related_name='rappels',
         verbose_name=_("Cotisation")
+    )
+    date_envoi = models.DateTimeField(
+        default=timezone.now,
+        verbose_name=_("Date d'envoi")
     )
     type_rappel = models.CharField(
         max_length=20,
@@ -735,24 +738,17 @@ class Rappel(BaseModel):
         verbose_name=_("Niveau de rappel"),
         help_text=_("Niveau de priorité/sévérité du rappel (1: premier rappel, 2: relance, etc.)")
     )
-    # Utiliser le created_at de BaseModel au lieu de date_creation
-    # date_creation est fourni par BaseModel.created_at
-    
+    # Date de création (toujours maintenant)
+    date_creation = models.DateTimeField(
+        verbose_name=_("Date de création"),
+        default=timezone.now,
+        editable=False
+    )
     # Date d'envoi (peut être dans le futur si planifié)
     date_envoi = models.DateTimeField(
-        verbose_name=_("Date d'envoi planifiée"),
-        default=timezone.now,
-        help_text=_("Date à laquelle le rappel doit être envoyé")
+        verbose_name=_("Date d'envoi"),
+        default=timezone.now
     )
-    
-    # Date d'envoi réelle (quand le rappel a été effectivement envoyé)
-    date_envoi_reel = models.DateTimeField(
-        verbose_name=_("Date d'envoi réelle"),
-        null=True,
-        blank=True,
-        help_text=_("Date à laquelle le rappel a été effectivement envoyé")
-    )
-    
     cree_par = models.ForeignKey(
         CustomUser,
         on_delete=models.SET_NULL,
@@ -784,31 +780,6 @@ class Rappel(BaseModel):
     
     def get_absolute_url(self):
         return reverse('cotisations:rappel_detail', kwargs={'pk': self.pk})
-    
-    @property
-    def date_creation(self):
-        """
-        Propriété pour maintenir la compatibilité avec les templates.
-        Utilise created_at de BaseModel.
-        """
-        return self.created_at
-    
-    def marquer_comme_envoye(self):
-        """
-        Marque le rappel comme envoyé et enregistre la date d'envoi réelle.
-        """
-        self.etat = RAPPEL_ETAT_ENVOYE
-        self.date_envoi_reel = timezone.now()
-        self.save(update_fields=['etat', 'date_envoi_reel'])
-    
-    def planifier_envoi(self, date_envoi):
-        """
-        Planifie l'envoi du rappel à une date donnée.
-        """
-        self.date_envoi = date_envoi
-        self.etat = RAPPEL_ETAT_PLANIFIE
-        self.save(update_fields=['date_envoi', 'etat'])
-
 
 
 class HistoriqueCotisation(BaseModel):
