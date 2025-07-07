@@ -1263,8 +1263,8 @@ const RappelManager = (function() {
             
             // Si planifié, combiner date et heure
             if (formData.planifie) {
-                const datePlanif = document.getElementById('formDatePlanification').value;
-                const heurePlanif = document.getElementById('formHeurePlanification').value || '00:00';
+                const datePlanif = document.getElementById('datePlanification').value;      // ✅ Corrigé
+                const heurePlanif = document.getElementById('heurePlanification').value || '00:00';  // ✅ Corrigé
                 if (datePlanif) {
                     formData.date_planifiee = `${datePlanif}T${heurePlanif}`;
                 }
