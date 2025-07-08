@@ -258,6 +258,7 @@
 
 {% block extra_js %}
 {{ block.super }}
+<script src="{% static 'js/validation-antidup.js' %}"></script>
 <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
 <script src="{% static 'js/cotisations/cotisations.js' %}"></script>
 
@@ -306,7 +307,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeTransactionSelect) {
         typeTransactionSelect.addEventListener('change', function() {
             // Nettoyer les erreurs lors du changement de type de transaction
-            clearFieldErrors(montantInput);
+            if (typeof window.clearFieldErrors === 'function') {
+                window.clearFieldErrors(montantInput);
+            }
             
             if (this.value === 'paiement') {
                 // Pour un paiement, le montant ne peut pas dépasser le restant dû
@@ -355,7 +358,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Validateur principal - nous voulons qu'il s'exécute en premier
         paiementForm.addEventListener('submit', function(event) {
             // Réinitialiser toutes les erreurs au début
-            errorRegistry.clearErrors();
+            window._globalErrorRegistry.clearErrors();
             clearAllErrorMessages();
             
             let isValid = true;
@@ -412,12 +415,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Fonction pour supprimer tous les messages d'erreur de la page
     function clearAllErrorMessages() {
-        // Supprimer tous les messages d'erreur
+        // Utiliser la fonction globale si disponible
+        if (typeof window.clearValidationErrors === 'function') {
+            window.clearValidationErrors();
+            return;
+        }
+        
+        // Fallback local
         document.querySelectorAll('.invalid-feedback').forEach(el => {
             el.remove();
         });
         
-        // Retirer la classe d'invalidité de tous les champs
         document.querySelectorAll('.is-invalid').forEach(el => {
             el.classList.remove('is-invalid');
         });
@@ -425,6 +433,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Fonction pour nettoyer les erreurs d'un champ spécifique
     function clearFieldErrors(field) {
+        // Utiliser la fonction globale si disponible
+        if (typeof window.clearFieldErrors === 'function') {
+            return window.clearFieldErrors(field);
+        }
         if (!field) return;
         
         // Retirer la classe d'invalidité
