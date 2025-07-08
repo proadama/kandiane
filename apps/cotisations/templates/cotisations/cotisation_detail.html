@@ -396,7 +396,7 @@
                     <div class="mb-3">
                         <label for="formMontant" class="form-label">{% trans "Montant" %}</label>
                         <div class="input-group">
-                            <input type="number" class="form-control" id="formMontant" name="montant" value="{{ cotisation.montant_restant|floatformat:2 }}" min="0.01" step="0.01" required>
+                            <input type="number" class="form-control" id="formMontant" name="montant" min="0.01" step="0.01" required>
                             <span class="input-group-text">€</span>
                         </div>
                         <div id="montantHelp" class="form-text">
@@ -531,13 +531,13 @@
                             <div id="optionsPlanification" style="display: none;">
                                 <div class="row g-3">
                                     <div class="col-md-6">
-                                        <label for="formDatePlanification" class="form-label">{% trans "Date d'envoi" %}</label>
-                                        <input type="date" class="form-control" id="formDatePlanification" name="date_planification" min="{{ now|date:'Y-m-d' }}">
+                                        <label for="datePlanification" class="form-label">{% trans "Date d'envoi" %}</label>
+                                        <input type="date" class="form-control" id="datePlanification" name="date_planification" min="{{ now|date:'Y-m-d' }}">
                                         <div class="invalid-feedback" id="datePlanificationError"></div>
                                     </div>
                                     <div class="col-md-6">
-                                        <label for="formHeurePlanification" class="form-label">{% trans "Heure d'envoi" %}</label>
-                                        <input type="time" class="form-control" id="formHeurePlanification" name="heure_planification">
+                                        <label for="heurePlanification" class="form-label">{% trans "Heure d'envoi" %}</label>
+                                        <input type="time" class="form-control" id="heurePlanification" name="heure_planification">
                                         <div class="invalid-feedback" id="heurePlanificationError"></div>
                                     </div>
                                 </div>
@@ -661,7 +661,7 @@
     display: block;
 }
 
-/* Ajouter ces styles dans la section CSS du fichier cotisation_detail.html */
+/* Styles pour les boutons de template */
 .btn-template {
     transition: all 0.3s ease;
 }
@@ -870,9 +870,23 @@ const PaiementManager = (function() {
             dateInput.value = now.toISOString().slice(0, 16);
         }
         
+        // ✅ CORRECTION : Définir la valeur numérique correcte pour le montant
+        const montantInput = document.getElementById('formMontant');
+        if (montantInput) {
+            // Récupérer la valeur depuis l'attribut data et convertir en format numérique
+            const montantRestantElement = document.getElementById('montant-restant');
+            if (montantRestantElement) {
+                const montantValue = montantRestantElement.dataset.value;
+                // Convertir le format français (virgule) en format anglais (point) si nécessaire
+                const montantNumeric = parseFloat(montantValue.toString().replace(',', '.'));
+                if (!isNaN(montantNumeric)) {
+                    montantInput.value = montantNumeric.toFixed(2);
+                }
+            }
+        }
+        
         // Gérer le type de transaction
         const typeSelect = document.getElementById('formTypeTransaction');
-        const montantInput = document.getElementById('formMontant');
         
         if (typeSelect && montantInput) {
             typeSelect.addEventListener('change', function() {
@@ -1236,13 +1250,29 @@ const RappelManager = (function() {
         if (envoyerImmediatementSwitch && optionsPlanification) {
             envoyerImmediatementSwitch.addEventListener('change', function() {
                 optionsPlanification.style.display = this.checked ? 'none' : 'block';
+                
+                // ✅ CORRECTION : Définir des valeurs par défaut lors du passage à planifié
+                if (!this.checked) {
+                    const datePlanification = document.getElementById('datePlanification');
+                    const heurePlanification = document.getElementById('heurePlanification');
+                    
+                    if (datePlanification && !datePlanification.value) {
+                        const demain = new Date();
+                        demain.setDate(demain.getDate() + 1);
+                        datePlanification.value = demain.toISOString().split('T')[0];
+                    }
+                    
+                    if (heurePlanification && !heurePlanification.value) {
+                        heurePlanification.value = '09:00';
+                    }
+                }
             });
         }
         
         // Initialiser les templates de rappel
         initRappelTemplates();
         
-        // AJOUTER CETTE LIGNE - Mettre en surbrillance le bouton standard par défaut
+        // Mettre en surbrillance le bouton standard par défaut
         updateTemplateButtonStyles(document.getElementById('templateDefault'));
 
         // Soumission du formulaire
@@ -1258,15 +1288,18 @@ const RappelManager = (function() {
             // Récupérer les données du formulaire
             const formData = FormManager.serializeForm(rappelForm);
             
-            // Ajouter l'information sur la planification
-            formData.planifie = !document.getElementById('envoyerImmediatement').checked;
+            // ✅ CORRECTION : Gestion correcte de la planification
+            const envoyerImmediatementChecked = envoyerImmediatementSwitch && envoyerImmediatementSwitch.checked;
+            formData.planifie = envoyerImmediatementChecked ? 'false' : 'true';
             
             // Si planifié, combiner date et heure
-            if (formData.planifie) {
-                const datePlanif = document.getElementById('datePlanification').value;      // ✅ Corrigé
-                const heurePlanif = document.getElementById('heurePlanification').value || '00:00';  // ✅ Corrigé
-                if (datePlanif) {
-                    formData.date_planifiee = `${datePlanif}T${heurePlanif}`;
+            if (formData.planifie === 'true') {
+                const datePlanification = document.getElementById('datePlanification');
+                const heurePlanification = document.getElementById('heurePlanification');
+                
+                if (datePlanification && datePlanification.value) {
+                    const heurePlanif = (heurePlanification && heurePlanification.value) ? heurePlanification.value : '09:00';
+                    formData.date_planifiee = `${datePlanification.value}T${heurePlanif}`;
                 }
             }
             
@@ -1299,6 +1332,14 @@ const RappelManager = (function() {
                     
                     // Réinitialiser le formulaire
                     rappelForm.reset();
+                    
+                    // Réinitialiser les options de planification
+                    if (envoyerImmediatementSwitch) {
+                        envoyerImmediatementSwitch.checked = true;
+                        if (optionsPlanification) {
+                            optionsPlanification.style.display = 'none';
+                        }
+                    }
                 } else {
                     // Afficher les erreurs
                     if (data.errors) {
@@ -1314,13 +1355,13 @@ const RappelManager = (function() {
                 }
             })
             .catch(error => {
-                console.error('Erreur:', error);
-                NotificationManager.showToast("{% trans 'Une erreur est survenue lors de la communication avec le serveur' %}", 'error');
+                console.error('Erreur complète:', error);
+                NotificationManager.showToast("{% trans 'Une erreur est survenue lors de la communication avec le serveur' %}: " + error.message, 'error');
             });
         });
     }
 
-    // Fonction pour mettre à jour les styles des boutons de modèle
+    // ✅ CORRECTION : Fonction sécurisée pour les boutons de modèle
     function updateTemplateButtonStyles(activeButton) {
         if (!activeButton) return;
         
@@ -1328,7 +1369,7 @@ const RappelManager = (function() {
             document.getElementById('templateDefault'),
             document.getElementById('templateUrgent'),
             document.getElementById('templateFormal')
-        ];
+        ].filter(button => button !== null); // Filtrer les éléments null
         
         templateButtons.forEach(button => {
             if (!button) return;
@@ -1356,21 +1397,22 @@ const RappelManager = (function() {
         const templateFormalBtn = document.getElementById('templateFormal');
         const formContenu = document.getElementById('formContenu');
         
-        if (!templateDefaultBtn || !formContenu) return;
+        if (!formContenu) return;
         
         // Template standard
-        templateDefaultBtn.addEventListener('click', function() {
-            const prenom = document.getElementById('membre-prenom')?.textContent?.trim() || '{prenom}';
-            const reference = document.getElementById('cotisation-reference')?.textContent?.trim() || '{reference}';
-            const montant = document.getElementById('montant-restant')?.dataset?.value || '{montant}';
-            const dateEcheance = document.querySelector('#cotisation-echeance')?.textContent?.trim().split('\n')[0] || '{date_echeance}';
-            
-            // Calculer la date limite (échéance + 7 jours)
-            const dateLimite = new Date();
-            dateLimite.setDate(dateLimite.getDate() + 7);
-            const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
-            
-            formContenu.value = `Cher/Chère ${prenom},
+        if (templateDefaultBtn) {
+            templateDefaultBtn.addEventListener('click', function() {
+                const prenom = document.getElementById('membre-prenom')?.textContent?.trim() || '{prenom}';
+                const reference = document.getElementById('cotisation-reference')?.textContent?.trim() || '{reference}';
+                const montant = document.getElementById('montant-restant')?.dataset?.value || '{montant}';
+                const dateEcheance = document.querySelector('#cotisation-echeance')?.textContent?.trim().split('\n')[0] || '{date_echeance}';
+                
+                // Calculer la date limite (échéance + 7 jours)
+                const dateLimite = new Date();
+                dateLimite.setDate(dateLimite.getDate() + 7);
+                const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
+                
+                formContenu.value = `Cher/Chère ${prenom},
 
 Nous vous rappelons que votre cotisation (réf. ${reference}) d'un montant restant dû de ${montant} € est arrivée à échéance le ${dateEcheance}.
 
@@ -1378,21 +1420,25 @@ Nous vous remercions de bien vouloir procéder au règlement avant le ${dateLimi
 
 Cordialement,
 L'équipe de l'association`;
-        });
+
+                updateTemplateButtonStyles(this);
+            });
+        }
         
         // Template urgent
-        templateUrgentBtn.addEventListener('click', function() {
-            const prenom = document.getElementById('membre-prenom')?.textContent?.trim() || '{prenom}';
-            const reference = document.getElementById('cotisation-reference')?.textContent?.trim() || '{reference}';
-            const montant = document.getElementById('montant-restant')?.dataset?.value || '{montant}';
-            const dateEcheance = document.querySelector('#cotisation-echeance')?.textContent?.trim().split('\n')[0] || '{date_echeance}';
-            
-            // Calculer la date limite (aujourd'hui + 5 jours)
-            const dateLimite = new Date();
-            dateLimite.setDate(dateLimite.getDate() + 5);
-            const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
-            
-            formContenu.value = `Cher/Chère ${prenom},
+        if (templateUrgentBtn) {
+            templateUrgentBtn.addEventListener('click', function() {
+                const prenom = document.getElementById('membre-prenom')?.textContent?.trim() || '{prenom}';
+                const reference = document.getElementById('cotisation-reference')?.textContent?.trim() || '{reference}';
+                const montant = document.getElementById('montant-restant')?.dataset?.value || '{montant}';
+                const dateEcheance = document.querySelector('#cotisation-echeance')?.textContent?.trim().split('\n')[0] || '{date_echeance}';
+                
+                // Calculer la date limite (aujourd'hui + 5 jours)
+                const dateLimite = new Date();
+                dateLimite.setDate(dateLimite.getDate() + 5);
+                const dateLimiteStr = dateLimite.toLocaleDateString('fr-FR');
+                
+                formContenu.value = `Cher/Chère ${prenom},
 
 RAPPEL URGENT : Votre cotisation (réf. ${reference}) d'un montant de ${montant} € est en retard de paiement depuis le ${dateEcheance}.
 
@@ -1402,7 +1448,10 @@ Pour toute question ou difficulté, n'hésitez pas à nous contacter rapidement.
 
 Cordialement,
 L'équipe de l'association`;
-        });
+
+                updateTemplateButtonStyles(this);
+            });
+        }
         
         // Template formel
         if (templateFormalBtn) {
@@ -1431,6 +1480,8 @@ Nous vous mettons donc en demeure de procéder au règlement intégral de cette 
 Veuillez agréer, Madame, Monsieur, l'expression de nos salutations distinguées.
 
 La Direction`;
+
+                updateTemplateButtonStyles(this);
             });
         }
     }
@@ -1468,12 +1519,31 @@ La Direction`;
             isValid = false;
         }
         
-        // Si planifié, vérifier la date
-        if (!form.querySelector('[name="envoyer_immediatement"]').checked) {
-            const dateInput = form.querySelector('[name="date_planification"]');
-            if (dateInput && !dateInput.value) {
+        // ✅ CORRECTION : Vérifier la planification si nécessaire
+        const envoyerImmediatementSwitch = document.getElementById('envoyerImmediatement');
+        if (envoyerImmediatementSwitch && !envoyerImmediatementSwitch.checked) {
+            const datePlanification = document.getElementById('datePlanification');
+            const heurePlanification = document.getElementById('heurePlanification');
+            
+            if (datePlanification && !datePlanification.value) {
                 errors.date_planification = ["{% trans 'Veuillez saisir une date d\'envoi' %}"];
                 isValid = false;
+            }
+            
+            if (heurePlanification && !heurePlanification.value) {
+                errors.heure_planification = ["{% trans 'Veuillez saisir une heure d\'envoi' %}"];
+                isValid = false;
+            }
+            
+            // Vérifier que la date/heure est dans le futur
+            if (datePlanification && datePlanification.value && heurePlanification && heurePlanification.value) {
+                const now = new Date();
+                const planifiedDate = new Date(`${datePlanification.value}T${heurePlanification.value}`);
+                
+                if (planifiedDate <= now) {
+                    errors.date_planification = ["{% trans 'La date et l\'heure d\'envoi doivent être dans le futur' %}"];
+                    isValid = false;
+                }
             }
         }
         
@@ -1585,7 +1655,7 @@ La Direction`;
             `<td class="text-center">
                 <div class="btn-group">
                     ${rappelData.etat.toLowerCase().includes('planifie') ? 
-                    `<a href="/cotisations/envoyer_rappel/${rappelData.id}/" class="btn btn-sm btn-outline-success">
+                    `<a href="/cotisations/rappels/${rappelData.id}/envoyer/" class="btn btn-sm btn-outline-success">
                         <i class="fas fa-paper-plane" aria-hidden="true"></i> {% trans "Envoyer" %}
                     </a>` : ''}
                     <a href="/cotisations/rappels/${rappelData.id}/" class="btn btn-sm btn-outline-primary">
@@ -1602,9 +1672,15 @@ La Direction`;
         updatedTableBody.insertBefore(row, updatedTableBody.firstChild);
         
         // Mettre à jour les gestionnaires d'événements pour le nouveau bouton "voir contenu"
-        row.querySelector('.voir-contenu').addEventListener('click', function() {
-            document.getElementById('contenuRappel').textContent = this.getAttribute('data-contenu');
-        });
+        const voirContenuBtn = row.querySelector('.voir-contenu');
+        if (voirContenuBtn) {
+            voirContenuBtn.addEventListener('click', function() {
+                const contenuRappel = document.getElementById('contenuRappel');
+                if (contenuRappel) {
+                    contenuRappel.textContent = this.getAttribute('data-contenu');
+                }
+            });
+        }
         
         // Animer l'apparition avec un délai pour permettre au DOM de se mettre à jour
         setTimeout(() => {
@@ -1629,8 +1705,9 @@ const UiManager = (function() {
         document.querySelectorAll('.voir-contenu').forEach(btn => {
             btn.addEventListener('click', function() {
                 const contenu = this.getAttribute('data-contenu');
-                if (contenu) {
-                    document.getElementById('contenuRappel').textContent = contenu;
+                const contenuRappel = document.getElementById('contenuRappel');
+                if (contenu && contenuRappel) {
+                    contenuRappel.textContent = contenu;
                 }
             });
         });
@@ -1645,8 +1722,11 @@ const UiManager = (function() {
                     displayHistoryDetails(details);
                 } catch (e) {
                     console.error('Erreur lors du parsing des détails:', e);
-                    document.getElementById('detailsTableBody').innerHTML = 
-                        '<tr><td colspan="2">{% trans "Erreur lors du chargement des détails." %}</td></tr>';
+                    const detailsTableBody = document.getElementById('detailsTableBody');
+                    if (detailsTableBody) {
+                        detailsTableBody.innerHTML = 
+                            '<tr><td colspan="2">{% trans "Erreur lors du chargement des détails." %}</td></tr>';
+                    }
                 }
             });
         });
@@ -1724,33 +1804,6 @@ const UiManager = (function() {
 
 // Initialisation à la fin du chargement de la page
 document.addEventListener('DOMContentLoaded', function() {
-    // Définir la date minimale pour la planification (aujourd'hui)
-    const formDatePlanification = document.getElementById('formDatePlanification');
-    const formHeurePlanification = document.getElementById('formHeurePlanification');
-    
-    if (formDatePlanification) {
-        // Définir la date minimum à aujourd'hui
-        const today = new Date();
-        const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        formDatePlanification.min = `${year}-${month}-${day}`;
-        
-        // Valider la combinaison date/heure lors de la soumission
-        document.getElementById('submitRappel').addEventListener('click', function(e) {
-            if (!document.getElementById('envoyerImmediatement').checked) {
-                const selectedDate = new Date(`${formDatePlanification.value}T${formHeurePlanification.value}`);
-                const now = new Date();
-                
-                if (selectedDate <= now) {
-                    e.preventDefault();
-                    alert("La date et l'heure d'envoi doivent être dans le futur");
-                    formDatePlanification.classList.add('is-invalid');
-                    return false;
-                }
-            }
-        });
-    }
     // Initialiser la gestion des formulaires
     FormManager.initFormHandlers();
     

@@ -13,6 +13,10 @@ import tempfile
 import traceback
 from decimal import Decimal, InvalidOperation
 from django.db import connection
+from django.views.decorators.http import require_http_methods
+from django.utils import timezone
+from datetime import datetime
+
 # Importations Django
 from django.contrib import messages
 from django import forms
@@ -947,118 +951,150 @@ class RappelCreateView(StaffRequiredMixin, CreateView):
             return reverse('cotisations:cotisation_detail', kwargs={'pk': self.cotisation.pk})
         return reverse('cotisations:cotisation_liste')
 
-@require_POST
+@login_required
+@require_http_methods(["POST"])
 def rappel_create_ajax(request, cotisation_id):
     """
-    Vue AJAX pour créer un rappel depuis la page de détail d'une cotisation.
+    Vue AJAX pour créer un rappel rapidement depuis le modal
     """
-    cotisation = get_object_or_404(Cotisation, pk=cotisation_id)
-    membre = cotisation.membre
-    
-    # Pour les requêtes AJAX avec JSON
-    if request.content_type == 'application/json':
-        try:
-            data = json.loads(request.body)
-            
-            # Créer un dictionnaire de données pour le formulaire
-            form_data = {
-                'type_rappel': data.get('type_rappel'),
-                'niveau': data.get('niveau'),
-                'contenu': data.get('contenu'),
-            }
-            
-            # Traiter les options de planification
-            if data.get('planifie') == 'true' and data.get('date_planifiee'):
-                # Si l'envoi est planifié, on garde l'état 'planifie'
-                etat = 'planifie'
-                # Convertir la date planifiée en datetime
-                try:
-                    date_planifiee = datetime.datetime.fromisoformat(data.get('date_planifiee'))
-                    form_data['date_envoi'] = date_planifiee
-                except (ValueError, TypeError):
-                    error_message = _("Format de date invalide")
-                    return JsonResponse({
-                        'success': False,
-                        'message': error_message
-                    }, encoder=ExtendedJSONEncoder, status=400)
-            else:
-                # Si envoi immédiat, on marque comme envoyé
-                etat = 'envoye'
-                form_data['date_envoi'] = timezone.now()
-            
-            form_data['etat'] = etat
-            
-            # Utiliser None comme user si non authentifié
-            user = request.user if request.user.is_authenticated else None
-            form = RappelForm(form_data, user=user, cotisation=cotisation, membre=membre)
-            
-            if form.is_valid():
-                rappel = form.save()
-                
-                # Pour les rappels à envoyer immédiatement, simuler l'envoi
-                if etat == 'envoye':
-                    # Ici, vous pouvez ajouter votre logique d'envoi de mail, SMS, etc.
-                    pass
-                
-                success_message = _("Le rappel a été créé avec succès.")
-                
-                # Retourner les infos sur le rappel créé
-                return JsonResponse({
-                    'success': True,
-                    'rappel': {
-                        'id': rappel.id,
-                        'date_envoi': rappel.date_envoi.strftime('%Y-%m-%dT%H:%M:%S'),
-                        'type_rappel': str(rappel.get_type_rappel_display()),
-                        'niveau': rappel.niveau,
-                        'etat': str(rappel.get_etat_display()),
-                        'contenu': rappel.contenu
-                    },
-                    'message': success_message
-                }, encoder=ExtendedJSONEncoder)
-            else:
-                error_message = _("Erreur lors de la création du rappel.")
-                return JsonResponse({
-                    'success': False,
-                    'errors': form.errors.as_json(),
-                    'message': error_message
-                }, encoder=ExtendedJSONEncoder)
-        except json.JSONDecodeError:
-            error_message = _("Format de données invalide.")
-            return JsonResponse({
-                'success': False,
-                'message': error_message
-            }, encoder=ExtendedJSONEncoder, status=400)
-    
-    # Pour les requêtes standard
-    else:
-        # Utiliser None comme user si non authentifié
-        user = request.user if request.user.is_authenticated else None
-        form = RappelForm(request.POST, user=user, cotisation=cotisation, membre=membre)
+    try:
+        # Récupérer la cotisation
+        cotisation = get_object_or_404(Cotisation, pk=cotisation_id)
         
-        if form.is_valid():
-            rappel = form.save()
-            
-            success_message = _("Le rappel a été créé avec succès.")
-            
-            return JsonResponse({
-                'success': True,
-                'rappel': {
-                    'id': rappel.id,
-                    'date_envoi': rappel.date_envoi.strftime('%Y-%m-%dT%H:%M:%S'),
-                    'type_rappel': str(rappel.get_type_rappel_display()),
-                    'niveau': rappel.niveau,
-                    'etat': str(rappel.get_etat_display()),
-                    'contenu': rappel.contenu
-                },
-                'message': success_message
-            }, encoder=ExtendedJSONEncoder)
-        else:
-            error_message = _("Erreur lors de la création du rappel.")
+        # Vérifier les permissions
+        if not request.user.is_staff:
             return JsonResponse({
                 'success': False,
-                'errors': form.errors.as_json(),
-                'message': error_message
-            }, encoder=ExtendedJSONEncoder)
+                'message': 'Permission refusée'
+            }, status=403)
+        
+        # Récupérer les données JSON
+        data = json.loads(request.body)
+        
+        # Validation des données requises
+        required_fields = ['type_rappel', 'niveau', 'contenu']
+        errors = {}
+        
+        for field in required_fields:
+            if field not in data or not data[field]:
+                errors[field] = [f"Le champ {field} est requis"]
+        
+        # Validation spécifique du niveau
+        try:
+            niveau = int(data.get('niveau', 0))
+            if niveau < 1 or niveau > 5:
+                errors['niveau'] = ["Le niveau doit être entre 1 et 5"]
+        except (ValueError, TypeError):
+            errors['niveau'] = ["Le niveau doit être un nombre entier"]
+        
+        # Validation du type de rappel
+        types_valides = ['email', 'sms', 'courrier', 'appel']
+        if data.get('type_rappel') not in types_valides:
+            errors['type_rappel'] = ["Type de rappel invalide"]
+        
+        # Validation du contenu
+        contenu = data.get('contenu', '').strip()
+        if len(contenu) < 10:
+            errors['contenu'] = ["Le contenu doit contenir au moins 10 caractères"]
+        elif len(contenu) > 2000:
+            errors['contenu'] = ["Le contenu ne peut pas dépasser 2000 caractères"]
+        
+        # Gestion de la date d'envoi
+        date_envoi = timezone.now()
+        planifie = data.get('planifie', 'false').lower() == 'true'
+        
+        if planifie:
+            date_planifiee_str = data.get('date_planifiee')
+            if date_planifiee_str:
+                try:
+                    # Parser la date au format ISO (YYYY-MM-DDTHH:MM)
+                    date_envoi = datetime.fromisoformat(date_planifiee_str.replace('Z', '+00:00'))
+                    if timezone.is_naive(date_envoi):
+                        date_envoi = timezone.make_aware(date_envoi)
+                    
+                    # Vérifier que la date est dans le futur
+                    if date_envoi <= timezone.now():
+                        errors['date_planification'] = ["La date d'envoi doit être dans le futur"]
+                except ValueError:
+                    errors['date_planification'] = ["Format de date invalide"]
+            else:
+                errors['date_planification'] = ["Date de planification requise"]
+        
+        # Si des erreurs, retourner les erreurs
+        if errors:
+            return JsonResponse({
+                'success': False,
+                'message': 'Données invalides',
+                'errors': json.dumps(errors)
+            }, status=400)
+        
+        # Créer le rappel
+        rappel = Rappel.objects.create(
+            cotisation=cotisation,
+            membre=cotisation.membre,
+            type_rappel=data['type_rappel'],
+            niveau=niveau,
+            contenu=contenu,
+            date_envoi=date_envoi,
+            etat=RAPPEL_ETAT_PLANIFIE if planifie else RAPPEL_ETAT_PLANIFIE,
+            cree_par=request.user
+        )
+        
+        # Si envoi immédiat, tenter d'envoyer le rappel
+        if not planifie:
+            try:
+                # Marquer comme envoyé immédiatement
+                rappel.marquer_comme_envoye()
+                rappel.etat = RAPPEL_ETAT_ENVOYE
+                rappel.save()
+                message_success = f"Rappel créé et envoyé avec succès à {cotisation.membre.prenom} {cotisation.membre.nom}"
+            except Exception as e:
+                # En cas d'erreur d'envoi, garder le rappel comme planifié
+                rappel.etat = RAPPEL_ETAT_ECHOUE
+                rappel.resultat = f"Erreur lors de l'envoi: {str(e)}"
+                rappel.save()
+                message_success = f"Rappel créé mais l'envoi a échoué: {str(e)}"
+        else:
+            message_success = f"Rappel planifié avec succès pour le {date_envoi.strftime('%d/%m/%Y à %H:%M')}"
+        
+        # Préparer les données du rappel pour la réponse
+        rappel_data = {
+            'id': rappel.id,
+            'type_rappel': rappel.get_type_rappel_display(),
+            'niveau': rappel.niveau,
+            'etat': rappel.get_etat_display(),
+            'contenu': rappel.contenu,
+            'date_envoi': rappel.date_envoi.isoformat()
+        }
+        
+        return JsonResponse({
+            'success': True,
+            'message': message_success,
+            'rappel': rappel_data
+        })
+        
+    except Cotisation.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Cotisation non trouvée'
+        }, status=404)
+    
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Données JSON invalides'
+        }, status=400)
+    
+    except Exception as e:
+        # Logger l'erreur pour le débogage
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erreur lors de la création du rappel AJAX: {str(e)}", exc_info=True)
+        
+        return JsonResponse({
+            'success': False,
+            'message': f'Erreur interne du serveur: {str(e)}'
+        }, status=500)
 
 
 @login_required
