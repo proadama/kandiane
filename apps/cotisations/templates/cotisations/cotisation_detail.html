@@ -1,4 +1,4 @@
-<!-- Version 4 -->
+<!-- Version corrigée - cotisation_detail.html -->
 {% extends "cotisations/base.html" %}
 {% load i18n %}
 {% load static %}
@@ -237,7 +237,7 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center bg-light">
                     <h5 class="card-title mb-0">{% trans "Rappels" %}</h5>
-                    <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#rappelModal">
+                    <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#rappelModal" id="rappelModalTrigger">
                         <i class="fas fa-plus" aria-hidden="true"></i> {% trans "Créer un rappel" %}
                     </button>
                 </div>
@@ -382,12 +382,12 @@
 </div>
 
 <!-- Modal pour l'ajout rapide de paiement -->
-<div class="modal fade" id="paiementModal" tabindex="-1" aria-labelledby="paiementModalLabel" aria-hidden="true">
+<div class="modal fade" id="paiementModal" tabindex="-1" aria-labelledby="paiementModalLabel" aria-modal="true" role="dialog">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="paiementModalLabel">{% trans "Ajouter un paiement" %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Fermer' %}"></button>
             </div>
             <div class="modal-body">
                 <form id="paiementAjaxForm" data-cotisation-id="{{ cotisation.pk }}" novalidate>
@@ -464,12 +464,12 @@
 </div>
 
 <!-- Modal pour l'ajout rapide de rappel -->
-<div class="modal fade" id="rappelModal" tabindex="-1" aria-labelledby="rappelModalLabel" aria-hidden="true">
+<div class="modal fade" id="rappelModal" tabindex="-1" aria-labelledby="rappelModalLabel" aria-modal="true" role="dialog">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="rappelModalLabel">{% trans "Créer un rappel" %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Fermer' %}"></button>
             </div>
             <div class="modal-body">
                 <form id="rappelAjaxForm" data-cotisation-id="{{ cotisation.pk }}" novalidate>
@@ -548,7 +548,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans "Annuler" %}</button>
-                <button type="button" class="btn btn-warning" id="submitRappel">
+                <button type="button" class="btn btn-warning" id="submitRappel" aria-describedby="rappelModalLabel">
                     <i class="fas fa-bell" aria-hidden="true"></i> {% trans "Créer le rappel" %}
                 </button>
             </div>
@@ -557,12 +557,12 @@
 </div>
 
 <!-- Modal pour afficher le contenu des rappels -->
-<div class="modal fade" id="contenuModal" tabindex="-1" aria-labelledby="contenuModalLabel" aria-hidden="true">
+<div class="modal fade" id="contenuModal" tabindex="-1" aria-labelledby="contenuModalLabel" aria-modal="true" role="dialog">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="contenuModalLabel">{% trans "Contenu du rappel" %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Fermer' %}"></button>
             </div>
             <div class="modal-body">
                 <pre id="contenuRappel" class="p-3 bg-light rounded"></pre>
@@ -575,12 +575,12 @@
 </div>
 
 <!-- Modal pour afficher les détails de l'historique -->
-<div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalLabel" aria-hidden="true">
+<div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalLabel" aria-modal="true" role="dialog">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="detailsModalLabel">{% trans "Détails de l'action" %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% trans 'Fermer' %}"></button>
             </div>
             <div class="modal-body">
                 <div id="detailsHistorique" class="p-3 bg-light rounded">
@@ -603,7 +603,7 @@
     <div class="toast-header">
       <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
       <strong class="me-auto" id="toastTitle"></strong>
-      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="{% trans 'Fermer' %}"></button>
     </div>
     <div class="toast-body" id="toastBody"></div>
   </div>
@@ -676,13 +676,24 @@
     color: #6c757d;
     border-color: #ced4da;
 }
+
+/* Amélioration focus pour accessibilité */
+.modal:focus {
+    outline: none;
+}
+
+.modal-content {
+    border: 2px solid transparent;
+}
+
+.modal.show .modal-content {
+    border-color: #007bff;
+}
 </style>
 {% endblock %}
 
 {% block extra_js %}
 {{ block.super }}
-<!-- Bibliothèques JS externes -->
-<!-- <script src="{% static 'js/cotisations/form-validation.js' %}"></script> -->
 <script>
 /**
  * Module de gestion des formulaires
@@ -851,6 +862,82 @@ const NotificationManager = (function() {
 })();
 
 /**
+ * Module de gestion de l'accessibilité des modals
+ */
+const ModalAccessibilityManager = (function() {
+    function init() {
+        // Gestion du modal de paiement
+        const paiementModal = document.getElementById('paiementModal');
+        const paiementButton = document.querySelector('[data-bs-target="#paiementModal"]');
+        
+        if (paiementModal) {
+            setupModalAccessibility(paiementModal, paiementButton);
+        }
+        
+        // Gestion du modal de rappel
+        const rappelModal = document.getElementById('rappelModal');
+        const rappelButton = document.getElementById('rappelModalTrigger');
+        
+        if (rappelModal) {
+            setupModalAccessibility(rappelModal, rappelButton);
+        }
+        
+        // Gestion des autres modals
+        const contenuModal = document.getElementById('contenuModal');
+        const detailsModal = document.getElementById('detailsModal');
+        
+        if (contenuModal) {
+            setupModalAccessibility(contenuModal);
+        }
+        
+        if (detailsModal) {
+            setupModalAccessibility(detailsModal);
+        }
+    }
+    
+    function setupModalAccessibility(modal, triggerButton) {
+        if (!modal) return;
+        
+        // Événement à l'ouverture du modal
+        modal.addEventListener('shown.bs.modal', function () {
+            // Supprimer aria-hidden quand le modal est ouvert
+            this.removeAttribute('aria-hidden');
+            
+            // Donner le focus au premier champ du formulaire ou au bouton de fermeture
+            const firstInput = this.querySelector('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])');
+            const closeButton = this.querySelector('.btn-close');
+            
+            if (firstInput) {
+                setTimeout(() => firstInput.focus(), 100);
+            } else if (closeButton) {
+                setTimeout(() => closeButton.focus(), 100);
+            }
+        });
+        
+        // Événement à la fermeture du modal
+        modal.addEventListener('hidden.bs.modal', function () {
+            // Remettre le focus sur le bouton qui a ouvert le modal
+            if (triggerButton && document.contains(triggerButton)) {
+                triggerButton.focus();
+            }
+        });
+        
+        // Événement avant la fermeture (pour éviter le conflit)
+        modal.addEventListener('hide.bs.modal', function () {
+            // Supprimer le focus des éléments internes avant la fermeture
+            const focusedElement = this.querySelector(':focus');
+            if (focusedElement && focusedElement !== this.querySelector('.btn-close')) {
+                focusedElement.blur();
+            }
+        });
+    }
+    
+    return {
+        init
+    };
+})();
+
+/**
  * Module de gestion des paiements
  */
 const PaiementManager = (function() {
@@ -870,7 +957,7 @@ const PaiementManager = (function() {
             dateInput.value = now.toISOString().slice(0, 16);
         }
         
-        // ✅ CORRECTION : Définir la valeur numérique correcte pour le montant
+        // Définir la valeur numérique correcte pour le montant
         const montantInput = document.getElementById('formMontant');
         if (montantInput) {
             // Récupérer la valeur depuis l'attribut data et convertir en format numérique
@@ -931,11 +1018,20 @@ const PaiementManager = (function() {
         submitBtn.addEventListener('click', function(e) {
             e.preventDefault();
             
+            // Désactiver le bouton pour éviter les clics multiples
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> {% trans "Enregistrement..." %}';
+            
             // Réinitialiser les erreurs
             FormManager.resetFormErrors(paiementForm);
             
             // Valider le formulaire côté client
-            if (!validatePaiementForm(paiementForm)) return;
+            if (!validatePaiementForm(paiementForm)) {
+                // Réactiver le bouton
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-save" aria-hidden="true"></i> {% trans "Enregistrer le paiement" %}';
+                return;
+            }
             
             // Récupérer les données du formulaire
             const formData = FormManager.serializeForm(paiementForm);
@@ -987,6 +1083,11 @@ const PaiementManager = (function() {
             .catch(error => {
                 console.error('Erreur:', error);
                 NotificationManager.showToast("{% trans 'Une erreur est survenue lors de la communication avec le serveur' %}", 'error');
+            })
+            .finally(() => {
+                // Réactiver le bouton
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-save" aria-hidden="true"></i> {% trans "Enregistrer le paiement" %}';
             });
         });
     }
@@ -1251,7 +1352,7 @@ const RappelManager = (function() {
             envoyerImmediatementSwitch.addEventListener('change', function() {
                 optionsPlanification.style.display = this.checked ? 'none' : 'block';
                 
-                // ✅ CORRECTION : Définir des valeurs par défaut lors du passage à planifié
+                // Définir des valeurs par défaut lors du passage à planifié
                 if (!this.checked) {
                     const datePlanification = document.getElementById('datePlanification');
                     const heurePlanification = document.getElementById('heurePlanification');
@@ -1279,16 +1380,25 @@ const RappelManager = (function() {
         submitBtn.addEventListener('click', function(e) {
             e.preventDefault();
             
+            // Désactiver le bouton pour éviter les clics multiples
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> {% trans "Création..." %}';
+            
             // Réinitialiser les erreurs
             FormManager.resetFormErrors(rappelForm);
             
             // Valider le formulaire côté client
-            if (!validateRappelForm(rappelForm)) return;
+            if (!validateRappelForm(rappelForm)) {
+                // Réactiver le bouton
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-bell" aria-hidden="true"></i> {% trans "Créer le rappel" %}';
+                return;
+            }
             
             // Récupérer les données du formulaire
             const formData = FormManager.serializeForm(rappelForm);
             
-            // ✅ CORRECTION : Gestion correcte de la planification
+            // Gestion correcte de la planification
             const envoyerImmediatementChecked = envoyerImmediatementSwitch && envoyerImmediatementSwitch.checked;
             formData.planifie = envoyerImmediatementChecked ? 'false' : 'true';
             
@@ -1357,11 +1467,16 @@ const RappelManager = (function() {
             .catch(error => {
                 console.error('Erreur complète:', error);
                 NotificationManager.showToast("{% trans 'Une erreur est survenue lors de la communication avec le serveur' %}: " + error.message, 'error');
+            })
+            .finally(() => {
+                // Réactiver le bouton
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-bell" aria-hidden="true"></i> {% trans "Créer le rappel" %}';
             });
         });
     }
 
-    // ✅ CORRECTION : Fonction sécurisée pour les boutons de modèle
+    // Fonction sécurisée pour les boutons de modèle
     function updateTemplateButtonStyles(activeButton) {
         if (!activeButton) return;
         
@@ -1519,7 +1634,7 @@ La Direction`;
             isValid = false;
         }
         
-        // ✅ CORRECTION : Vérifier la planification si nécessaire
+        // Vérifier la planification si nécessaire
         const envoyerImmediatementSwitch = document.getElementById('envoyerImmediatement');
         if (envoyerImmediatementSwitch && !envoyerImmediatementSwitch.checked) {
             const datePlanification = document.getElementById('datePlanification');
@@ -1806,6 +1921,9 @@ const UiManager = (function() {
 document.addEventListener('DOMContentLoaded', function() {
     // Initialiser la gestion des formulaires
     FormManager.initFormHandlers();
+    
+    // Initialiser la gestion de l'accessibilité des modals
+    ModalAccessibilityManager.init();
     
     // Initialiser les gestionnaires UI
     UiManager.init();
