@@ -175,8 +175,9 @@
                                 {% endif %}
                                 <small class="form-text text-muted">
                                     {% trans "Dates suggérées" %}:
-                                    <a href="#" class="set-date" data-date="{{ today|date:'Y-m-d' }}T{{ now|date:'H:i' }}">{% trans "Aujourd'hui" %}</a>,
-                                    <a href="#" class="set-date" data-date="{{ today|add_days:1|date:'Y-m-d' }}T{{ now|date:'H:i' }}">{% trans "Demain" %}</a>
+                                    <a href="#" class="set-date-now">{% trans "Maintenant" %}</a>,
+                                    <a href="#" class="set-date-today">{% trans "Aujourd'hui 9h" %}</a>,
+                                    <a href="#" class="set-date-tomorrow">{% trans "Demain 9h" %}</a>
                                 </small>
                                 {% if form.date_paiement.errors %}
                                 <div class="invalid-feedback d-block">
@@ -290,13 +291,52 @@ document.addEventListener('DOMContentLoaded', function() {
     const dateInput = document.getElementById('id_date_paiement');
     
     // Gérer les liens de date rapide
-    document.querySelectorAll('.set-date').forEach(link => {
+    // Gérer les liens de date rapide avec génération côté client
+    document.querySelectorAll('.set-date-now, .set-date-today, .set-date-tomorrow').forEach(link => {
         link.addEventListener('click', function(e) {
             e.preventDefault();
-            dateInput.value = this.getAttribute('data-date');
+            
+            let targetDate = new Date();
+            
+            if (this.classList.contains('set-date-now')) {
+                // Maintenant : date et heure actuelles
+                // Pas de modification de targetDate
+            } else if (this.classList.contains('set-date-today')) {
+                // Aujourd'hui à 9h
+                targetDate.setHours(9, 0, 0, 0);
+            } else if (this.classList.contains('set-date-tomorrow')) {
+                // Demain à 9h
+                targetDate.setDate(targetDate.getDate() + 1);
+                targetDate.setHours(9, 0, 0, 0);
+            }
+            
+            // Convertir au format datetime-local (yyyy-MM-ddThh:mm)
+            const year = targetDate.getFullYear();
+            const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+            const day = String(targetDate.getDate()).padStart(2, '0');
+            const hours = String(targetDate.getHours()).padStart(2, '0');
+            const minutes = String(targetDate.getMinutes()).padStart(2, '0');
+            
+            const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}`;
+            
+            if (dateInput) {
+                dateInput.value = formattedDate;
+            }
         });
     });
     
+    // Initialiser la date de paiement avec la date/heure actuelle
+    if (dateInput && !dateInput.value) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        
+        dateInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
     {% if cotisation and not form.instance.pk %}
     // Pour les nouveaux paiements, appliquer des restrictions au montant
     // Convertir la valeur avec virgule en valeur avec point pour JavaScript
