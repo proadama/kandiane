@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import tempfile
+from datetime import datetime as dt
 import traceback
 from decimal import Decimal, InvalidOperation
 from django.db import connection
@@ -1006,7 +1007,7 @@ def rappel_create_ajax(request, cotisation_id):
             if date_planifiee_str:
                 try:
                     # Parser la date au format ISO (YYYY-MM-DDTHH:MM)
-                    date_envoi = datetime.fromisoformat(date_planifiee_str.replace('Z', '+00:00'))
+                    date_envoi = dt.fromisoformat(date_planifiee_str.replace('Z', '+00:00'))
                     if timezone.is_naive(date_envoi):
                         date_envoi = timezone.make_aware(date_envoi)
                     

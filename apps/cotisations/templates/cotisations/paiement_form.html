@@ -259,7 +259,7 @@
 
 {% block extra_js %}
 {{ block.super }}
-<script src="{% static 'js/validation-antidup.js' %}"></script>
+<!-- <script src="{% static 'js/validation-antidup.js' %}"></script> -->
 <script src="{% static 'js/cotisations/form-validation.js' %}"></script>
 <script src="{% static 'js/cotisations/cotisations.js' %}"></script>
 
@@ -529,16 +529,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Ajouter le message d'erreur au conteneur
         container.appendChild(errorDiv);
-    }
-    
-    // Remplacer la fonction highlightField d'autres scripts si elle existe
-    if (window.highlightField) {
-        const originalHighlightField = window.highlightField;
-        window.highlightField = function(field, message) {
-            // Utiliser notre implémentation qui évite les duplications
-            highlightField(field, message);
-        };
-    }
+    }  
+
 });
 </script>
 {% endblock extra_js %}
