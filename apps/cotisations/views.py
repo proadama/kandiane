@@ -15,7 +15,6 @@ from decimal import Decimal, InvalidOperation
 from django.db import connection
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
-from datetime import datetime
 
 # Importations Django
 from django.contrib import messages
@@ -83,7 +82,6 @@ class ExtendedJSONEncoder(DjangoJSONEncoder):
         elif isinstance(obj, datetime.datetime):
             return obj.isoformat()
         return super().default(obj)
-
 
 #
 # Vues pour le tableau de bord
