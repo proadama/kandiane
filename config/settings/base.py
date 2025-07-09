@@ -33,6 +33,7 @@ LOCAL_APPS = [
     'apps.core',
     'apps.accounts',
     'apps.membres',
+    'apps.evenements',
     'apps.cotisations',
     'django_apscheduler',
 ]
