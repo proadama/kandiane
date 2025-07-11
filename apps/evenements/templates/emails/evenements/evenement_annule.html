@@ -1,0 +1,79 @@
+<!-- templates/emails/evenements/evenement_annule.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annulation d'événement</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background-color: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; }
+        .alert { padding: 15px; border-radius: 5px; margin: 20px 0; background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .sorry-card { background-color: white; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; margin: 20px 0; }
+        .btn { display: inline-block; padding: 12px 24px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; color: #6c757d; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>❌ Annulation d'événement</h1>
+        <p>{{ site_name }}</p>
+    </div>
+    
+    <div class="content">
+        <p>Bonjour <strong>{{ recipient_name }}</strong>,</p>
+        
+        <div class="alert">
+            <strong>⚠️ Annulation :</strong> Nous sommes désolés de vous informer que l'événement <strong>{{ evenement.titre }}</strong> a été annulé.
+        </div>
+        
+        <div class="sorry-card">
+            <h3>💔 Nous sommes désolés</h3>
+            <p>L'événement <strong>{{ evenement.titre }}</strong> prévu le <strong>{{ evenement.date_debut|date:"l d F Y à H:i" }}</strong> a dû être annulé.</p>
+            
+            {% if raison %}
+            <div style="margin-top: 20px;">
+                <h4>📝 Raison de l'annulation :</h4>
+                <p style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #dc3545;">
+                    {{ raison }}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div style="background-color: white; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; margin: 20px 0;">
+            <h3>📋 Détails de l'événement annulé</h3>
+            <p><strong>🎯 Titre :</strong> {{ evenement.titre }}</p>
+            <p><strong>📅 Date prévue :</strong> {{ evenement.date_debut|date:"l d F Y à H:i" }}</p>
+            <p><strong>📍 Lieu :</strong> {{ evenement.lieu }}</p>
+            <p><strong>👤 Organisateur :</strong> {{ evenement.organisateur.get_full_name }}</p>
+        </div>
+        
+        <div style="background-color: #d1ecf1; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h4>🔄 Prochaines étapes :</h4>
+            <ul>
+                <li>Votre inscription a été automatiquement annulée</li>
+                <li>Si vous aviez effectué un paiement, vous serez remboursé(e)</li>
+                <li>Vous recevrez des informations sur le remboursement sous 48h</li>
+                <li>Surveillez nos prochains événements qui pourraient vous intéresser</li>
+            </ul>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ url_evenement }}" class="btn">
+                👁️ Voir la page de l'événement
+            </a>
+        </div>
+        
+        <p>Nous nous excusons pour ce désagrément et espérons vous retrouver bientôt lors d'un prochain événement.</p>
+        
+        <p>Cordialement,<br>
+        L'équipe {{ site_name }}</p>
+    </div>
+    
+    <div class="footer">
+        <p>© {{ current_year }} {{ site_name }}<br><a href="{{ site_url }}">{{ site_url }}</a></p>
+    </div>
+</body>
+</html>

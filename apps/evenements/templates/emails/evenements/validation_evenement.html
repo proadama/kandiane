@@ -1,0 +1,71 @@
+<!-- templates/emails/evenements/validation_evenement.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validation d'événement requise</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #6f42c1; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background-color: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; }
+        .validation-card { background-color: white; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; margin: 20px 0; }
+        .btn { display: inline-block; padding: 12px 24px; background-color: #6f42c1; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
+        .btn-primary { background-color: #007bff; }
+        .urgent { background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border: 1px solid #ffeaa7; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; color: #6c757d; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 Validation requise</h1>
+        <p>{{ site_name }}</p>
+    </div>
+    
+    <div class="content">
+        <p>Bonjour <strong>{{ recipient_name }}</strong>,</p>
+        
+        <p>Un nouvel événement nécessite votre validation avant d'être publié.</p>
+        
+        <div class="validation-card">
+            <h3>📋 Événement à valider</h3>
+            <p><strong>🎯 Titre :</strong> {{ evenement.titre }}</p>
+            <p><strong>📅 Date :</strong> {{ evenement.date_debut|date:"l d F Y à H:i" }}</p>
+            <p><strong>📍 Lieu :</strong> {{ evenement.lieu }}</p>
+            <p><strong>👤 Organisateur :</strong> {{ evenement.organisateur.get_full_name }}</p>
+            <p><strong>🎯 Type :</strong> {{ evenement.type_evenement.libelle }}</p>
+            <p><strong>👥 Capacité :</strong> {{ evenement.capacite_max }} participants</p>
+        </div>
+        
+        <div style="background-color: #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h4>📝 Description :</h4>
+            <p>{{ evenement.description }}</p>
+        </div>
+        
+        {% if evenement.date_debut < now|add_days:7 %}
+        <div class="urgent">
+            <h4>⚠️ Validation urgente</h4>
+            <p>Cet événement a lieu dans moins de 7 jours. Une validation rapide est recommandée.</p>
+        </div>
+        {% endif %}
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ url_validation }}" class="btn">
+                🔍 Valider l'événement
+            </a>
+            <a href="{{ url_evenement }}" class="btn btn-primary">
+                👁️ Voir les détails
+            </a>
+        </div>
+        
+        <p>Merci de traiter cette demande de validation dans les meilleurs délais.</p>
+        
+        <p>Cordialement,<br>
+        L'équipe {{ site_name }}</p>
+    </div>
+    
+    <div class="footer">
+        <p>© {{ current_year }} {{ site_name }}<br><a href="{{ site_url }}">{{ site_url }}</a></p>
+    </div>
+</body>
+</html>

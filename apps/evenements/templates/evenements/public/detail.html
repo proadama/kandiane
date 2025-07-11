@@ -1,0 +1,580 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block title %}{{ evenement.titre }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.hero-event {
+    background: linear-gradient(rgba(0,123,255,0.8), rgba(0,86,179,0.8)), 
+                url('{{ evenement.image.url|default:"/static/img/default-event.jpg" }}') center/cover;
+    color: white;
+    padding: 4rem 0;
+    position: relative;
+}
+
+.event-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 2rem;
+    font-weight: 500;
+    margin-bottom: 1rem;
+}
+
+.info-card {
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    padding: 2rem;
+    margin-top: -3rem;
+    position: relative;
+    z-index: 10;
+}
+
+.detail-item {
+    display: flex;
+    align-items: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.detail-item:last-child {
+    border-bottom: none;
+}
+
+.detail-icon {
+    width: 50px;
+    height: 50px;
+    background: #f8f9fa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    flex-shrink: 0;
+}
+
+.price-highlight {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    text-align: center;
+    margin: 2rem 0;
+}
+
+.organizer-card {
+    background: #f8f9fa;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.places-progress {
+    height: 0.5rem;
+    border-radius: 0.25rem;
+    background: #e9ecef;
+    overflow: hidden;
+    margin: 1rem 0;
+}
+
+.places-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.inscription-card {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+    border-radius: 1rem;
+    padding: 2rem;
+    text-align: center;
+    position: sticky;
+    top: 2rem;
+}
+
+.session-item {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+}
+
+.session-item:hover {
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.breadcrumb-custom {
+    background: rgba(248,249,250,0.8);
+    backdrop-filter: blur(10px);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+}
+
+.share-buttons {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+.share-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    text-decoration: none;
+    transition: transform 0.3s ease;
+}
+
+.share-btn:hover {
+    transform: scale(1.1);
+    color: white;
+}
+
+@media (max-width: 768px) {
+    .hero-event {
+        padding: 3rem 0;
+    }
+    
+    .info-card {
+        margin-top: -2rem;
+        padding: 1.5rem;
+    }
+    
+    .inscription-card {
+        position: static;
+        margin-top: 2rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="container mt-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb breadcrumb-custom">
+            <li class="breadcrumb-item">
+                <a href="{% url 'evenements:evenements_publics' %}" class="text-decoration-none">
+                    <i class="fas fa-calendar-alt me-1"></i>
+                    Événements
+                </a>
+            </li>
+            <li class="breadcrumb-item active">{{ evenement.titre|truncatechars:50 }}</li>
+        </ol>
+    </nav>
+</div>
+
+<!-- Hero Section -->
+<section class="hero-event">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="event-badge" style="background-color: {{ evenement.type_evenement.couleur_affichage }};">
+                    <i class="fas fa-tag me-2"></i>
+                    {{ evenement.type_evenement.libelle }}
+                </div>
+                
+                <h1 class="display-4 fw-bold mb-3">{{ evenement.titre }}</h1>
+                
+                <div class="d-flex flex-wrap gap-3 mb-4">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-calendar me-2"></i>
+                        <span>{{ evenement.date_debut|date:"l d F Y" }}</span>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-clock me-2"></i>
+                        <span>{{ evenement.date_debut|date:"H:i" }}{% if evenement.date_fin %} - {{ evenement.date_fin|date:"H:i" }}{% endif %}</span>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-map-marker-alt me-2"></i>
+                        <span>{{ evenement.lieu }}</span>
+                    </div>
+                </div>
+                
+                <!-- Partage social -->
+                <div class="share-buttons">
+                    <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri }}" 
+                       target="_blank" class="share-btn" style="background-color: #1877f2;">
+                        <i class="fab fa-facebook-f"></i>
+                    </a>
+                    <a href="https://twitter.com/intent/tweet?url={{ request.build_absolute_uri }}&text={{ evenement.titre }}" 
+                       target="_blank" class="share-btn" style="background-color: #1da1f2;">
+                        <i class="fab fa-twitter"></i>
+                    </a>
+                    <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.build_absolute_uri }}" 
+                       target="_blank" class="share-btn" style="background-color: #0077b5;">
+                        <i class="fab fa-linkedin-in"></i>
+                    </a>
+                    <a href="mailto:?subject={{ evenement.titre }}&body=Découvrez cet événement: {{ request.build_absolute_uri }}" 
+                       class="share-btn" style="background-color: #6c757d;">
+                        <i class="fas fa-envelope"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="container">
+    <div class="row">
+        <!-- Contenu principal -->
+        <div class="col-lg-8">
+            <!-- Carte d'informations -->
+            <div class="info-card">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="detail-item">
+                            <div class="detail-icon">
+                                <i class="fas fa-calendar-alt text-primary"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Date et Heure</h6>
+                                <p class="mb-0 text-muted">
+                                    {{ evenement.date_debut|date:"l d F Y à H:i" }}
+                                    {% if evenement.date_fin %}
+                                        <br><small>Fin : {{ evenement.date_fin|date:"H:i" }}</small>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="detail-item">
+                            <div class="detail-icon">
+                                <i class="fas fa-map-marker-alt text-danger"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Lieu</h6>
+                                <p class="mb-0 text-muted">
+                                    {{ evenement.lieu }}
+                                    {% if evenement.adresse_complete %}
+                                        <br><small>{{ evenement.adresse_complete }}</small>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="detail-item">
+                            <div class="detail-icon">
+                                <i class="fas fa-users text-info"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Capacité</h6>
+                                <p class="mb-0 text-muted">
+                                    {{ evenement.capacite_max }} place{{ evenement.capacite_max|pluralize }}
+                                    <br><small>{{ evenement.places_disponibles }} disponible{{ evenement.places_disponibles|pluralize }}</small>
+                                </p>
+                                
+                                <!-- Barre de progression des places -->
+                                <div class="places-progress">
+                                    <div class="places-fill bg-{% if evenement.taux_occupation > 80 %}danger{% elif evenement.taux_occupation > 60 %}warning{% else %}success{% endif %}" 
+                                         style="width: {{ evenement.taux_occupation }}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="detail-item">
+                            <div class="detail-icon">
+                                <i class="fas fa-{% if evenement.est_payant %}euro-sign text-warning{% else %}gift text-success{% endif %}"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Tarification</h6>
+                                <p class="mb-0 text-muted">
+                                    {% if evenement.est_payant %}
+                                        Membre : {{ evenement.tarif_membre }}€
+                                        <br><small>Salarié : {{ evenement.tarif_salarie }}€</small>
+                                    {% else %}
+                                        <span class="text-success fw-bold">Gratuit</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if evenement.permet_accompagnants %}
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-users me-2"></i>
+                        <strong>Accompagnants autorisés :</strong> 
+                        Vous pouvez inviter jusqu'à {{ evenement.nombre_max_accompagnants }} accompagnant{{ evenement.nombre_max_accompagnants|pluralize }}.
+                        {% if evenement.est_payant %}
+                            Tarif accompagnant : {{ evenement.tarif_invite }}€
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+            
+            <!-- Description -->
+            <div class="mt-4">
+                <h3 class="mb-3">
+                    <i class="fas fa-info-circle text-primary me-2"></i>
+                    Description
+                </h3>
+                <div class="bg-light p-4 rounded">
+                    {{ evenement.description|linebreaks }}
+                </div>
+            </div>
+            
+            <!-- Instructions particulières -->
+            {% if evenement.instructions_particulieres %}
+                <div class="mt-4">
+                    <h4 class="mb-3">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                        Instructions Particulières
+                    </h4>
+                    <div class="alert alert-warning">
+                        {{ evenement.instructions_particulieres|linebreaks }}
+                    </div>
+                </div>
+            {% endif %}
+            
+            <!-- Matériel requis -->
+            {% if evenement.materiel_requis %}
+                <div class="mt-4">
+                    <h4 class="mb-3">
+                        <i class="fas fa-tools text-info me-2"></i>
+                        Matériel Requis
+                    </h4>
+                    <div class="alert alert-info">
+                        {{ evenement.materiel_requis|linebreaks }}
+                    </div>
+                </div>
+            {% endif %}
+            
+            <!-- Sessions -->
+            {% if evenement.sessions.exists %}
+                <div class="mt-4">
+                    <h4 class="mb-3">
+                        <i class="fas fa-list-ol text-primary me-2"></i>
+                        Programme des Sessions
+                    </h4>
+                    
+                    {% for session in evenement.sessions.all %}
+                        <div class="session-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-2">
+                                        Session {{ session.ordre_session }} : {{ session.titre_session }}
+                                        {% if session.est_obligatoire %}
+                                            <span class="badge bg-danger ms-2">Obligatoire</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary ms-2">Optionnelle</span>
+                                        {% endif %}
+                                    </h6>
+                                    
+                                    {% if session.description_session %}
+                                        <p class="text-muted mb-2">{{ session.description_session }}</p>
+                                    {% endif %}
+                                    
+                                    <div class="d-flex gap-3 small text-muted">
+                                        <span>
+                                            <i class="fas fa-clock me-1"></i>
+                                            {{ session.date_debut_session|date:"H:i" }}
+                                            {% if session.date_fin_session %} - {{ session.date_fin_session|date:"H:i" }}{% endif %}
+                                        </span>
+                                        
+                                        {% if session.intervenant %}
+                                            <span>
+                                                <i class="fas fa-user me-1"></i>
+                                                {{ session.intervenant }}
+                                            </span>
+                                        {% endif %}
+                                        
+                                        {% if session.capacite_session %}
+                                            <span>
+                                                <i class="fas fa-users me-1"></i>
+                                                {{ session.capacite_session }} place{{ session.capacite_session|pluralize }}
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            
+            <!-- Organisateur -->
+            <div class="mt-4">
+                <h4 class="mb-3">
+                    <i class="fas fa-user-tie text-primary me-2"></i>
+                    Organisateur
+                </h4>
+                <div class="organizer-card">
+                    <div class="d-flex align-items-center justify-content-center">
+                        <div class="me-3">
+                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                                 style="width: 60px; height: 60px;">
+                                <i class="fas fa-user fa-2x"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <h6 class="mb-1">{{ evenement.organisateur.get_full_name }}</h6>
+                            <p class="text-muted mb-0">{{ evenement.organisateur.email }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <div class="inscription-card">
+                {% if evenement.est_payant %}
+                    <div class="price-highlight bg-white bg-opacity-20 rounded mb-3">
+                        <h3 class="mb-0">{{ evenement.tarif_membre }}€</h3>
+                        <small>Tarif membre</small>
+                    </div>
+                {% else %}
+                    <div class="price-highlight bg-white bg-opacity-20 rounded mb-3">
+                        <h3 class="mb-0">
+                            <i class="fas fa-gift me-2"></i>
+                            Gratuit
+                        </h3>
+                    </div>
+                {% endif %}
+                
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between text-white mb-2">
+                        <span>Places disponibles</span>
+                        <strong>{{ evenement.places_disponibles }}/{{ evenement.capacite_max }}</strong>
+                    </div>
+                    <div class="places-progress">
+                        <div class="places-fill bg-white bg-opacity-75" 
+                             style="width: {{ evenement.taux_occupation }}%"></div>
+                    </div>
+                </div>
+                
+                {% if evenement.inscriptions_ouvertes and evenement.places_disponibles > 0 %}
+                    <a href="{% url 'accounts:login' %}?next={% url 'evenements:inscription_creer' evenement.pk %}" 
+                       class="btn btn-light btn-lg w-100 mb-3">
+                        <i class="fas fa-user-plus me-2"></i>
+                        S'inscrire à l'Événement
+                    </a>
+                {% elif evenement.est_complet %}
+                    <button class="btn btn-light btn-lg w-100 mb-3" disabled>
+                        <i class="fas fa-users me-2"></i>
+                        Événement Complet
+                    </button>
+                {% else %}
+                    <button class="btn btn-light btn-lg w-100 mb-3" disabled>
+                        <i class="fas fa-lock me-2"></i>
+                        Inscriptions Fermées
+                    </button>
+                {% endif %}
+                
+                {% if not user.is_authenticated %}
+                    <p class="small text-white text-center mb-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Connectez-vous ou créez un compte pour vous inscrire
+                    </p>
+                    
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'accounts:login' %}" class="btn btn-outline-light">
+                            <i class="fas fa-sign-in-alt me-1"></i>
+                            Se connecter
+                        </a>
+                        <a href="{% url 'accounts:register' %}" class="btn btn-outline-light">
+                            <i class="fas fa-user-plus me-1"></i>
+                            Créer un compte
+                        </a>
+                    </div>
+                {% endif %}
+                
+                <hr class="border-white border-opacity-25">
+                
+                <div class="text-center">
+                    <h6 class="text-white mb-3">Informations Pratiques</h6>
+                    
+                    <div class="d-flex justify-content-between text-white mb-2">
+                        <span class="small">
+                            <i class="fas fa-clock me-1"></i>
+                            Confirmation
+                        </span>
+                        <span class="small">{{ evenement.delai_confirmation }}h</span>
+                    </div>
+                    
+                    {% if evenement.date_fermeture_inscriptions %}
+                        <div class="d-flex justify-content-between text-white mb-2">
+                            <span class="small">
+                                <i class="fas fa-calendar-times me-1"></i>
+                                Fermeture
+                            </span>
+                            <span class="small">{{ evenement.date_fermeture_inscriptions|date:"d/m H:i" }}</span>
+                        </div>
+                    {% endif %}
+                    
+                    <div class="mt-3">
+                        <a href="{% url 'evenements:evenements_publics' %}" 
+                           class="btn btn-outline-light btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i>
+                            Retour aux événements
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Section événements similaires -->
+<section class="bg-light py-5 mt-5">
+    <div class="container">
+        <h3 class="text-center mb-4">
+            <i class="fas fa-calendar-alt text-primary me-2"></i>
+            Autres Événements
+        </h3>
+        
+        <div class="row">
+            <!-- Ici on pourrait ajouter des événements similaires -->
+            <div class="col-12 text-center">
+                <a href="{% url 'evenements:evenements_publics' %}" class="btn btn-primary">
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    Voir Tous les Événements
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Animation de la barre de progression
+    const progressBar = document.querySelector('.places-fill');
+    if (progressBar) {
+        const targetWidth = progressBar.style.width;
+        progressBar.style.width = '0%';
+        setTimeout(() => {
+            progressBar.style.width = targetWidth;
+        }, 500);
+    }
+    
+    // Smooth scroll pour les liens d'ancrage
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

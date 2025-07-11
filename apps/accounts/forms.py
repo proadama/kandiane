@@ -157,6 +157,38 @@ class UserProfileForm(forms.ModelForm):
         widget=forms.ClearableFileInput(attrs={'class': 'form-control'})
     )
     
+    # AJOUTER ces champs de notification AVANT class Meta
+    notifications_evenement_invitation = forms.BooleanField(
+        required=False,
+        label=_("Invitations aux événements"),
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    notifications_evenement_rappel_confirmation = forms.BooleanField(
+        required=False,
+        label=_("Rappels de confirmation"),
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    notifications_evenement_modification = forms.BooleanField(
+        required=False,
+        label=_("Modifications d'événements"),
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    notifications_evenement_annulation = forms.BooleanField(
+        required=False,
+        label=_("Annulations d'événements"),
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    notifications_evenement_promotion_liste = forms.BooleanField(
+        required=False,
+        label=_("Promotions depuis liste d'attente"),
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    notifications_evenement_nouveau_type = forms.BooleanField(
+        required=False,
+        label=_("Nouveaux types d'événements"),
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
     class Meta:
         model = UserProfile
         fields = ('bio', 'date_naissance', 'adresse', 'ville', 'code_postal', 'pays')
@@ -177,6 +209,14 @@ class UserProfileForm(forms.ModelForm):
             self.fields['first_name'].initial = user.first_name
             self.fields['last_name'].initial = user.last_name
             self.fields['telephone'].initial = user.telephone
+
+            # AJOUTER - Initialiser les préférences de notification
+            if hasattr(user, 'profile'):
+                prefs = user.profile.get_all_notification_preferences()
+                for notif_type, enabled in prefs.items():
+                    field_name = f'notifications_{notif_type}'
+                    if field_name in self.fields:
+                        self.fields[field_name].initial = enabled
     
     def save(self, user=None, commit=True):
         profile = super().save(commit=False)
@@ -191,6 +231,16 @@ class UserProfileForm(forms.ModelForm):
         
         if commit:
             profile.save()
+            
+            # AJOUTER - Sauvegarder les préférences de notification
+            for notif_type in profile.NOTIFICATION_TYPES.keys():
+                field_name = f'notifications_{notif_type}'
+                if field_name in self.cleaned_data:
+                    profile.set_notification_preference(
+                        notif_type, 
+                        self.cleaned_data[field_name]
+                    )
+        
         return profile
 
 

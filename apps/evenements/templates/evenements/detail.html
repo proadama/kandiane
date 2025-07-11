@@ -1,0 +1,750 @@
+{% extends "evenements/base_evenement.html" %}
+{% load static %}
+
+{% block page_title %}{{ evenement.titre }}{% endblock page_title %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+.hero-section {
+    background: linear-gradient(135deg, rgba(0,123,255,0.8), rgba(108,117,125,0.8));
+    color: white;
+    padding: 3rem 0;
+    border-radius: 15px;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+.hero-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('{{ evenement.image.url }}');
+    background-size: cover;
+    background-position: center;
+    opacity: 0.3;
+    z-index: -1;
+}
+.info-card {
+    border: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    border-radius: 15px;
+    transition: transform 0.3s ease;
+}
+.info-card:hover {
+    transform: translateY(-2px);
+}
+.info-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
+.session-timeline {
+    position: relative;
+    padding-left: 30px;
+}
+.session-timeline::before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(to bottom, #007bff, #6c757d);
+    border-radius: 2px;
+}
+.session-item {
+    position: relative;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+.session-item::before {
+    content: '';
+    position: absolute;
+    left: -37px;
+    top: 1rem;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #007bff;
+    border: 3px solid white;
+    box-shadow: 0 0 0 3px #007bff;
+}
+.inscription-panel {
+    position: sticky;
+    top: 20px;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+    border: 3px solid #e9ecef;
+}
+.price-display {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #28a745;
+}
+.countdown-timer {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin: 1rem 0;
+}
+.countdown-item {
+    text-align: center;
+    padding: 0.5rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    min-width: 60px;
+}
+.countdown-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #007bff;
+}
+.countdown-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+.participant-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid white;
+    margin-left: -10px;
+    background: #007bff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    position: relative;
+    z-index: 1;
+}
+.participant-avatar:first-child {
+    margin-left: 0;
+}
+.status-alert {
+    border-radius: 10px;
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+.event-meta {
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-radius: 15px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+.share-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+</style>
+{% endblock extra_css %}
+
+{% block evenement_content %}
+<!-- Section héro -->
+<div class="hero-section" {% if evenement.image %}style="background-image: linear-gradient(135deg, rgba(0,123,255,0.8), rgba(108,117,125,0.8)), url('{{ evenement.image.url }}'); background-size: cover; background-position: center;"{% endif %}>
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <div class="mb-3">
+                    <span class="badge fs-6 me-2" style="background-color: {{ evenement.type_evenement.couleur_affichage }}">
+                        {{ evenement.type_evenement.libelle }}
+                    </span>
+                    <span class="badge bg-light text-dark fs-6">
+                        {{ evenement.get_statut_display }}
+                    </span>
+                </div>
+                <h1 class="display-4 fw-bold mb-3">{{ evenement.titre }}</h1>
+                <p class="lead mb-4">{{ evenement.description|truncatewords:30 }}</p>
+                
+                <!-- Informations rapides -->
+                <div class="row g-3">
+                    <div class="col-auto">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-calendar-alt fa-lg me-2"></i>
+                            <div>
+                                <div class="fw-bold">{{ evenement.date_debut|date:"d/m/Y" }}</div>
+                                <small>{{ evenement.date_debut|date:"H:i" }}{% if evenement.date_fin %} - {{ evenement.date_fin|date:"H:i" }}{% endif %}</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-map-marker-alt fa-lg me-2"></i>
+                            <div>
+                                <div class="fw-bold">{{ evenement.lieu }}</div>
+                                {% if evenement.adresse_complete %}
+                                <small>{{ evenement.adresse_complete|truncatewords:5 }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-users fa-lg me-2"></i>
+                            <div>
+                                <div class="fw-bold">{{ inscriptions_confirmees.count }}/{{ evenement.capacite_max }}</div>
+                                <small>participants</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 text-end">
+                <!-- Compte à rebours si événement à venir -->
+                {% if not evenement.est_termine %}
+                <div class="countdown-timer" data-date="{{ evenement.date_debut|date:'c' }}">
+                    <div class="countdown-item">
+                        <div class="countdown-number" data-unit="days">-</div>
+                        <div class="countdown-label">jours</div>
+                    </div>
+                    <div class="countdown-item">
+                        <div class="countdown-number" data-unit="hours">-</div>
+                        <div class="countdown-label">heures</div>
+                    </div>
+                    <div class="countdown-item">
+                        <div class="countdown-number" data-unit="minutes">-</div>
+                        <div class="countdown-label">min</div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Contenu principal -->
+    <div class="col-lg-8">
+        <!-- Messages d'alerte -->
+        {% if not peut_s_inscrire and message_inscription %}
+        <div class="alert status-alert alert-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            {{ message_inscription }}
+        </div>
+        {% endif %}
+        
+        {% if inscription_existante %}
+        <div class="alert status-alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            Vous êtes inscrit(e) à cet événement avec le statut : 
+            <span class="badge bg-primary">{{ inscription_existante.get_statut_display }}</span>
+            <a href="{% url 'evenements:inscription_detail' inscription_existante.pk %}" class="btn btn-sm btn-outline-primary ms-2">
+                Voir mon inscription
+            </a>
+        </div>
+        {% endif %}
+        
+        <!-- Description complète -->
+        <div class="card info-card mb-4">
+            <div class="card-body">
+                <h4 class="card-title mb-3">
+                    <i class="fas fa-info-circle text-primary me-2"></i>
+                    Description
+                </h4>
+                <div class="fs-6">
+                    {{ evenement.description|linebreaks }}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Métadonnées de l'événement -->
+        <div class="event-meta mb-4">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center">
+                        <div class="info-icon bg-primary text-white me-3">
+                            <i class="fas fa-user-tie"></i>
+                        </div>
+                        <div>
+                            <h6 class="mb-1">Organisateur</h6>
+                            <p class="mb-0">{{ evenement.organisateur.get_full_name }}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if evenement.duree_heures %}
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center">
+                        <div class="info-icon bg-info text-white me-3">
+                            <i class="fas fa-hourglass-half"></i>
+                        </div>
+                        <div>
+                            <h6 class="mb-1">Durée</h6>
+                            <p class="mb-0">{{ evenement.duree_heures|floatformat:1 }} heure{{ evenement.duree_heures|pluralize }}</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center">
+                        <div class="info-icon bg-success text-white me-3">
+                            <i class="fas fa-ticket-alt"></i>
+                        </div>
+                        <div>
+                            <h6 class="mb-1">Inscriptions</h6>
+                            <p class="mb-0">
+                                {% if evenement.inscriptions_ouvertes %}
+                                    Ouvertes
+                                    {% if evenement.date_fermeture_inscriptions %}
+                                    <br><small class="text-muted">Jusqu'au {{ evenement.date_fermeture_inscriptions|date:"d/m H:i" }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    Fermées
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if evenement.permet_accompagnants %}
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center">
+                        <div class="info-icon bg-warning text-white me-3">
+                            <i class="fas fa-user-friends"></i>
+                        </div>
+                        <div>
+                            <h6 class="mb-1">Accompagnants</h6>
+                            <p class="mb-0">Maximum {{ evenement.nombre_max_accompagnants }}</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Instructions particulières -->
+        {% if evenement.instructions_particulieres %}
+        <div class="card info-card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-exclamation-circle text-warning me-2"></i>
+                    Instructions particulières
+                </h5>
+                <div>{{ evenement.instructions_particulieres|linebreaks }}</div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Matériel requis -->
+        {% if evenement.materiel_requis %}
+        <div class="card info-card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-tools text-secondary me-2"></i>
+                    Matériel requis
+                </h5>
+                <div>{{ evenement.materiel_requis|linebreaks }}</div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Sessions -->
+        {% if sessions %}
+        <div class="card info-card mb-4">
+            <div class="card-body">
+                <h5 class="card-title mb-4">
+                    <i class="fas fa-clock text-info me-2"></i>
+                    Programme détaillé
+                </h5>
+                <div class="session-timeline">
+                    {% for session in sessions %}
+                    <div class="session-item">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="mb-1">
+                                {{ session.titre_session }}
+                                {% if session.est_obligatoire %}
+                                <span class="badge bg-danger ms-1">Obligatoire</span>
+                                {% endif %}
+                            </h6>
+                            <small class="text-muted">
+                                {{ session.date_debut_session|date:"H:i" }}
+                                {% if session.date_fin_session %} - {{ session.date_fin_session|date:"H:i" }}{% endif %}
+                            </small>
+                        </div>
+                        {% if session.description_session %}
+                        <p class="text-muted mb-2">{{ session.description_session }}</p>
+                        {% endif %}
+                        {% if session.intervenant %}
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-user text-primary me-2"></i>
+                            <small><strong>Intervenant:</strong> {{ session.intervenant }}</small>
+                        </div>
+                        {% endif %}
+                        {% if session.capacite_session %}
+                        <div class="d-flex align-items-center mt-1">
+                            <i class="fas fa-users text-success me-2"></i>
+                            <small><strong>Places:</strong> {{ session.capacite_session }}</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Participants confirmés -->
+        {% if inscriptions_confirmees %}
+        <div class="card info-card mb-4">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="fas fa-users text-success me-2"></i>
+                    Participants confirmés ({{ inscriptions_confirmees.count }})
+                </h5>
+                
+                <!-- Avatars des participants -->
+                <div class="d-flex align-items-center mb-3" style="overflow-x: auto;">
+                    {% for inscription in inscriptions_confirmees|slice:":10" %}
+                    <div class="participant-avatar" 
+                         title="{{ inscription.membre.prenom }} {{ inscription.membre.nom }}"
+                         data-bs-toggle="tooltip">
+                        {{ inscription.membre.prenom|first }}{{ inscription.membre.nom|first }}
+                    </div>
+                    {% endfor %}
+                    {% if inscriptions_confirmees.count > 10 %}
+                    <div class="participant-avatar bg-secondary">
+                        +{{ inscriptions_confirmees.count|add:"-10" }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if user.is_staff %}
+                <!-- Liste détaillée pour les staff -->
+                <div class="collapse" id="participantsList">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Nom</th>
+                                    <th>Date inscription</th>
+                                    <th>Accompagnants</th>
+                                    <th>Statut</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for inscription in inscriptions_confirmees %}
+                                <tr>
+                                    <td>{{ inscription.membre.prenom }} {{ inscription.membre.nom }}</td>
+                                    <td>{{ inscription.date_inscription|date:"d/m H:i" }}</td>
+                                    <td>{{ inscription.nombre_accompagnants }}</td>
+                                    <td>
+                                        <span class="badge bg-success">{{ inscription.get_statut_display }}</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" 
+                        type="button" data-bs-toggle="collapse" data-bs-target="#participantsList">
+                    <i class="fas fa-list me-1"></i>Voir la liste détaillée
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Liste d'attente -->
+        {% if liste_attente %}
+        <div class="card info-card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-hourglass-half text-warning me-2"></i>
+                    Liste d'attente ({{ liste_attente.count }})
+                </h5>
+                <p class="text-muted">Des places peuvent se libérer. Les personnes en liste d'attente seront notifiées automatiquement.</p>
+                {% if user.is_staff %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Position</th>
+                                <th>Nom</th>
+                                <th>Date inscription</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for inscription in liste_attente %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>{{ inscription.membre.prenom }} {{ inscription.membre.nom }}</td>
+                                <td>{{ inscription.date_inscription|date:"d/m H:i" }}</td>
+                                <td>
+                                    {% if evenement.places_disponibles > 0 %}
+                                    <button class="btn btn-sm btn-success" 
+                                            onclick="promouvoirInscription({{ inscription.pk }})">
+                                        <i class="fas fa-arrow-up me-1"></i>Promouvoir
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Sidebar droite -->
+    <div class="col-lg-4">
+        <!-- Panel d'inscription -->
+        <div class="inscription-panel p-4 mb-4">
+            {% if evenement.est_payant %}
+            <div class="text-center mb-3">
+                <div class="price-display">{{ evenement.tarif_membre }}€</div>
+                <small class="text-muted">tarif membre</small>
+                {% if evenement.tarif_invite != evenement.tarif_membre %}
+                <div class="mt-1">
+                    <small>Invités: {{ evenement.tarif_invite }}€</small>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="text-center mb-3">
+                <div class="price-display text-success">GRATUIT</div>
+            </div>
+            {% endif %}
+            
+            <!-- Progression des places -->
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small">Places disponibles</span>
+                    <span class="small">{{ evenement.places_disponibles }}/{{ evenement.capacite_max }}</span>
+                </div>
+                <div class="progress" style="height: 8px;">
+                    <div class="progress-bar {% if evenement.taux_occupation >= 80 %}bg-danger{% elif evenement.taux_occupation >= 60 %}bg-warning{% else %}bg-success{% endif %}" 
+                         style="width: {{ evenement.taux_occupation }}%"></div>
+                </div>
+            </div>
+            
+            <!-- Bouton d'inscription -->
+            {% if user.is_authenticated %}
+                {% if peut_s_inscrire %}
+                <div class="d-grid mb-3">
+                    <a href="{% url 'evenements:inscription_creer' evenement_pk=evenement.pk %}" 
+                       class="btn btn-primary btn-lg">
+                        <i class="fas fa-ticket-alt me-2"></i>S'inscrire maintenant
+                    </a>
+                </div>
+                {% elif inscription_existante %}
+                <div class="d-grid mb-3">
+                    <a href="{% url 'evenements:inscription_detail' inscription_existante.pk %}" 
+                       class="btn btn-success btn-lg">
+                        <i class="fas fa-check me-2"></i>Gérer mon inscription
+                    </a>
+                </div>
+                {% else %}
+                <div class="d-grid mb-3">
+                    <button class="btn btn-secondary btn-lg" disabled>
+                        <i class="fas fa-times me-2"></i>Inscription impossible
+                    </button>
+                </div>
+                {% endif %}
+            {% else %}
+            <div class="d-grid mb-3">
+                <a href="{% url 'accounts:login' %}?next={{ request.get_full_path }}" 
+                   class="btn btn-primary btn-lg">
+                    <i class="fas fa-sign-in-alt me-2"></i>Se connecter pour s'inscrire
+                </a>
+            </div>
+            {% endif %}
+            
+            <!-- Informations sur la confirmation -->
+            {% if evenement.delai_confirmation and peut_s_inscrire %}
+            <div class="alert alert-info small">
+                <i class="fas fa-info-circle me-1"></i>
+                Vous aurez {{ evenement.delai_confirmation }}h pour confirmer votre inscription.
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Partage -->
+        <div class="card info-card mb-4">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-share-alt me-2"></i>Partager cet événement
+                </h6>
+                <div class="share-buttons">
+                    <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri }}" 
+                       target="_blank" class="btn btn-outline-primary btn-sm">
+                        <i class="fab fa-facebook-f"></i>
+                    </a>
+                    <a href="https://twitter.com/intent/tweet?url={{ request.build_absolute_uri }}&text={{ evenement.titre|urlencode }}" 
+                       target="_blank" class="btn btn-outline-info btn-sm">
+                        <i class="fab fa-twitter"></i>
+                    </a>
+                    <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ request.build_absolute_uri }}" 
+                       target="_blank" class="btn btn-outline-dark btn-sm">
+                        <i class="fab fa-linkedin-in"></i>
+                    </a>
+                    <button class="btn btn-outline-secondary btn-sm" 
+                            onclick="copyToClipboard('{{ request.build_absolute_uri }}')">
+                        <i class="fas fa-link"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Actions administrateur -->
+        {% if user.is_staff %}
+        <div class="card info-card">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-cog me-2"></i>Actions administrateur
+                </h6>
+                <div class="d-grid gap-2">
+                    <a href="{% url 'evenements:modifier' evenement.pk %}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-edit me-1"></i>Modifier
+                    </a>
+                    <a href="{% url 'evenements:export:inscriptions_evenement' evenement.pk %}" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-download me-1"></i>Export inscrits
+                    </a>
+                    <a href="{% url 'evenements:export:badges' evenement.pk %}" class="btn btn-outline-info btn-sm">
+                        <i class="fas fa-id-badge me-1"></i>Badges participants
+                    </a>
+                    {% if evenement.statut != 'publie' %}
+                    <a href="{% url 'evenements:publier' evenement.pk %}" class="btn btn-outline-warning btn-sm">
+                        <i class="fas fa-eye me-1"></i>Publier
+                    </a>
+                    {% endif %}
+                    {% if evenement.sessions.count == 0 %}
+                    <a href="{% url 'evenements:sessions_liste' evenement.pk %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-calendar-plus me-1"></i>Gérer sessions
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock evenement_content %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Compte à rebours
+    const countdownTimer = document.querySelector('.countdown-timer');
+    if (countdownTimer) {
+        const eventDate = new Date(countdownTimer.dataset.date);
+        
+        function updateCountdown() {
+            const now = new Date();
+            const diff = eventDate - now;
+            
+            if (diff > 0) {
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                
+                document.querySelector('[data-unit="days"]').textContent = days;
+                document.querySelector('[data-unit="hours"]').textContent = hours;
+                document.querySelector('[data-unit="minutes"]').textContent = minutes;
+            } else {
+                countdownTimer.innerHTML = '<div class="text-center w-100"><strong>Événement en cours</strong></div>';
+            }
+        }
+        
+        updateCountdown();
+        setInterval(updateCountdown, 60000); // Mise à jour chaque minute
+    }
+    
+    // Animation des cartes
+    const infoCards = document.querySelectorAll('.info-card');
+    infoCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 200);
+    });
+});
+
+// Fonction pour promouvoir une inscription depuis la liste d'attente
+function promouvoirInscription(inscriptionId) {
+    if (confirm('Promouvoir cette inscription depuis la liste d\'attente ?')) {
+        fetch(`{% url 'evenements:ajax:promouvoir_liste_attente' pk=0 %}`.replace('0', inscriptionId), {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erreur: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            alert('Une erreur est survenue');
+        });
+    }
+}
+
+// Fonction pour copier le lien dans le presse-papiers
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        // Afficher une notification temporaire
+        const btn = event.target.closest('button');
+        const originalIcon = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        btn.classList.add('btn-success');
+        btn.classList.remove('btn-outline-secondary');
+        
+        setTimeout(() => {
+            btn.innerHTML = originalIcon;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-secondary');
+        }, 2000);
+    });
+}
+
+// Mise à jour en temps réel des places disponibles
+setInterval(function() {
+    fetch(`{% url 'evenements:ajax:places_disponibles' pk=evenement.pk %}`)
+        .then(response => response.json())
+        .then(data => {
+            // Mettre à jour l'affichage des places
+            const placesText = document.querySelector('.places-count');
+            if (placesText) {
+                placesText.textContent = `${data.places_disponibles}/${data.capacite_max}`;
+            }
+            
+            // Mettre à jour la barre de progression
+            const progressBar = document.querySelector('.progress-bar');
+            if (progressBar) {
+                progressBar.style.width = data.taux_occupation + '%';
+                progressBar.className = `progress-bar ${data.taux_occupation >= 80 ? 'bg-danger' : data.taux_occupation >= 60 ? 'bg-warning' : 'bg-success'}`;
+            }
+        })
+        .catch(error => console.log('Erreur mise à jour places:', error));
+}, 30000); // Toutes les 30 secondes
+</script>
+{% endblock extra_js %}

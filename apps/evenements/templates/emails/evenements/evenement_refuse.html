@@ -1,0 +1,72 @@
+<!-- templates/emails/evenements/evenement_refuse.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Événement refusé</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background-color: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; }
+        .refusal-card { background-color: #f8d7da; padding: 20px; border-radius: 8px; border: 1px solid #f5c6cb; margin: 20px 0; }
+        .btn { display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; color: #6c757d; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>❌ Événement refusé</h1>
+        <p>{{ site_name }}</p>
+    </div>
+    
+    <div class="content">
+        <p>Bonjour <strong>{{ recipient_name }}</strong>,</p>
+        
+        <div class="refusal-card">
+            <h3>⚠️ Validation refusée</h3>
+            <p>Nous sommes désolés de vous informer que votre événement <strong>{{ evenement.titre }}</strong> n'a pas été approuvé.</p>
+        </div>
+        
+        <div style="background-color: white; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; margin: 20px 0;">
+            <h3>📋 Détails de votre événement</h3>
+            <p><strong>🎯 Titre :</strong> {{ evenement.titre }}</p>
+            <p><strong>📅 Date :</strong> {{ evenement.date_debut|date:"l d F Y à H:i" }}</p>
+            <p><strong>📍 Lieu :</strong> {{ evenement.lieu }}</p>
+            <p><strong>📊 Statut :</strong> <span style="color: #dc3545; font-weight: bold;">Refusé</span></p>
+        </div>
+        
+        {% if commentaire %}
+        <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border: 1px solid #ffeaa7;">
+            <h4>💬 Commentaire du validateur :</h4>
+            <p style="font-style: italic; color: #856404;">{{ commentaire }}</p>
+        </div>
+        {% endif %}
+        
+        <div style="background-color: #d1ecf1; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h4>🔄 Que faire maintenant ?</h4>
+            <ul>
+                <li>Lisez attentivement les commentaires du validateur</li>
+                <li>Modifiez votre événement selon les recommandations</li>
+                <li>Soumettez à nouveau votre événement pour validation</li>
+                <li>Contactez l'équipe si vous avez des questions</li>
+            </ul>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ url_evenement }}" class="btn">
+                ✏️ Modifier mon événement
+            </a>
+        </div>
+        
+        <p>Ne vous découragez pas ! Vous pouvez modifier votre événement et le soumettre à nouveau pour validation.</p>
+        
+        <p>Cordialement,<br>
+        L'équipe {{ site_name }}</p>
+    </div>
+    
+    <div class="footer">
+        <p>© {{ current_year }} {{ site_name }}<br><a href="{{ site_url }}">{{ site_url }}</a></p>
+    </div>
+</body>
+</html>

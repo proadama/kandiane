@@ -428,6 +428,103 @@ class Membre(BaseModel):
             }
         )
     
+
+    def get_historique_evenements(self, limite=None):
+        """Récupère l'historique des événements du membre"""
+        from apps.evenements.models import InscriptionEvenement
+        
+        inscriptions = InscriptionEvenement.objects.filter(
+            membre=self
+        ).select_related('evenement', 'evenement__type_evenement').order_by('-date_inscription')
+        
+        if limite:
+            inscriptions = inscriptions[:limite]
+        
+        return inscriptions
+
+    def get_evenements_confirmes(self):
+        """Récupère les événements confirmés du membre"""
+        from apps.evenements.models import InscriptionEvenement
+        
+        return InscriptionEvenement.objects.filter(
+            membre=self,
+            statut__in=['confirmee', 'presente']
+        ).select_related('evenement')
+
+    def get_prochains_evenements(self):
+        """Récupère les prochains événements du membre"""
+        from apps.evenements.models import InscriptionEvenement
+        from django.utils import timezone
+        
+        return InscriptionEvenement.objects.filter(
+            membre=self,
+            statut__in=['confirmee', 'en_attente'],
+            evenement__date_debut__gte=timezone.now()
+        ).select_related('evenement').order_by('evenement__date_debut')
+
+    def get_statistiques_participation(self):
+        """Calcule les statistiques de participation aux événements"""
+        from apps.evenements.models import InscriptionEvenement
+        from django.db.models import Count, Sum
+        
+        stats = {
+            'total_inscriptions': 0,
+            'inscriptions_confirmees': 0,
+            'inscriptions_presentes': 0,
+            'inscriptions_annulees': 0,
+            'total_accompagnants': 0,
+            'montant_total_paye': 0,
+            'evenements_par_type': {},
+            'taux_presence': 0,
+            'membre_depuis': (timezone.now().date() - self.date_adhesion).days
+        }
+        
+        inscriptions = InscriptionEvenement.objects.filter(membre=self)
+        
+        if inscriptions.exists():
+            aggregats = inscriptions.aggregate(
+                total=Count('id'),
+                confirmees=Count('id', filter=models.Q(statut='confirmee')),
+                presentes=Count('id', filter=models.Q(statut='presente')),
+                annulees=Count('id', filter=models.Q(statut='annulee')),
+                total_accompagnants=Sum('nombre_accompagnants'),
+                montant_total=Sum('montant_paye')
+            )
+            
+            stats.update({
+                'total_inscriptions': aggregats['total'] or 0,
+                'inscriptions_confirmees': aggregats['confirmees'] or 0,
+                'inscriptions_presentes': aggregats['presentes'] or 0,
+                'inscriptions_annulees': aggregats['annulees'] or 0,
+                'total_accompagnants': aggregats['total_accompagnants'] or 0,
+                'montant_total_paye': float(aggregats['montant_total'] or 0)
+            })
+            
+            # Taux de présence
+            total_participe = stats['inscriptions_confirmees'] + stats['inscriptions_presentes']
+            if total_participe > 0:
+                stats['taux_presence'] = round((stats['inscriptions_presentes'] / total_participe) * 100, 1)
+            
+            # Événements par type
+            from apps.evenements.models import TypeEvenement
+            for type_evt in TypeEvenement.objects.all():
+                count = inscriptions.filter(
+                    evenement__type_evenement=type_evt,
+                    statut__in=['confirmee', 'presente']
+                ).count()
+                if count > 0:
+                    stats['evenements_par_type'][type_evt.libelle] = count
+        
+        return stats
+
+    def est_eligible_pour_evenement(self, evenement):
+        """Vérifie si le membre est éligible pour un événement"""
+        return evenement.verifier_eligibilite_membre(self)
+
+    def get_tarif_pour_evenement(self, evenement):
+        """Récupère le tarif applicable pour un événement"""
+        return evenement.calculer_tarif_membre(self)
+
     @property
     def nom_complet(self):
         """Retourne le nom complet du membre"""

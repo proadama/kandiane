@@ -1,0 +1,37 @@
+<!-- templates/emails/evenements/invitation_evenement.txt -->
+Bonjour {{ recipient_name }},
+
+Nous avons le plaisir de vous inviter à participer à l'événement suivant :
+
+{{ evenement.titre }}
+
+📅 Date : {{ evenement.date_debut|date:"l d F Y à H:i" }}
+{% if evenement.date_fin %}🏁 Fin : {{ evenement.date_fin|date:"l d F Y à H:i" }}{% endif %}
+📍 Lieu : {{ evenement.lieu }}
+👥 Capacité : {{ evenement.capacite_max }} participants
+💰 Tarif : {% if evenement.est_payant %}{{ evenement.tarif_membre }}€ (membres){% else %}Gratuit{% endif %}
+🎯 Type : {{ evenement.type_evenement.libelle }}
+
+Description :
+{{ evenement.description }}
+
+{% if evenement.instructions_particulieres %}
+Instructions particulières :
+{{ evenement.instructions_particulieres }}
+{% endif %}
+
+Pour vous inscrire : {{ url_inscription }}
+Pour voir les détails : {{ url_detail }}
+
+Informations importantes :
+- Places limitées à {{ evenement.capacite_max }} participants
+{% if evenement.permet_accompagnants %}- Accompagnants autorisés (max {{ evenement.nombre_max_accompagnants }}){% endif %}
+- Délai de confirmation : {{ evenement.delai_confirmation }} heures
+- Organisateur : {{ evenement.organisateur.get_full_name }}
+
+N'attendez pas, les places sont limitées !
+
+Cordialement,
+L'équipe {{ site_name }}
+
+{{ site_url }}

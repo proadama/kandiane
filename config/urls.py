@@ -35,6 +35,7 @@ urlpatterns = [
     path('accounts/', include('apps.accounts.urls')),
     path('membres/', include('apps.membres.urls')),
     path('cotisations/', include('apps.cotisations.urls')),
+    path('evenements/', include('apps.evenements.urls')),
     path('favicon.ico', RedirectView.as_view(url='/static/img/favicon.ico')),
 
     # Ajouter un alias pour faciliter l'accès à la page de login

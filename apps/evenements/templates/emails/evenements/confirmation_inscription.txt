@@ -1,0 +1,36 @@
+<!-- templates/emails/evenements/confirmation_inscription.txt -->
+Bonjour {{ recipient_name }},
+
+Votre inscription à l'événement "{{ evenement.titre }}" a été enregistrée avec succès.
+
+⚠️ ACTION REQUISE : Vous devez confirmer votre inscription dans les {{ delai_heures }} heures pour que votre place soit définitivement réservée.
+
+📋 Récapitulatif de votre inscription :
+🎯 Événement : {{ evenement.titre }}
+📅 Date : {{ evenement.date_debut|date:"l d F Y à H:i" }}
+📍 Lieu : {{ evenement.lieu }}
+👤 Participant : {{ membre.prenom }} {{ membre.nom }}
+{% if inscription.nombre_accompagnants > 0 %}👥 Accompagnants : {{ inscription.nombre_accompagnants }}{% endif %}
+💰 Montant : {% if montant_total > 0 %}{{ montant_total }}€{% else %}Gratuit{% endif %}
+📊 Statut : {% if inscription.statut == 'en_attente' %}En attente de confirmation{% elif inscription.statut == 'liste_attente' %}En liste d'attente{% endif %}
+
+{% if inscription.statut == 'en_attente' %}
+Pour confirmer votre inscription : {{ url_confirmation }}
+{% elif inscription.statut == 'liste_attente' %}
+ℹ️ Liste d'attente : L'événement est complet, mais vous êtes en liste d'attente. Nous vous notifierons dès qu'une place se libère.
+{% endif %}
+
+Pour voir les détails : {{ url_detail }}
+
+📝 Prochaines étapes :
+1. Confirmez votre inscription
+{% if montant_total > 0 %}2. Procédez au paiement si l'événement est payant{% endif %}
+3. Recevez votre confirmation définitive
+4. Préparez-vous pour l'événement !
+
+Si vous avez des questions, n'hésitez pas à nous contacter.
+
+À bientôt,
+L'équipe {{ site_name }}
+
+{{ site_url }}

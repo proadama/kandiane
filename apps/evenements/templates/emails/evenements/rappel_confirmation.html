@@ -1,0 +1,137 @@
+<!-- templates/emails/evenements/rappel_confirmation.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rappel de confirmation</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            padding: 20px; 
+        }
+        .header { 
+            background-color: #ffc107; 
+            color: #212529; 
+            padding: 20px; 
+            text-align: center; 
+            border-radius: 8px 8px 0 0; 
+        }
+        .content { 
+            background-color: #f8f9fa; 
+            padding: 30px; 
+            border-radius: 0 0 8px 8px; 
+        }
+        .alert { 
+            padding: 15px; 
+            border-radius: 5px; 
+            margin: 20px 0; 
+        }
+        .alert-warning { 
+            background-color: #fff3cd; 
+            border: 1px solid #ffeaa7; 
+            color: #856404; 
+        }
+        .btn { 
+            display: inline-block; 
+            padding: 12px 24px; 
+            background-color: #dc3545; 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 5px; 
+            margin: 10px 5px; 
+            font-weight: bold; 
+        }
+        .btn-success { 
+            background-color: #28a745; 
+        }
+        .countdown { 
+            background-color: #fff3cd; 
+            border: 2px solid #ffc107; 
+            padding: 20px; 
+            border-radius: 8px; 
+            text-align: center; 
+            margin: 20px 0; 
+        }
+        .countdown h2 { 
+            color: #856404; 
+            margin: 0; 
+        }
+        .footer { 
+            text-align: center; 
+            margin-top: 30px; 
+            padding-top: 20px; 
+            border-top: 1px solid #dee2e6; 
+            color: #6c757d; 
+            font-size: 14px; 
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⏰ RAPPEL URGENT</h1>
+        <p>Confirmation d'inscription requise</p>
+    </div>
+    
+    <div class="content">
+        <p>Bonjour <strong>{{ recipient_name }}</strong>,</p>
+        
+        <p>Votre inscription à l'événement <strong>{{ evenement.titre }}</strong> expire bientôt !</p>
+        
+        <div class="countdown">
+            <h2>⏳ Plus que {{ heures_restantes }} heure{% if heures_restantes > 1 %}s{% endif %}</h2>
+            <p>pour confirmer votre inscription</p>
+        </div>
+        
+        <div class="alert alert-warning">
+            <strong>⚠️ Action urgente requise :</strong> Si vous ne confirmez pas votre inscription dans les 
+            <strong>{{ heures_restantes }} heure{% if heures_restantes > 1 %}s{% endif %}</strong>, 
+            votre place sera automatiquement libérée pour les membres en liste d'attente.
+        </div>
+        
+        <div style="background-color: white; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; margin: 20px 0;">
+            <h3>📋 Rappel de votre inscription</h3>
+            <p><strong>🎯 Événement :</strong> {{ evenement.titre }}</p>
+            <p><strong>📅 Date :</strong> {{ evenement.date_debut|date:"l d F Y à H:i" }}</p>
+            <p><strong>📍 Lieu :</strong> {{ evenement.lieu }}</p>
+            {% if inscription.nombre_accompagnants > 0 %}
+            <p><strong>👥 Accompagnants :</strong> {{ inscription.nombre_accompagnants }}</p>
+            {% endif %}
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ url_confirmation }}" class="btn btn-success">
+                ✅ CONFIRMER MAINTENANT
+            </a>
+            <a href="{{ url_detail }}" class="btn">
+                👁️ Voir les détails
+            </a>
+        </div>
+        
+        <div style="background-color: #e9ecef; padding: 15px; border-radius: 5px; margin-top: 20px;">
+            <p><strong>❓ Pourquoi confirmer ?</strong></p>
+            <ul>
+                <li>Garantir votre place à l'événement</li>
+                <li>Permettre une meilleure organisation</li>
+                <li>Libérer les places non confirmées pour d'autres membres</li>
+            </ul>
+        </div>
+        
+        <p>Ne perdez pas votre place, confirmez dès maintenant !</p>
+        
+        <p>Cordialement,<br>
+        L'équipe {{ site_name }}</p>
+    </div>
+    
+    <div class="footer">
+        <p>
+            © {{ current_year }} {{ site_name }}<br>
+            <a href="{{ site_url }}">{{ site_url }}</a>
+        </p>
+    </div>
+</body>
+</html>

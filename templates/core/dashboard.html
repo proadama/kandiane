@@ -84,10 +84,13 @@
                 <h1 class="card-title">{{ evenements_total }}</h1>
                 <ul class="list-unstyled mt-3 mb-4">
                     <li><i class="fas fa-calendar-day me-2"></i> {{ evenements_venir }} événements à venir</li>
-                    <li><i class="fas fa-user-clock me-2"></i> {{ inscriptions_attente }} inscriptions en attente</li>
+                    <li><i class="fas fa-eye me-2"></i> {{ evenements_publies }} événements publiés</li>
+                    {% if user.is_staff and nb_validations_attente > 0 %}
+                    <li><i class="fas fa-clock me-2 text-warning"></i> {{ nb_validations_attente }} en attente de validation</li>
+                    {% endif %}
                 </ul>
                 {% if evenements_total > 0 %}
-                <a href="#" class="btn btn-lg btn-block btn-outline-info w-100">
+                <a href="{% url 'evenements:liste' %}" class="btn btn-lg btn-block btn-outline-info w-100">
                     Voir les événements
                 </a>
                 {% else %}
@@ -161,7 +164,7 @@
 
 <!-- Graphiques -->
 <div class="row mt-4">
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="card">
             <div class="card-header">
                 <h5><i class="fas fa-chart-bar me-2"></i> Adhésions par mois</h5>
@@ -175,7 +178,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="card">
             <div class="card-header">
                 <h5><i class="fas fa-chart-pie me-2"></i> Cotisations par statut</h5>
@@ -189,12 +192,198 @@
             </div>
         </div>
     </div>
+    <!-- Graphique inscriptions événements -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-line me-2"></i> Inscriptions événements</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="inscriptions-evenements-chart" style="height: 300px; width: 100%;"></canvas>
+                <div id="inscriptions-evenements-fallback" class="text-center text-muted py-5" style="display: none;">
+                    Aucune donnée disponible
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+
+<!-- Widgets événements -->
+<div class="row mt-4">
+    <!-- Prochains événements publics -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-calendar-plus me-2"></i> Prochains événements</h5>
+            </div>
+            <div class="card-body">
+                {% if prochains_evenements %}
+                <div class="list-group list-group-flush">
+                    {% for evenement in prochains_evenements %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
+                        <div>
+                            <h6 class="mb-1">{{ evenement.titre }}</h6>
+                            <small class="text-muted">
+                                {{ evenement.date_debut|date:"d/m/Y H:i" }} • {{ evenement.lieu }}
+                            </small>
+                            {% if evenement.est_payant %}
+                            <span class="badge bg-success rounded-pill ms-2">{{ evenement.tarif_membre }}€</span>
+                            {% else %}
+                            <span class="badge bg-primary rounded-pill ms-2">Gratuit</span>
+                            {% endif %}
+                        </div>
+                        <div>
+                            {% if evenement.places_disponibles > 0 %}
+                            <span class="badge bg-info">{{ evenement.places_disponibles }} places</span>
+                            {% else %}
+                            <span class="badge bg-warning">Complet</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-3">
+                    <a href="{% url 'evenements:liste' %}" class="btn btn-outline-info btn-sm">
+                        <i class="bi bi-calendar me-1"></i> Voir tous les événements
+                    </a>
+                </div>
+                {% else %}
+                <p class="text-center text-muted">Aucun événement à venir.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Mes inscriptions -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-user-check me-2"></i> Mes inscriptions</h5>
+            </div>
+            <div class="card-body">
+                {% if mes_inscriptions %}
+                <div class="list-group list-group-flush">
+                    {% for inscription in mes_inscriptions %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
+                        <div>
+                            <h6 class="mb-1">{{ inscription.evenement.titre }}</h6>
+                            <small class="text-muted">
+                                {{ inscription.evenement.date_debut|date:"d/m/Y H:i" }}
+                            </small>
+                        </div>
+                        <div>
+                            <span class="badge bg-{% if inscription.statut == 'confirmee' %}success{% elif inscription.statut == 'en_attente' %}warning{% else %}secondary{% endif %}">
+                                {{ inscription.get_statut_display }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-3">
+                    <a href="{% url 'evenements:mes_inscriptions' %}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-list me-1"></i> Voir mes inscriptions
+                    </a>
+                </div>
+                {% else %}
+                <p class="text-center text-muted">Aucune inscription en cours.</p>
+                <div class="text-center">
+                    <a href="{% url 'evenements:liste' %}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-plus me-1"></i> S'inscrire à un événement
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if user.is_staff %}
+<!-- Widgets organisateur/admin -->
+<div class="row mt-4">
+    <!-- Mes événements organisés -->
+    {% if mes_evenements %}
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5><i class="fas fa-user-cog me-2"></i> Mes événements organisés</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for evenement in mes_evenements %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
+                        <div>
+                            <h6 class="mb-1">{{ evenement.titre }}</h6>
+                            <small class="text-muted">{{ evenement.date_debut|date:"d/m/Y H:i" }}</small>
+                        </div>
+                        <div>
+                            <span class="badge bg-{% if evenement.statut == 'publie' %}success{% elif evenement.statut == 'en_attente_validation' %}warning{% elif evenement.statut == 'brouillon' %}secondary{% else %}danger{% endif %}">
+                                {{ evenement.get_statut_display }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-3">
+                    <a href="{% url 'evenements:liste' %}" class="btn btn-outline-warning btn-sm">
+                        <i class="bi bi-gear me-1"></i> Gérer mes événements
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Alertes validation -->
+    {% if validations_attente %}
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5>
+                    <i class="fas fa-exclamation-triangle me-2"></i> Validations en attente
+                    {% if validations_urgentes > 0 %}
+                    <span class="badge bg-warning ms-2">{{ validations_urgentes }} urgentes</span>
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for validation in validations_attente %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center border-0 px-0">
+                        <div>
+                            <h6 class="mb-1">{{ validation.evenement.titre }}</h6>
+                            <small class="text-muted">
+                                {{ validation.evenement.date_debut|date:"d/m/Y H:i" }}
+                                {% if validation.evenement.date_debut|timeuntil %}
+                                • dans {{ validation.evenement.date_debut|timeuntil }}
+                                {% endif %}
+                            </small>
+                        </div>
+                        <div>
+                            {% if validation.evenement.date_debut|timeuntil and "jour" in validation.evenement.date_debut|timeuntil %}
+                            <span class="badge bg-danger">Urgent</span>
+                            {% else %}
+                            <span class="badge bg-warning">En attente</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-3">
+                    <a href="{% url 'evenements:validation_liste' %}" class="btn btn-outline-danger btn-sm">
+                        <i class="bi bi-check-circle me-1"></i> Traiter les validations
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
 
 <!-- Ajouter de l'espace en bas de la page avant le footer -->
 <div class="mb-5 pb-4"></div>
 
-{% endblock %}
+{% endblock content %}
 
 {% block extra_js %}
 <!-- Inclusion de Chart.js pour les graphiques -->
@@ -301,6 +490,43 @@
             cotisationsChartEl.style.display = 'none';
             document.getElementById('cotisations-chart-fallback').style.display = 'block';
         }
+        
+        // Graphique des inscriptions événements
+        const inscriptionsEvenementsChartEl = document.getElementById('inscriptions-evenements-chart');
+        const inscriptionsEvenementsData = {{ inscriptions_par_mois_json|safe }};
+        
+        if (inscriptionsEvenementsData && inscriptionsEvenementsData.length > 0) {
+            const inscriptionsEvenementsCtx = inscriptionsEvenementsChartEl.getContext('2d');
+            new Chart(inscriptionsEvenementsCtx, {
+                type: 'line',
+                data: {
+                    labels: inscriptionsEvenementsData.map(item => item.label),
+                    datasets: [{
+                        label: 'Inscriptions aux événements',
+                        data: inscriptionsEvenementsData.map(item => item.value),
+                        backgroundColor: 'rgba(23, 162, 184, 0.2)',
+                        borderColor: 'rgba(23, 162, 184, 1)',
+                        borderWidth: 2,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        } else {
+            inscriptionsEvenementsChartEl.style.display = 'none';
+            document.getElementById('inscriptions-evenements-fallback').style.display = 'block';
+        }
     });
 </script>
-{% endblock %}
+{% endblock extra_js %}

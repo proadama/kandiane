@@ -1,0 +1,694 @@
+{% extends "evenements/base_evenement.html" %}
+{% load static %}
+
+{% block page_title %}Calendrier des événements{% endblock page_title %}
+
+{% block extra_css %}
+{{ block.super }}
+<!-- FullCalendar CSS -->
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css' rel='stylesheet' />
+<style>
+.calendar-container {
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+.calendar-header {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 15px 15px 0 0;
+    margin: -2rem -2rem 2rem -2rem;
+}
+.calendar-filters {
+    background: #f8f9fa;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    position: sticky;
+    top: 20px;
+}
+.fc {
+    font-family: inherit;
+}
+.fc-event {
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 2px 6px !important;
+    cursor: pointer !important;
+    transition: transform 0.2s ease !important;
+}
+.fc-event:hover {
+    transform: scale(1.05) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+}
+.fc-event-title {
+    font-weight: 600 !important;
+    font-size: 0.85rem !important;
+}
+.fc-event-time {
+    font-size: 0.75rem !important;
+    opacity: 0.9 !important;
+}
+.fc-daygrid-event {
+    margin: 1px 0 !important;
+}
+.fc-day-today {
+    background-color: rgba(0, 123, 255, 0.1) !important;
+}
+.fc-day:hover {
+    background-color: rgba(0, 123, 255, 0.05) !important;
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    margin-right: 0.5rem;
+}
+.calendar-stats {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+}
+.stat-item {
+    text-align: center;
+    padding: 0.5rem;
+}
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+    display: block;
+}
+.stat-label {
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+.calendar-views {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+.view-btn {
+    padding: 0.5rem 1rem;
+    border: 2px solid #dee2e6;
+    background: white;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.875rem;
+}
+.view-btn:hover {
+    border-color: #007bff;
+    background: #f8f9fa;
+}
+.view-btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+.quick-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 15px;
+    z-index: 1000;
+}
+.event-tooltip {
+    background: white;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    padding: 1rem;
+    max-width: 300px;
+    z-index: 9999;
+}
+.mini-calendar {
+    background: white;
+    border-radius: 10px;
+    padding: 1rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+</style>
+{% endblock extra_css %}
+
+{% block evenement_content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h3 mb-1">
+                    <i class="fas fa-calendar-alt text-primary me-2"></i>
+                    Calendrier des événements
+                </h1>
+                <p class="text-muted mb-0">Vue d'ensemble de tous vos événements</p>
+            </div>
+            <div class="d-flex gap-2">
+                {% if user.is_staff %}
+                <a href="{% url 'evenements:creer' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>Nouvel événement
+                </a>
+                {% endif %}
+                <button class="btn btn-outline-secondary" onclick="window.print()">
+                    <i class="fas fa-print me-1"></i>Imprimer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Sidebar avec filtres et informations -->
+    <div class="col-lg-3 order-lg-2">
+        <!-- Statistiques rapides -->
+        <div class="calendar-stats">
+            <div class="row">
+                <div class="col-6">
+                    <div class="stat-item">
+                        <span class="stat-number" id="totalEvents">-</span>
+                        <span class="stat-label">Événements</span>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stat-item">
+                        <span class="stat-number" id="thisMonth">-</span>
+                        <span class="stat-label">Ce mois</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions rapides -->
+        <div class="quick-actions">
+            <button class="btn btn-sm btn-outline-primary" onclick="calendar.today()">
+                <i class="fas fa-home me-1"></i>Aujourd'hui
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="exportCalendar()">
+                <i class="fas fa-download me-1"></i>Export iCal
+            </button>
+        </div>
+
+        <!-- Filtres -->
+        <div class="calendar-filters">
+            <h6 class="mb-3">
+                <i class="fas fa-filter me-2"></i>Filtres
+            </h6>
+            
+            <!-- Types d'événements -->
+            <div class="mb-3">
+                <label class="form-label">Types d'événements</label>
+                <div id="typeFilters">
+                    {% for type in types_evenements %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" 
+                               id="type_{{ type.pk }}" value="{{ type.pk }}" checked
+                               data-color="{{ type.couleur_affichage }}">
+                        <label class="form-check-label d-flex align-items-center" for="type_{{ type.pk }}">
+                            <span class="legend-color me-2" style="background-color: {{ type.couleur_affichage }}"></span>
+                            {{ type.libelle }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Statut des événements -->
+            {% if user.is_staff %}
+            <div class="mb-3">
+                <label class="form-label">Statut</label>
+                <select class="form-select form-select-sm" id="statusFilter">
+                    <option value="">Tous les statuts</option>
+                    <option value="publie" selected>Publiés</option>
+                    <option value="brouillon">Brouillons</option>
+                    <option value="en_attente_validation">En attente</option>
+                    <option value="annule">Annulés</option>
+                </select>
+            </div>
+            {% endif %}
+            
+            <!-- Mes événements -->
+            {% if user.is_authenticated %}
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="mesEvenements">
+                    <label class="form-check-label" for="mesEvenements">
+                        Mes événements seulement
+                    </label>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Bouton de réinitialisation -->
+            <button class="btn btn-sm btn-outline-secondary w-100" onclick="resetFilters()">
+                <i class="fas fa-refresh me-1"></i>Réinitialiser
+            </button>
+        </div>
+
+        <!-- Légende -->
+        <div class="mini-calendar mb-3">
+            <h6 class="mb-3">
+                <i class="fas fa-info-circle me-2"></i>Légende
+            </h6>
+            <div id="legend">
+                {% for type in types_evenements %}
+                <div class="legend-item">
+                    <span class="legend-color" style="background-color: {{ type.couleur_affichage }}"></span>
+                    <span class="small">{{ type.libelle }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Mini calendrier de navigation -->
+        <div class="mini-calendar">
+            <h6 class="mb-2">
+                <i class="fas fa-calendar me-2"></i>Navigation rapide
+            </h6>
+            <div class="d-grid gap-1">
+                <button class="btn btn-sm btn-outline-primary" onclick="goToDate('today')">
+                    Aujourd'hui
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="goToDate('nextWeek')">
+                    Semaine prochaine
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="goToDate('nextMonth')">
+                    Mois prochain
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendrier principal -->
+    <div class="col-lg-9 order-lg-1">
+        <!-- Vues du calendrier -->
+        <div class="calendar-views">
+            <button class="view-btn active" data-view="dayGridMonth">
+                <i class="fas fa-calendar me-1"></i>Mois
+            </button>
+            <button class="view-btn" data-view="dayGridWeek">
+                <i class="fas fa-calendar-week me-1"></i>Semaine
+            </button>
+            <button class="view-btn" data-view="listWeek">
+                <i class="fas fa-list me-1"></i>Liste
+            </button>
+        </div>
+
+        <div class="calendar-container position-relative">
+            <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Chargement...</span>
+                </div>
+            </div>
+            
+            <div id="calendar"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour les détails d'événement -->
+<div class="modal fade" id="eventModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="eventModalTitle">Détails de l'événement</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="eventModalBody">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Chargement...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                <a href="#" class="btn btn-primary" id="viewEventBtn">Voir les détails</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock evenement_content %}
+
+{% block extra_js %}
+{{ block.super }}
+<!-- FullCalendar JS -->
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/locales/fr.js'></script>
+
+<script>
+let calendar;
+let allEvents = {{ evenements_json|safe }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    const calendarEl = document.getElementById('calendar');
+    
+    // Initialisation du calendrier
+    calendar = new FullCalendar.Calendar(calendarEl, {
+        locale: 'fr',
+        initialView: 'dayGridMonth',
+        height: 'auto',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,dayGridWeek,listWeek'
+        },
+        buttonText: {
+            today: 'Aujourd\'hui',
+            month: 'Mois',
+            week: 'Semaine',
+            list: 'Liste'
+        },
+        dayMaxEvents: 3,
+        moreLinkText: function(num) {
+            return '+ ' + num + ' autres';
+        },
+        events: allEvents,
+        eventDisplay: 'block',
+        displayEventTime: true,
+        eventTimeFormat: {
+            hour: '2-digit',
+            minute: '2-digit',
+            meridiem: false
+        },
+        
+        // Clic sur un événement
+        eventClick: function(info) {
+            showEventDetails(info.event);
+            info.jsEvent.preventDefault();
+        },
+        
+        // Survol d'un événement
+        eventMouseEnter: function(info) {
+            showEventTooltip(info.event, info.jsEvent);
+        },
+        
+        eventMouseLeave: function(info) {
+            hideEventTooltip();
+        },
+        
+        // Clic sur une date
+        dateClick: function(info) {
+            if (info.dateStr >= new Date().toISOString().split('T')[0]) {
+                {% if user.is_staff %}
+                const createUrl = "{% url 'evenements:creer' %}?date=" + info.dateStr;
+                if (confirm('Voulez-vous créer un événement pour le ' + info.dateStr + ' ?')) {
+                    window.location.href = createUrl;
+                }
+                {% endif %}
+            }
+        },
+        
+        // Changement de vue
+        viewDidMount: function(info) {
+            updateStats();
+            updateViewButtons(info.view.type);
+        }
+    });
+    
+    calendar.render();
+    
+    // Gestion des boutons de vue
+    document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const view = this.dataset.view;
+            calendar.changeView(view);
+        });
+    });
+    
+    // Gestion des filtres de type
+    document.querySelectorAll('#typeFilters input').forEach(checkbox => {
+        checkbox.addEventListener('change', applyFilters);
+    });
+    
+    // Filtre de statut
+    const statusFilter = document.getElementById('statusFilter');
+    if (statusFilter) {
+        statusFilter.addEventListener('change', applyFilters);
+    }
+    
+    // Filtre mes événements
+    const mesEvenementsFilter = document.getElementById('mesEvenements');
+    if (mesEvenementsFilter) {
+        mesEvenementsFilter.addEventListener('change', applyFilters);
+    }
+    
+    // Initialisation
+    updateStats();
+});
+
+// Affichage des détails d'événement
+function showEventDetails(event) {
+    const modal = new bootstrap.Modal(document.getElementById('eventModal'));
+    const modalTitle = document.getElementById('eventModalTitle');
+    const modalBody = document.getElementById('eventModalBody');
+    const viewBtn = document.getElementById('viewEventBtn');
+    
+    modalTitle.textContent = event.title;
+    viewBtn.href = event.url || '#';
+    
+    // Contenu du modal
+    const startDate = new Date(event.start);
+    const endDate = event.end ? new Date(event.end) : null;
+    
+    modalBody.innerHTML = `
+        <div class="row">
+            <div class="col-md-8">
+                <h6><i class="fas fa-calendar-alt text-primary me-2"></i>Date et heure</h6>
+                <p class="mb-3">
+                    ${startDate.toLocaleDateString('fr-FR', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    })} à ${startDate.toLocaleTimeString('fr-FR', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })}
+                    ${endDate ? ' - ' + endDate.toLocaleTimeString('fr-FR', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }) : ''}
+                </p>
+                
+                <h6><i class="fas fa-map-marker-alt text-primary me-2"></i>Lieu</h6>
+                <p class="mb-3">${event.extendedProps.lieu || 'Non spécifié'}</p>
+                
+                <h6><i class="fas fa-tag text-primary me-2"></i>Type</h6>
+                <p class="mb-3">
+                    <span class="badge" style="background-color: ${event.backgroundColor}">${event.extendedProps.type}</span>
+                </p>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6 class="card-title">Places disponibles</h6>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>${event.extendedProps.places_disponibles}</span>
+                            <span class="badge ${event.extendedProps.est_complet ? 'bg-danger' : 'bg-success'}">
+                                ${event.extendedProps.est_complet ? 'Complet' : 'Disponible'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    modal.show();
+}
+
+// Tooltip pour les événements
+let currentTooltip = null;
+
+function showEventTooltip(event, jsEvent) {
+    hideEventTooltip();
+    
+    const tooltip = document.createElement('div');
+    tooltip.className = 'event-tooltip position-absolute';
+    tooltip.innerHTML = `
+        <strong>${event.title}</strong><br>
+        <small><i class="fas fa-clock me-1"></i>${new Date(event.start).toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit'
+        })}</small><br>
+        <small><i class="fas fa-map-marker-alt me-1"></i>${event.extendedProps.lieu}</small><br>
+        <small><i class="fas fa-users me-1"></i>${event.extendedProps.places_disponibles} places</small>
+    `;
+    
+    document.body.appendChild(tooltip);
+    
+    // Positionnement
+    const rect = jsEvent.target.getBoundingClientRect();
+    tooltip.style.left = rect.left + 'px';
+    tooltip.style.top = (rect.bottom + 5) + 'px';
+    
+    currentTooltip = tooltip;
+}
+
+function hideEventTooltip() {
+    if (currentTooltip) {
+        currentTooltip.remove();
+        currentTooltip = null;
+    }
+}
+
+// Application des filtres
+function applyFilters() {
+    showLoading(true);
+    
+    // Récupérer les types sélectionnés
+    const selectedTypes = Array.from(document.querySelectorAll('#typeFilters input:checked'))
+        .map(cb => cb.value);
+    
+    // Récupérer le statut sélectionné
+    const statusFilter = document.getElementById('statusFilter');
+    const selectedStatus = statusFilter ? statusFilter.value : '';
+    
+    // Mes événements seulement
+    const mesEvenements = document.getElementById('mesEvenements');
+    const onlyMyEvents = mesEvenements ? mesEvenements.checked : false;
+    
+    // Filtrer les événements
+    let filteredEvents = allEvents.filter(event => {
+        // Filtre par type
+        if (selectedTypes.length > 0 && !selectedTypes.includes(event.extendedProps.type_id)) {
+            return false;
+        }
+        
+        // Filtre par statut (si applicable)
+        if (selectedStatus && event.extendedProps.statut !== selectedStatus) {
+            return false;
+        }
+        
+        // Filtre mes événements (si applicable)
+        if (onlyMyEvents && !event.extendedProps.is_mine) {
+            return false;
+        }
+        
+        return true;
+    });
+    
+    // Mettre à jour le calendrier
+    calendar.removeAllEvents();
+    calendar.addEventSource(filteredEvents);
+    
+    updateStats();
+    showLoading(false);
+}
+
+// Réinitialisation des filtres
+function resetFilters() {
+    // Réinitialiser les checkboxes de type
+    document.querySelectorAll('#typeFilters input').forEach(cb => {
+        cb.checked = true;
+    });
+    
+    // Réinitialiser le statut
+    const statusFilter = document.getElementById('statusFilter');
+    if (statusFilter) {
+        statusFilter.value = 'publie';
+    }
+    
+    // Réinitialiser mes événements
+    const mesEvenements = document.getElementById('mesEvenements');
+    if (mesEvenements) {
+        mesEvenements.checked = false;
+    }
+    
+    applyFilters();
+}
+
+// Mise à jour des statistiques
+function updateStats() {
+    const currentEvents = calendar.getEvents();
+    const currentDate = new Date();
+    const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    
+    const thisMonthEvents = currentEvents.filter(event => {
+        const eventDate = new Date(event.start);
+        return eventDate >= startOfMonth && eventDate <= endOfMonth;
+    });
+    
+    document.getElementById('totalEvents').textContent = currentEvents.length;
+    document.getElementById('thisMonth').textContent = thisMonthEvents.length;
+}
+
+// Mise à jour des boutons de vue
+function updateViewButtons(activeView) {
+    document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.view === activeView) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+// Navigation rapide
+function goToDate(period) {
+    const today = new Date();
+    let targetDate;
+    
+    switch(period) {
+        case 'today':
+            targetDate = today;
+            break;
+        case 'nextWeek':
+            targetDate = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+            break;
+        case 'nextMonth':
+            targetDate = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate());
+            break;
+        default:
+            targetDate = today;
+    }
+    
+    calendar.gotoDate(targetDate);
+}
+
+// Export du calendrier
+function exportCalendar() {
+    const link = document.createElement('a');
+    link.href = "{% url 'evenements:export:calendrier_ics' %}";
+    link.download = 'evenements_calendrier.ics';
+    link.click();
+}
+
+// Overlay de chargement
+function showLoading(show) {
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.style.display = show ? 'flex' : 'none';
+}
+
+// Gestion de l'impression
+window.addEventListener('beforeprint', function() {
+    // Optimiser l'affichage pour l'impression
+    calendar.updateSize();
+});
+
+// Gestion du redimensionnement
+window.addEventListener('resize', function() {
+    calendar.updateSize();
+});
+</script>
+{% endblock extra_js %}

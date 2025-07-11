@@ -1,0 +1,308 @@
+{% extends 'evenements/base_evenement.html' %}
+{% load static %}
+
+{% block title %}Types d'Événements{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'evenements:dashboard' %}">Événements</a></li>
+        <li class="breadcrumb-item active">Types d'événements</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="h3 mb-0">
+                <i class="fas fa-tags text-primary me-2"></i>
+                Types d'Événements
+            </h1>
+            <p class="text-muted">Gestion des catégories d'événements</p>
+        </div>
+        <div class="col-md-4 text-end">
+            {% if user.is_staff %}
+                <a href="{% url 'evenements:types_creer' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>
+                    Nouveau Type
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Statistiques rapides -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h4 class="mb-0">{{ types.count }}</h4>
+                            <p class="mb-0 small">Types actifs</p>
+                        </div>
+                        <div class="ms-3">
+                            <i class="fas fa-tags fa-2x opacity-75"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h4 class="mb-0">{{ types|length|add:"-1" }}</h4>
+                            <p class="mb-0 small">Avec accompagnants</p>
+                        </div>
+                        <div class="ms-3">
+                            <i class="fas fa-users fa-2x opacity-75"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h4 class="mb-0">{{ types|length|add:"-2" }}</h4>
+                            <p class="mb-0 small">Nécessitent validation</p>
+                        </div>
+                        <div class="ms-3">
+                            <i class="fas fa-check-circle fa-2x opacity-75"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h4 class="mb-0">{{ types.count }}</h4>
+                            <p class="mb-0 small">Ordre défini</p>
+                        </div>
+                        <div class="ms-3">
+                            <i class="fas fa-sort-numeric-down fa-2x opacity-75"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste des types -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-list me-2"></i>
+                Liste des Types
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            {% if types %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th width="5%">Ordre</th>
+                                <th width="25%">Type</th>
+                                <th width="35%">Description</th>
+                                <th width="10%">Couleur</th>
+                                <th width="10%">Validation</th>
+                                <th width="10%">Accompagnants</th>
+                                <th width="5%">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for type in types %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ type.ordre_affichage }}</span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <span class="badge me-2" style="background-color: {{ type.couleur_affichage }}; color: white;">
+                                                ●
+                                            </span>
+                                            <div>
+                                                <strong>{{ type.libelle }}</strong>
+                                                <br>
+                                                <small class="text-muted">
+                                                    Créé le {{ type.created_at|date:"d/m/Y" }}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="text-muted">
+                                            {{ type.description|truncatewords:10|default:"Aucune description" }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="color-preview me-2" 
+                                                 style="width: 20px; height: 20px; background-color: {{ type.couleur_affichage }}; border-radius: 3px; border: 1px solid #ddd;">
+                                            </div>
+                                            <small>{{ type.couleur_affichage }}</small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if type.necessite_validation %}
+                                            <span class="badge bg-warning">
+                                                <i class="fas fa-check-circle me-1"></i>
+                                                Requise
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-times-circle me-1"></i>
+                                                Automatique
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if type.permet_accompagnants %}
+                                            <span class="badge bg-info">
+                                                <i class="fas fa-users me-1"></i>
+                                                Autorisés
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">
+                                                <i class="fas fa-user me-1"></i>
+                                                Interdits
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'evenements:types_detail' type.pk %}" 
+                                               class="btn btn-outline-primary" 
+                                               title="Voir">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            {% if user.is_staff %}
+                                                <a href="{% url 'evenements:types_modifier' type.pk %}" 
+                                                   class="btn btn-outline-secondary" 
+                                                   title="Modifier">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a href="{% url 'evenements:types_supprimer' type.pk %}" 
+                                                   class="btn btn-outline-danger" 
+                                                   title="Supprimer"
+                                                   onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce type ?')">
+                                                    <i class="fas fa-trash"></i>
+                                                </a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-tags fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Aucun type d'événement</h5>
+                    <p class="text-muted">Commencez par créer votre premier type d'événement.</p>
+                    {% if user.is_staff %}
+                        <a href="{% url 'evenements:types_creer' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-1"></i>
+                            Créer un Type
+                        </a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Informations supplémentaires -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        À propos des Types
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            <strong>Validation :</strong> Certains types nécessitent une validation administrateur
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-users text-info me-2"></i>
+                            <strong>Accompagnants :</strong> Configuration par type d'événement
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-palette text-warning me-2"></i>
+                            <strong>Couleurs :</strong> Pour différencier visuellement dans le calendrier
+                        </li>
+                        <li>
+                            <i class="fas fa-sort text-primary me-2"></i>
+                            <strong>Ordre :</strong> Définit l'ordre d'affichage dans les listes
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>
+                        Utilisation des Types
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for type in types|slice:":4" %}
+                            <div class="col-6 mb-2">
+                                <div class="d-flex align-items-center">
+                                    <span class="badge me-2" style="background-color: {{ type.couleur_affichage }};">●</span>
+                                    <small>{{ type.libelle }}</small>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="col-12">
+                                <p class="text-muted text-center mb-0">Aucun type disponible</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.color-preview {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.badge {
+    font-size: 0.85em;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+}
+
+.btn-group-sm .btn {
+    padding: 0.25rem 0.5rem;
+}
+</style>
+{% endblock %}

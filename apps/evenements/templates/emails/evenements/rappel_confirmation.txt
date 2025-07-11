@@ -1,0 +1,31 @@
+<!-- templates/emails/evenements/rappel_confirmation.txt -->
+Bonjour {{ recipient_name }},
+
+⏰ RAPPEL URGENT - Confirmation d'inscription requise
+
+Votre inscription à l'événement "{{ evenement.titre }}" expire bientôt !
+
+⏳ Plus que {{ heures_restantes }} heure{% if heures_restantes > 1 %}s{% endif %} pour confirmer votre inscription
+
+⚠️ Action urgente requise : Si vous ne confirmez pas votre inscription dans les {{ heures_restantes }} heure{% if heures_restantes > 1 %}s{% endif %}, votre place sera automatiquement libérée pour les membres en liste d'attente.
+
+📋 Rappel de votre inscription :
+🎯 Événement : {{ evenement.titre }}
+📅 Date : {{ evenement.date_debut|date:"l d F Y à H:i" }}
+📍 Lieu : {{ evenement.lieu }}
+{% if inscription.nombre_accompagnants > 0 %}👥 Accompagnants : {{ inscription.nombre_accompagnants }}{% endif %}
+
+Pour confirmer maintenant : {{ url_confirmation }}
+Pour voir les détails : {{ url_detail }}
+
+❓ Pourquoi confirmer ?
+- Garantir votre place à l'événement
+- Permettre une meilleure organisation
+- Libérer les places non confirmées pour d'autres membres
+
+Ne perdez pas votre place, confirmez dès maintenant !
+
+Cordialement,
+L'équipe {{ site_name }}
+
+{{ site_url }}

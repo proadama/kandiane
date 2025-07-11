@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Erreur de confirmation - Gestion d'Association</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .error-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            max-width: 500px;
+            width: 100%;
+            margin: 20px;
+            text-align: center;
+        }
+        .error-header {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+            padding: 2rem;
+        }
+        .error-body {
+            padding: 2rem;
+        }
+        .icon-large {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            border: none;
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 123, 255, 0.3);
+        }
+        .btn-secondary {
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+        }
+        .error-details {
+            background: #f8f9fa;
+            border-left: 4px solid #dc3545;
+            padding: 1rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+            text-align: left;
+        }
+        .help-section {
+            background: #e3f2fd;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        .animate-bounce {
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(-10px);
+            }
+            60% {
+                transform: translateY(-5px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="error-card">
+        <!-- En-tête d'erreur -->
+        <div class="error-header">
+            <i class="fas fa-exclamation-triangle icon-large animate-bounce"></i>
+            <h2 class="mb-2">Erreur de confirmation</h2>
+            <p class="mb-0">Impossible de traiter votre demande</p>
+        </div>
+
+        <!-- Corps de l'erreur -->
+        <div class="error-body">
+            <!-- Message d'erreur principal -->
+            <div class="error-details">
+                <h5><i class="fas fa-times-circle text-danger"></i> Que s'est-il passé ?</h5>
+                <p class="mb-0">{{ erreur }}</p>
+            </div>
+
+            <!-- Explications selon le type d'erreur -->
+            {% if "Code de confirmation invalide" in erreur %}
+                <div class="help-section">
+                    <h6><i class="fas fa-lightbulb text-warning"></i> Causes possibles :</h6>
+                    <ul class="text-start mb-0">
+                        <li>Le lien de confirmation est incorrect ou incomplet</li>
+                        <li>Le lien a été modifié par votre client email</li>
+                        <li>Le lien est trop ancien (plus de 7 jours)</li>
+                        <li>L'inscription a été supprimée du système</li>
+                    </ul>
+                </div>
+            {% elif "déjà été traitée" in erreur %}
+                <div class="help-section">
+                    <h6><i class="fas fa-info-circle text-info"></i> Information :</h6>
+                    <p class="mb-0">
+                        Cette inscription a déjà été confirmée ou annulée. 
+                        Vous ne pouvez plus modifier ce statut.
+                    </p>
+                </div>
+            {% elif "délai" in erreur or "expiré" in erreur %}
+                <div class="help-section">
+                    <h6><i class="fas fa-clock text-warning"></i> Délai expiré :</h6>
+                    <p class="mb-0">
+                        Le délai pour confirmer votre inscription est dépassé. 
+                        Votre place a été libérée pour d'autres participants.
+                    </p>
+                </div>
+            {% endif %}
+
+            <!-- Actions recommandées -->
+            <div class="mt-4">
+                <h5><i class="fas fa-wrench"></i> Que faire maintenant ?</h5>
+                
+                <div class="d-grid gap-2">
+                    {% if "Code de confirmation invalide" in erreur %}
+                        <p class="text-muted">Vérifiez votre email et utilisez le lien complet, ou contactez l'organisateur.</p>
+                        <a href="{% url 'evenements:evenements_publics' %}" class="btn btn-primary">
+                            <i class="fas fa-calendar"></i> Voir tous les événements
+                        </a>
+                    {% elif "délai" in erreur or "expiré" in erreur %}
+                        <p class="text-muted">Vous pouvez vous inscrire à nouveau si des places sont encore disponibles.</p>
+                        <a href="{% url 'evenements:evenements_publics' %}" class="btn btn-primary">
+                            <i class="fas fa-calendar-plus"></i> S'inscrire à nouveau
+                        </a>
+                    {% else %}
+                        <a href="{% url 'evenements:evenements_publics' %}" class="btn btn-primary">
+                            <i class="fas fa-home"></i> Retour aux événements
+                        </a>
+                    {% endif %}
+                    
+                    <button class="btn btn-secondary" onclick="window.print()">
+                        <i class="fas fa-print"></i> Imprimer cette page
+                    </button>
+                </div>
+            </div>
+
+            <!-- Contact d'urgence -->
+            <div class="mt-4">
+                <div class="alert alert-light">
+                    <h6><i class="fas fa-phone-alt"></i> Besoin d'aide immédiate ?</h6>
+                    <p class="mb-2">Contactez l'organisateur de l'événement ou l'administration</p>
+                    <small class="text-muted">
+                        Mentionnez le code d'erreur et l'heure de votre tentative pour un support plus rapide.
+                    </small>
+                </div>
+            </div>
+
+            <!-- Informations techniques -->
+            <div class="mt-3">
+                <small class="text-muted">
+                    <strong>Code d'erreur :</strong> CONF-ERR-{{ "now"|date:"Ymd-His" }}
+                    <br>
+                    <strong>Horodatage :</strong> {{ "now"|date:"d/m/Y à H:i:s" }}
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Animation sur les boutons
+        document.querySelectorAll('.btn').forEach(button => {
+            button.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-2px) scale(1.05)';
+            });
+            
+            button.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0) scale(1)';
+            });
+        });
+
+        // Auto-redirection après 30 secondes (optionnel)
+        let countdown = 30;
+        const redirectTimer = setInterval(() => {
+            countdown--;
+            if (countdown <= 0) {
+                clearInterval(redirectTimer);
+                window.location.href = '{% url "evenements:evenements_publics" %}';
+            }
+        }, 1000);
+
+        // Annuler la redirection si l'utilisateur interagit avec la page
+        document.addEventListener('click', () => {
+            clearInterval(redirectTimer);
+        });
+
+        document.addEventListener('keydown', () => {
+            clearInterval(redirectTimer);
+        });
+
+        // Animation d'entrée
+        window.addEventListener('load', () => {
+            document.querySelector('.error-card').style.opacity = '0';
+            document.querySelector('.error-card').style.transform = 'translateY(50px)';
+            
+            setTimeout(() => {
+                document.querySelector('.error-card').style.transition = 'all 0.5s ease';
+                document.querySelector('.error-card').style.opacity = '1';
+                document.querySelector('.error-card').style.transform = 'translateY(0)';
+            }, 100);
+        });
+    </script>
+</body>
+</html>

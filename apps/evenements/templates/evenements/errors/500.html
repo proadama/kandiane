@@ -1,0 +1,542 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block title %}Erreur Interne - Erreur 500{% endblock %}
+
+{% block extra_css %}
+<style>
+.error-container {
+    min-height: 80vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.error-content {
+    text-align: center;
+    z-index: 10;
+    position: relative;
+    max-width: 600px;
+    padding: 2rem;
+}
+
+.error-code {
+    font-size: 8rem;
+    font-weight: 900;
+    line-height: 1;
+    opacity: 0.3;
+    margin-bottom: 1rem;
+    background: linear-gradient(45deg, #fff, #f8f9fa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.error-icon {
+    font-size: 4rem;
+    margin-bottom: 2rem;
+    opacity: 0.8;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.error-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.error-description {
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+    opacity: 0.9;
+    line-height: 1.6;
+}
+
+.actions-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+}
+
+.btn-custom {
+    padding: 0.75rem 2rem;
+    border-radius: 2rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-primary-custom {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    backdrop-filter: blur(10px);
+}
+
+.btn-primary-custom:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    color: white;
+}
+
+.btn-secondary-custom {
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    color: white;
+}
+
+.btn-secondary-custom:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+    color: white;
+}
+
+.technical-info {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 1rem;
+    padding: 2rem;
+    margin-top: 3rem;
+    border-left: 4px solid rgba(255, 255, 255, 0.5);
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.5rem 1rem;
+    border-radius: 2rem;
+    margin-bottom: 1rem;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    background: #ff4757;
+    border-radius: 50%;
+    animation: blink 1.5s ease-in-out infinite;
+}
+
+.floating-shapes {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.shape {
+    position: absolute;
+    opacity: 0.1;
+    animation: float 6s ease-in-out infinite;
+}
+
+.shape:nth-child(1) {
+    top: 20%;
+    left: 10%;
+    animation-delay: 0s;
+}
+
+.shape:nth-child(2) {
+    top: 60%;
+    right: 10%;
+    animation-delay: 2s;
+}
+
+.shape:nth-child(3) {
+    bottom: 20%;
+    left: 20%;
+    animation-delay: 4s;
+}
+
+.refresh-button {
+    margin-top: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.refresh-button:hover {
+    transform: scale(1.05);
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+}
+
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0px) rotate(0deg);
+    }
+    50% {
+        transform: translateY(-20px) rotate(10deg);
+    }
+}
+
+@media (max-width: 768px) {
+    .error-code {
+        font-size: 5rem;
+    }
+    
+    .error-title {
+        font-size: 2rem;
+    }
+    
+    .error-description {
+        font-size: 1rem;
+    }
+    
+    .actions-container {
+        width: 100%;
+    }
+    
+    .btn-custom {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <!-- Formes flottantes en arrière-plan -->
+    <div class="floating-shapes">
+        <div class="shape">
+            <i class="fas fa-exclamation-triangle fa-3x"></i>
+        </div>
+        <div class="shape">
+            <i class="fas fa-cog fa-2x"></i>
+        </div>
+        <div class="shape">
+            <i class="fas fa-wrench fa-4x"></i>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="error-content">
+            <!-- Code d'erreur -->
+            <div class="error-code">500</div>
+            
+            <!-- Icône -->
+            <div class="error-icon">
+                <i class="fas fa-server"></i>
+            </div>
+            
+            <!-- Statut -->
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span>Erreur Serveur Détectée</span>
+            </div>
+            
+            <!-- Titre -->
+            <h1 class="error-title">Erreur Interne du Serveur</h1>
+            
+            <!-- Description -->
+            <p class="error-description">
+                Désolé, une erreur technique s'est produite sur nos serveurs. 
+                Nos équipes techniques ont été automatiquement notifiées et travaillent 
+                pour résoudre ce problème dans les plus brefs délais.
+            </p>
+            
+            <!-- Actions principales -->
+            <div class="actions-container">
+                <button onclick="window.location.reload()" class="btn-custom btn-primary-custom refresh-button">
+                    <i class="fas fa-redo-alt"></i>
+                    Actualiser la Page
+                </button>
+                
+                <a href="{% url 'evenements:evenements_publics' %}" class="btn-custom btn-secondary-custom">
+                    <i class="fas fa-calendar-alt"></i>
+                    Retour aux Événements
+                </a>
+                
+                <a href="{% url 'core:home' %}" class="btn-custom btn-secondary-custom">
+                    <i class="fas fa-home"></i>
+                    Page d'Accueil
+                </a>
+            </div>
+            
+            <!-- Informations techniques -->
+            <div class="technical-info">
+                <h5 class="mb-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Informations Techniques
+                </h5>
+                
+                <div class="row text-start">
+                    <div class="col-md-6 mb-3">
+                        <strong>Code d'erreur :</strong>
+                        <br>
+                        <span class="text-warning">HTTP 500 - Internal Server Error</span>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <strong>Timestamp :</strong>
+                        <br>
+                        <span id="timestamp"></span>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <strong>Service :</strong>
+                        <br>
+                        <span>Gestion des Événements</span>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <strong>Statut :</strong>
+                        <br>
+                        <span class="text-warning">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            En cours de résolution
+                        </span>
+                    </div>
+                </div>
+                
+                <hr class="border-white border-opacity-25 my-3">
+                
+                <div class="text-center">
+                    <p class="mb-3">
+                        <i class="fas fa-tools me-2"></i>
+                        <strong>Que fait notre équipe ?</strong>
+                    </p>
+                    
+                    <div class="row text-start">
+                        <div class="col-sm-6 mb-2">
+                            <small>
+                                <i class="fas fa-check text-success me-2"></i>
+                                Notification automatique envoyée
+                            </small>
+                        </div>
+                        <div class="col-sm-6 mb-2">
+                            <small>
+                                <i class="fas fa-search text-info me-2"></i>
+                                Analyse des logs en cours
+                            </small>
+                        </div>
+                        <div class="col-sm-6 mb-2">
+                            <small>
+                                <i class="fas fa-wrench text-warning me-2"></i>
+                                Intervention technique programmée
+                            </small>
+                        </div>
+                        <div class="col-sm-6 mb-2">
+                            <small>
+                                <i class="fas fa-clock text-secondary me-2"></i>
+                                Temps de résolution estimé : < 1h
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Contact d'urgence -->
+            <div class="mt-4">
+                <p class="small opacity-75">
+                    <i class="fas fa-exclamation-circle me-1"></i>
+                    Problème urgent ? 
+                    <a href="mailto:support@association.fr" class="text-white text-decoration-underline">
+                        Contactez le support technique
+                    </a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Section alternative -->
+<section class="bg-light py-5">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h3>
+                <i class="fas fa-route text-primary me-2"></i>
+                Alternatives Disponibles
+            </h3>
+            <p class="text-muted">En attendant la résolution, vous pouvez</p>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <i class="fas fa-list fa-3x text-primary mb-3"></i>
+                        <h5>Consulter les Événements</h5>
+                        <p class="text-muted">Accéder à la liste complète de nos événements</p>
+                        <a href="{% url 'evenements:evenements_publics' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-external-link-alt me-1"></i>
+                            Voir les Événements
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <i class="fas fa-calendar fa-3x text-success mb-3"></i>
+                        <h5>Calendrier Public</h5>
+                        <p class="text-muted">Vue d'ensemble de tous nos événements</p>
+                        <a href="{% url 'evenements:calendrier_public' %}" class="btn btn-outline-success">
+                            <i class="fas fa-external-link-alt me-1"></i>
+                            Ouvrir le Calendrier
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <i class="fas fa-envelope fa-3x text-info mb-3"></i>
+                        <h5>Nous Contacter</h5>
+                        <p class="text-muted">Obtenir de l'aide directement de notre équipe</p>
+                        <a href="mailto:contact@association.fr" class="btn btn-outline-info">
+                            <i class="fas fa-envelope me-1"></i>
+                            Envoyer un Email
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Statut du service -->
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="alert alert-warning" role="alert">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+                        <div class="flex-grow-1">
+                            <h5 class="alert-heading mb-1">Statut des Services</h5>
+                            <p class="mb-2">
+                                <strong>Événements :</strong> 
+                                <span class="badge bg-warning">Dégradé</span>
+                                - Certaines fonctionnalités peuvent être indisponibles
+                            </p>
+                            <p class="mb-0">
+                                <small>
+                                    <i class="fas fa-clock me-1"></i>
+                                    Dernière mise à jour : <span id="status-time"></span>
+                                </small>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Afficher le timestamp actuel
+    function updateTimestamp() {
+        const now = new Date();
+        const timestamp = now.toLocaleString('fr-FR', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        
+        const timestampEl = document.getElementById('timestamp');
+        const statusTimeEl = document.getElementById('status-time');
+        
+        if (timestampEl) timestampEl.textContent = timestamp;
+        if (statusTimeEl) statusTimeEl.textContent = timestamp;
+    }
+    
+    updateTimestamp();
+    
+    // Animation d'entrée progressive
+    const elements = document.querySelectorAll('.error-content > *');
+    elements.forEach((el, index) => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(30px)';
+        el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        
+        setTimeout(() => {
+            el.style.opacity = '1';
+            el.style.transform = 'translateY(0)';
+        }, index * 150);
+    });
+    
+    // Animation du bouton refresh
+    const refreshButton = document.querySelector('.refresh-button');
+    if (refreshButton) {
+        refreshButton.addEventListener('click', function() {
+            const icon = this.querySelector('i');
+            icon.style.animation = 'spin 1s linear';
+            
+            setTimeout(() => {
+                icon.style.animation = '';
+            }, 1000);
+        });
+    }
+    
+    // Auto-refresh après 60 secondes
+    setTimeout(() => {
+        const autoRefreshAlert = document.createElement('div');
+        autoRefreshAlert.className = 'alert alert-info position-fixed bottom-0 end-0 m-3';
+        autoRefreshAlert.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-info-circle me-2"></i>
+                <span>Actualisation automatique dans <span id="countdown">10</span>s</span>
+                <button class="btn btn-sm btn-outline-info ms-2" onclick="clearInterval(window.countdownInterval); this.parentElement.parentElement.remove();">
+                    Annuler
+                </button>
+            </div>
+        `;
+        document.body.appendChild(autoRefreshAlert);
+        
+        let countdown = 10;
+        window.countdownInterval = setInterval(() => {
+            countdown--;
+            const countdownEl = document.getElementById('countdown');
+            if (countdownEl) {
+                countdownEl.textContent = countdown;
+            }
+            
+            if (countdown <= 0) {
+                window.location.reload();
+            }
+        }, 1000);
+    }, 60000);
+});
+
+// Animation CSS pour la rotation
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}

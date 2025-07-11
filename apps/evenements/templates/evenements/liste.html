@@ -1,0 +1,514 @@
+{% extends "evenements/base_evenement.html" %}
+{% load static %}
+
+{% block page_title %}Liste des événements{% endblock page_title %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+.filter-sidebar {
+    background-color: #f8f9fa;
+    border-radius: 15px;
+    padding: 1.5rem;
+    height: fit-content;
+    position: sticky;
+    top: 20px;
+}
+.event-card {
+    transition: all 0.3s ease;
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+.event-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+.event-image {
+    height: 200px;
+    object-fit: cover;
+    position: relative;
+}
+.event-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 100%);
+    display: flex;
+    align-items: flex-end;
+    padding: 1rem;
+    color: white;
+}
+.type-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    border: 2px solid white;
+    font-weight: bold;
+}
+.price-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(40, 167, 69, 0.9);
+    color: white;
+    border: none;
+}
+.status-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+.places-progress {
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    background-color: #e9ecef;
+}
+.search-highlight {
+    background-color: #fff3cd;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+.view-toggle {
+    background: white;
+    border-radius: 10px;
+    padding: 0.25rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+.list-view .event-card {
+    margin-bottom: 1rem;
+}
+.list-view .row {
+    margin: 0;
+}
+.grid-view .event-card {
+    height: 100%;
+}
+</style>
+{% endblock extra_css %}
+
+{% block evenement_content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+                <h1 class="h3 mb-1">
+                    <i class="fas fa-list text-primary me-2"></i>
+                    Événements disponibles
+                </h1>
+                <p class="text-muted mb-0">
+                    {% if evenements %}
+                        {{ page_obj.paginator.count }} événement{{ page_obj.paginator.count|pluralize }} trouvé{{ page_obj.paginator.count|pluralize }}
+                        {% if search_form.recherche.value %}
+                            pour "<span class="search-highlight">{{ search_form.recherche.value }}</span>"
+                        {% endif %}
+                    {% else %}
+                        Aucun événement trouvé
+                    {% endif %}
+                </p>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <!-- Toggle vue grille/liste -->
+                <div class="view-toggle d-flex">
+                    <button class="btn btn-sm btn-outline-secondary active" id="gridViewBtn" 
+                            data-view="grid" title="Vue grille">
+                        <i class="fas fa-th"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" id="listViewBtn" 
+                            data-view="list" title="Vue liste">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+                
+                {% if user.is_staff %}
+                <a href="{% url 'evenements:creer' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>Nouvel événement
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Sidebar de filtres -->
+    <div class="col-lg-3 mb-4">
+        <div class="filter-sidebar">
+            <h5 class="mb-3">
+                <i class="fas fa-filter me-2"></i>Filtres
+            </h5>
+            
+            <form method="get" id="searchForm">
+                <!-- Recherche textuelle -->
+                <div class="mb-3">
+                    <label class="form-label">Recherche</label>
+                    {{ search_form.recherche }}
+                </div>
+                
+                <!-- Type d'événement -->
+                <div class="mb-3">
+                    <label class="form-label">Type d'événement</label>
+                    {{ search_form.type_evenement }}
+                </div>
+                
+                <!-- Statut -->
+                {% if user.is_staff %}
+                <div class="mb-3">
+                    <label class="form-label">Statut</label>
+                    {{ search_form.statut }}
+                </div>
+                {% endif %}
+                
+                <!-- Période -->
+                <div class="mb-3">
+                    <label class="form-label">Période</label>
+                    {{ search_form.periode }}
+                </div>
+                
+                <!-- Dates personnalisées -->
+                <div id="customDates" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">Date de début</label>
+                        {{ search_form.date_debut }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Date de fin</label>
+                        {{ search_form.date_fin }}
+                    </div>
+                </div>
+                
+                <!-- Lieu -->
+                <div class="mb-3">
+                    <label class="form-label">Lieu</label>
+                    {{ search_form.lieu }}
+                </div>
+                
+                <!-- Organisateur -->
+                {% if user.is_staff %}
+                <div class="mb-3">
+                    <label class="form-label">Organisateur</label>
+                    {{ search_form.organisateur }}
+                </div>
+                {% endif %}
+                
+                <!-- Options -->
+                <div class="mb-3">
+                    <div class="form-check">
+                        {{ search_form.places_disponibles }}
+                        <label class="form-check-label" for="{{ search_form.places_disponibles.id_for_label }}">
+                            Avec places disponibles
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        {{ search_form.inscriptions_ouvertes }}
+                        <label class="form-check-label" for="{{ search_form.inscriptions_ouvertes.id_for_label }}">
+                            Inscriptions ouvertes
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Tarification -->
+                <div class="mb-3">
+                    <label class="form-label">Tarification</label>
+                    {{ search_form.evenements_payants }}
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-1"></i>Rechercher
+                    </button>
+                    <a href="{% url 'evenements:liste' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-times me-1"></i>Effacer
+                    </a>
+                </div>
+            </form>
+            
+            <!-- Types d'événements populaires -->
+            <div class="mt-4">
+                <h6 class="mb-2">Types populaires</h6>
+                {% for type in types_evenements %}
+                <a href="?type_evenement={{ type.pk }}" 
+                   class="badge me-1 mb-1 text-decoration-none"
+                   style="background-color: {{ type.couleur_affichage }}; color: white;">
+                    {{ type.libelle }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Liste des événements -->
+    <div class="col-lg-9">
+        {% if evenements %}
+        <div id="eventsContainer" class="grid-view">
+            <div class="row" id="eventsGrid">
+                {% for evenement in evenements %}
+                <div class="col-md-6 col-xl-4 mb-4 event-item">
+                    <div class="card event-card h-100">
+                        <!-- Image ou placeholder -->
+                        <div class="position-relative">
+                            {% if evenement.image %}
+                                <img src="{{ evenement.image.url }}" class="card-img-top event-image" alt="{{ evenement.titre }}">
+                            {% else %}
+                                <div class="event-image bg-light d-flex align-items-center justify-content-center">
+                                    <i class="fas fa-calendar-alt fa-3x text-muted"></i>
+                                </div>
+                            {% endif %}
+                            
+                            <!-- Badges sur l'image -->
+                            <span class="badge type-badge" style="background-color: {{ evenement.type_evenement.couleur_affichage }}">
+                                {{ evenement.type_evenement.libelle }}
+                            </span>
+                            
+                            {% if evenement.est_payant %}
+                            <span class="badge price-badge">
+                                {{ evenement.tarif_membre }}€
+                            </span>
+                            {% else %}
+                            <span class="badge price-badge bg-success">
+                                Gratuit
+                            </span>
+                            {% endif %}
+                            
+                            <!-- Indicateur de statut inscription -->
+                            {% if not evenement.inscriptions_ouvertes %}
+                            <div class="inscription-badge">
+                                <span class="badge bg-warning">Inscriptions fermées</span>
+                            </div>
+                            {% elif evenement.est_complet %}
+                            <div class="inscription-badge">
+                                <span class="badge bg-danger">Complet</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="card-body">
+                            <!-- Titre et description -->
+                            <h5 class="card-title">
+                                <a href="{% url 'evenements:detail' evenement.pk %}" class="text-decoration-none">
+                                    {{ evenement.titre }}
+                                </a>
+                            </h5>
+                            <p class="card-text text-muted small">
+                                {{ evenement.description|truncatewords:20 }}
+                            </p>
+                            
+                            <!-- Informations pratiques -->
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="fas fa-clock text-primary me-2"></i>
+                                    <small>{{ evenement.date_debut|date:"d/m/Y H:i" }}</small>
+                                </div>
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                                    <small>{{ evenement.lieu|truncatechars:30 }}</small>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-user-tie text-primary me-2"></i>
+                                    <small>{{ evenement.organisateur.get_full_name }}</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Progression des places -->
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <small class="text-muted">Places</small>
+                                    <small class="text-muted">
+                                        {{ evenement.inscriptions_confirmees|default:0 }}/{{ evenement.capacite_max }}
+                                    </small>
+                                </div>
+                                <div class="places-progress">
+                                    {% with taux=evenement.taux_occupation|default:0 %}
+                                    <div class="progress-bar {% if taux >= 80 %}bg-danger{% elif taux >= 60 %}bg-warning{% else %}bg-success{% endif %}" 
+                                         style="width: {{ taux }}%"></div>
+                                    {% endwith %}
+                                </div>
+                            </div>
+                            
+                            <!-- Statut -->
+                            <div class="mb-3">
+                                <span class="status-indicator bg-{% if evenement.statut == 'publie' %}success{% elif evenement.statut == 'en_attente_validation' %}warning{% else %}secondary{% endif %}"></span>
+                                <small class="text-muted">{{ evenement.get_statut_display }}</small>
+                            </div>
+                        </div>
+                        
+                        <div class="card-footer bg-transparent">
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'evenements:detail' evenement.pk %}" class="btn btn-outline-primary btn-sm flex-grow-1">
+                                    <i class="fas fa-eye me-1"></i>Détails
+                                </a>
+                                {% if evenement.peut_s_inscrire %}
+                                <a href="{% url 'evenements:inscription_creer' evenement_pk=evenement.pk %}" 
+                                   class="btn btn-primary btn-sm">
+                                    <i class="fas fa-ticket-alt me-1"></i>S'inscrire
+                                </a>
+                                {% endif %}
+                                {% if user.is_staff %}
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" 
+                                            type="button" data-bs-toggle="dropdown">
+                                        <i class="fas fa-cog"></i>
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="{% url 'evenements:modifier' evenement.pk %}">
+                                            <i class="fas fa-edit me-1"></i>Modifier
+                                        </a></li>
+                                        <li><a class="dropdown-item" href="{% url 'evenements:export:inscriptions_evenement' evenement.pk %}">
+                                            <i class="fas fa-download me-1"></i>Export inscrits
+                                        </a></li>
+                                        {% if evenement.statut == 'brouillon' %}
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><a class="dropdown-item text-danger" href="{% url 'evenements:supprimer' evenement.pk %}">
+                                            <i class="fas fa-trash me-1"></i>Supprimer
+                                        </a></li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <nav aria-label="Navigation des événements" class="mt-4">
+            {% include 'includes/pagination.html' with page_obj=page_obj %}
+        </nav>
+        {% endif %}
+        
+        {% else %}
+        <!-- Aucun événement trouvé -->
+        <div class="text-center py-5">
+            <i class="fas fa-search fa-4x text-muted mb-3"></i>
+            <h4 class="text-muted">Aucun événement trouvé</h4>
+            <p class="text-muted">Essayez de modifier vos critères de recherche</p>
+            <div class="mt-3">
+                <a href="{% url 'evenements:liste' %}" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-refresh me-1"></i>Voir tous les événements
+                </a>
+                {% if user.is_staff %}
+                <a href="{% url 'evenements:creer' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>Créer un événement
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock evenement_content %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Gestion du toggle de vue
+    const gridViewBtn = document.getElementById('gridViewBtn');
+    const listViewBtn = document.getElementById('listViewBtn');
+    const eventsContainer = document.getElementById('eventsContainer');
+    
+    gridViewBtn.addEventListener('click', function() {
+        eventsContainer.className = 'grid-view';
+        gridViewBtn.classList.add('active');
+        listViewBtn.classList.remove('active');
+        localStorage.setItem('eventsView', 'grid');
+    });
+    
+    listViewBtn.addEventListener('click', function() {
+        eventsContainer.className = 'list-view';
+        listViewBtn.classList.add('active');
+        gridViewBtn.classList.remove('active');
+        localStorage.setItem('eventsView', 'list');
+        
+        // Restructurer pour la vue liste
+        const items = document.querySelectorAll('.event-item');
+        items.forEach(item => {
+            item.className = 'col-12 mb-3 event-item';
+        });
+    });
+    
+    // Restaurer la vue sauvegardée
+    const savedView = localStorage.getItem('eventsView') || 'grid';
+    if (savedView === 'list') {
+        listViewBtn.click();
+    }
+    
+    // Gestion des dates personnalisées
+    const periodeSelect = document.getElementById('{{ search_form.periode.id_for_label }}');
+    const customDates = document.getElementById('customDates');
+    
+    if (periodeSelect) {
+        periodeSelect.addEventListener('change', function() {
+            if (this.value === 'personnalisee') {
+                customDates.style.display = 'block';
+            } else {
+                customDates.style.display = 'none';
+            }
+        });
+        
+        // Vérifier la valeur initiale
+        if (periodeSelect.value === 'personnalisee') {
+            customDates.style.display = 'block';
+        }
+    }
+    
+    // Auto-submit des filtres (optionnel)
+    const filterInputs = document.querySelectorAll('#searchForm select, #searchForm input[type="checkbox"]');
+    filterInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            // Délai pour éviter les soumissions multiples rapides
+            clearTimeout(this.timeout);
+            this.timeout = setTimeout(() => {
+                document.getElementById('searchForm').submit();
+            }, 500);
+        });
+    });
+    
+    // Animation d'apparition des cartes
+    const eventCards = document.querySelectorAll('.event-card');
+    eventCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+    
+    // Mise à jour des places en temps réel (optionnel)
+    setInterval(function() {
+        updatePlacesInfo();
+    }, 30000); // 30 secondes
+});
+
+function updatePlacesInfo() {
+    // Fonction pour mettre à jour les informations de places via AJAX
+    const eventCards = document.querySelectorAll('[data-event-id]');
+    eventCards.forEach(card => {
+        const eventId = card.dataset.eventId;
+        if (eventId) {
+            fetch(window.EvenementsConfig.urls.placesDisponibles.replace('__PK__', eventId))
+                .then(response => response.json())
+                .then(data => {
+                    // Mettre à jour l'affichage des places
+                    const placesInfo = card.querySelector('.places-info');
+                    if (placesInfo && data.places_disponibles !== undefined) {
+                        // Mise à jour du contenu
+                    }
+                })
+                .catch(error => console.log('Erreur mise à jour places:', error));
+        }
+    });
+}
+</script>
+{% endblock extra_js %}

@@ -373,19 +373,95 @@ class Evenement(BaseModel):
         return True, "Inscription possible"
 
     def calculer_tarif_membre(self, membre):
-        """Calcule le tarif applicable pour un membre"""
+        """Calcule le tarif applicable pour un membre selon son type"""
         if not self.est_payant:
             return Decimal('0.00')
         
-        # Logique de tarification selon le type de membre
+        # Récupérer les types de membre actifs avec leurs priorités tarifaires
         types_membre_actifs = membre.get_types_actifs()
         
-        # Priorité au tarif salarié si le membre est salarié
+        if not types_membre_actifs.exists():
+            # Membre sans type spécifique = tarif standard membre
+            return self.tarif_membre
+        
+        # Logique de priorité tarifaire selon les types de membre
+        # 1. Vérifier s'il y a un tarif spécifique pour le type d'événement
+        tarif_specifique = self._get_tarif_specifique_type_membre(types_membre_actifs)
+        if tarif_specifique is not None:
+            return tarif_specifique
+        
+        # 2. Appliquer les règles de priorité générales
+        # Priorité 1: Salarié (tarif le plus avantageux)
         if types_membre_actifs.filter(libelle__icontains='salarié').exists():
             return self.tarif_salarie
         
+        # Priorité 2: Étudiant (si défini, sinon tarif membre)
+        if types_membre_actifs.filter(libelle__icontains='étudiant').exists():
+            # Si pas de tarif étudiant spécifique, on peut appliquer une réduction
+            return min(self.tarif_membre * Decimal('0.8'), self.tarif_salarie)  # 20% de réduction
+        
+        # Priorité 3: Membre honoraire (gratuit ou réduction importante)
+        if types_membre_actifs.filter(libelle__icontains='honoraire').exists():
+            return Decimal('0.00')  # Gratuit pour les membres honoraires
+        
+        # Priorité 4: Membre bienfaiteur (réduction modérée)
+        if types_membre_actifs.filter(libelle__icontains='bienfaiteur').exists():
+            return self.tarif_membre * Decimal('0.9')  # 10% de réduction
+        
         # Sinon tarif membre standard
         return self.tarif_membre
+    
+    def _get_tarif_specifique_type_membre(self, types_membre_actifs):
+        """Récupère un tarif spécifique selon le type d'événement et de membre"""
+        # Logique pour des tarifs spécifiques par combinaison type_evenement/type_membre
+        # Par exemple: Formation + Étudiant = tarif spécial
+        
+        if self.type_evenement.libelle.lower() in ['formation', 'séminaire']:
+            if types_membre_actifs.filter(libelle__icontains='étudiant').exists():
+                return self.tarif_membre * Decimal('0.5')  # 50% réduction formations pour étudiants
+        
+        if self.type_evenement.libelle.lower() in ['assemblée générale']:
+            # AG généralement gratuite pour tous les membres
+            return Decimal('0.00')
+        
+        return None
+
+    def verifier_eligibilite_membre(self, membre):
+        """Vérifie l'éligibilité d'un membre pour cet événement"""
+        # Vérification de base déjà dans peut_s_inscrire
+        peut_inscrire, message = self.peut_s_inscrire(membre)
+        if not peut_inscrire:
+            return False, message
+        
+        # Vérifications spécifiques selon le type de membre
+        types_membre_actifs = membre.get_types_actifs()
+        
+        # Règles d'éligibilité par type d'événement
+        restrictions = self.type_evenement.comportements_specifiques.get('restrictions_membres', {})
+        
+        if restrictions:
+            # Vérifier les types requis
+            types_requis = restrictions.get('types_requis', [])
+            if types_requis:
+                types_membre_noms = [t.libelle.lower() for t in types_membre_actifs]
+                if not any(tr.lower() in types_membre_noms for tr in types_requis):
+                    return False, f"Cet événement est réservé aux membres : {', '.join(types_requis)}"
+            
+            # Vérifier les types exclus
+            types_exclus = restrictions.get('types_exclus', [])
+            if types_exclus:
+                types_membre_noms = [t.libelle.lower() for t in types_membre_actifs]
+                if any(te.lower() in types_membre_noms for te in types_exclus):
+                    return False, f"Cet événement n'est pas accessible aux membres : {', '.join(types_exclus)}"
+        
+        # Vérifications selon l'ancienneté
+        anciennete_requise = self.type_evenement.comportements_specifiques.get('anciennete_minimale')
+        if anciennete_requise:
+            anciennete_membre = (timezone.now().date() - membre.date_adhesion).days
+            if anciennete_membre < anciennete_requise:
+                return False, f"Ancienneté minimale requise : {anciennete_requise} jours"
+        
+        return True, "Éligible"
 
     def promouvoir_liste_attente(self):
         """Promeut les inscrits de la liste d'attente si des places se libèrent"""

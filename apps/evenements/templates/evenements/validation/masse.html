@@ -1,0 +1,725 @@
+{% extends 'evenements/base_evenement.html' %}
+{% load static %}
+
+{% block title %}Validation en masse{% endblock %}
+
+{% block extra_css %}
+<style>
+    .masse-header {
+        background: linear-gradient(135deg, #6f42c1, #e83e8c);
+        color: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    .selection-panel {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border: 2px dashed #dee2e6;
+    }
+    .event-mini-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        border-left: 4px solid #007bff;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    .event-mini-card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        transform: translateX(5px);
+    }
+    .event-mini-card.selected {
+        border-left-color: #28a745;
+        background: #f8fff9;
+    }
+    .event-mini-card.urgent {
+        border-left-color: #dc3545;
+        background: #fff5f5;
+    }
+    .actions-panel {
+        position: sticky;
+        top: 20px;
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .progress-indicator {
+        background: #e9ecef;
+        height: 8px;
+        border-radius: 4px;
+        overflow: hidden;
+        margin: 1rem 0;
+    }
+    .progress-bar {
+        background: linear-gradient(90deg, #007bff, #28a745);
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    .stats-row {
+        background: #e3f2fd;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    .bulk-action-btn {
+        border-radius: 25px;
+        padding: 12px 25px;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+        transition: all 0.3s ease;
+    }
+    .bulk-action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    }
+    .filter-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .filter-chip {
+        background: #e9ecef;
+        border-radius: 20px;
+        padding: 0.3rem 0.8rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .filter-chip.active {
+        background: #007bff;
+        color: white;
+    }
+    .confirmation-modal .modal-dialog {
+        max-width: 600px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- En-tête -->
+    <div class="masse-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2><i class="fas fa-tasks"></i> Validation en masse</h2>
+                <p class="mb-0">Gérez plusieurs événements simultanément pour gagner du temps</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="{% url 'evenements:validation_liste' %}" class="btn btn-light">
+                    <i class="fas fa-arrow-left"></i> Retour
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Statistiques et filtres -->
+            <div class="stats-row">
+                <div class="row text-center">
+                    <div class="col-3">
+                        <div class="h4 text-warning mb-0" id="totalEvents">0</div>
+                        <small class="text-muted">Total</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="h4 text-danger mb-0" id="urgentEvents">0</div>
+                        <small class="text-muted">Urgents</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="h4 text-success mb-0" id="selectedEvents">0</div>
+                        <small class="text-muted">Sélectionnés</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="h4 text-primary mb-0" id="processedEvents">0</div>
+                        <small class="text-muted">Traités</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtres rapides -->
+            <div class="filter-chips">
+                <div class="filter-chip active" data-filter="all">
+                    <i class="fas fa-list"></i> Tous
+                </div>
+                <div class="filter-chip" data-filter="urgent">
+                    <i class="fas fa-fire"></i> Urgents (&lt; 7 jours)
+                </div>
+                <div class="filter-chip" data-filter="priority">
+                    <i class="fas fa-exclamation-triangle"></i> Priorité (&lt; 14 jours)
+                </div>
+                <div class="filter-chip" data-filter="recent">
+                    <i class="fas fa-clock"></i> Récents (dernières 24h)
+                </div>
+                <div class="filter-chip" data-filter="type">
+                    <i class="fas fa-tag"></i> Par type
+                </div>
+            </div>
+
+            <!-- Panel de sélection -->
+            <div class="selection-panel">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5><i class="fas fa-mouse-pointer"></i> Sélection des événements</h5>
+                    <div>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="selectAll()">
+                            <i class="fas fa-check-square"></i> Tout sélectionner
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="selectNone()">
+                            <i class="fas fa-square"></i> Tout désélectionner
+                        </button>
+                        <button class="btn btn-outline-primary btn-sm" onclick="selectUrgent()">
+                            <i class="fas fa-fire"></i> Sélectionner urgents
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Barre de progression -->
+                <div class="progress-indicator">
+                    <div class="progress-bar" style="width: 0%" id="selectionProgress"></div>
+                </div>
+                <small class="text-muted">Sélectionnez les événements à traiter en masse</small>
+            </div>
+
+            <!-- Liste des événements -->
+            <div id="eventsList">
+                {% for validation in validations %}
+                {% with evenement=validation.evenement %}
+                <div class="event-mini-card {% if validation.urgence_badge %}urgent{% endif %}" 
+                     data-validation-id="{{ validation.pk }}"
+                     data-urgency="{% if validation.urgence_badge %}urgent{% else %}normal{% endif %}"
+                     data-type="{{ evenement.type_evenement.id }}"
+                     data-created="{{ validation.created_at|date:'U' }}">
+                    
+                    <div class="row align-items-center">
+                        <!-- Checkbox -->
+                        <div class="col-md-1">
+                            <div class="form-check">
+                                <input class="form-check-input event-checkbox" 
+                                       type="checkbox" 
+                                       value="{{ validation.pk }}"
+                                       id="event{{ validation.pk }}">
+                            </div>
+                        </div>
+
+                        <!-- Informations événement -->
+                        <div class="col-md-7">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">{{ evenement.titre }}</h6>
+                                    <small class="text-muted">
+                                        <i class="fas fa-calendar"></i> {{ evenement.date_debut|date:"d/m/Y à H:i" }}
+                                        <span class="mx-2">|</span>
+                                        <i class="fas fa-map-marker-alt"></i> {{ evenement.lieu }}
+                                        <span class="mx-2">|</span>
+                                        <i class="fas fa-user"></i> {{ evenement.organisateur.get_full_name }}
+                                    </small>
+                                </div>
+                                {% if validation.urgence_badge %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-fire"></i> URGENT
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Type et délai -->
+                        <div class="col-md-3">
+                            <div class="text-end">
+                                <span class="badge" style="background-color: {{ evenement.type_evenement.couleur_affichage }}">
+                                    {{ evenement.type_evenement.libelle }}
+                                </span>
+                                <br>
+                                <small class="text-muted">{{ evenement.date_debut|timeuntil }}</small>
+                            </div>
+                        </div>
+
+                        <!-- Actions rapides -->
+                        <div class="col-md-1">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                        type="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <a class="dropdown-item" href="{% url 'evenements:validation_detail' validation.pk %}">
+                                            <i class="fas fa-eye"></i> Examiner
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item text-success" href="#" onclick="quickApprove({{ validation.pk }})">
+                                            <i class="fas fa-check"></i> Approuver
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item text-danger" href="#" onclick="quickReject({{ validation.pk }})">
+                                            <i class="fas fa-times"></i> Refuser
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endwith %}
+                {% empty %}
+                <div class="text-center py-5">
+                    <i class="fas fa-check-circle text-success" style="font-size: 3rem; opacity: 0.5;"></i>
+                    <h5 class="mt-3">Aucun événement à valider</h5>
+                    <p class="text-muted">Toutes les validations sont traitées !</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Sidebar Actions -->
+        <div class="col-md-4">
+            <div class="actions-panel">
+                <h5><i class="fas fa-bolt"></i> Actions en masse</h5>
+                
+                <!-- Compteur de sélection -->
+                <div class="alert alert-info text-center">
+                    <strong><span id="selectedCount">0</span> événement(s) sélectionné(s)</strong>
+                </div>
+
+                <!-- Actions principales -->
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-success bulk-action-btn" 
+                            onclick="showMassActionModal('approve')" disabled id="approveBtn">
+                        <i class="fas fa-check-circle"></i> Approuver la sélection
+                    </button>
+                    
+                    <button type="button" class="btn btn-warning bulk-action-btn" 
+                            onclick="showMassActionModal('modify')" disabled id="modifyBtn">
+                        <i class="fas fa-edit"></i> Demander modifications
+                    </button>
+                    
+                    <button type="button" class="btn btn-danger bulk-action-btn" 
+                            onclick="showMassActionModal('reject')" disabled id="rejectBtn">
+                        <i class="fas fa-times-circle"></i> Refuser la sélection
+                    </button>
+                </div>
+
+                <hr>
+
+                <!-- Actions intelligentes -->
+                <h6><i class="fas fa-magic"></i> Actions intelligentes</h6>
+                <div class="d-grid gap-1">
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="autoApproveValid()">
+                        <i class="fas fa-robot"></i> Auto-approuver les valides
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="reviewIncomplete()">
+                        <i class="fas fa-search"></i> Réviser les incomplets
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-info btn-sm" onclick="groupByType()">
+                        <i class="fas fa-layer-group"></i> Grouper par type
+                    </button>
+                </div>
+
+                <hr>
+
+                <!-- Statistiques détaillées -->
+                <h6><i class="fas fa-chart-bar"></i> Analyse</h6>
+                <div class="small">
+                    <div class="d-flex justify-content-between">
+                        <span>Taux d'urgence :</span>
+                        <span class="text-danger" id="urgencyRate">0%</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Temps moyen :</span>
+                        <span class="text-info" id="avgTime">--</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Type dominant :</span>
+                        <span class="text-primary" id="dominantType">--</span>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Historique des actions -->
+                <h6><i class="fas fa-history"></i> Dernières actions</h6>
+                <div id="recentActions" class="small">
+                    <div class="text-muted">Aucune action récente</div>
+                </div>
+
+                <!-- Aide -->
+                <div class="mt-3">
+                    <div class="card border-light">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="fas fa-lightbulb"></i> Conseils</h6>
+                            <small class="text-muted">
+                                • Traitez d'abord les urgents<br>
+                                • Groupez par type similaire<br>
+                                • Utilisez l'auto-approbation<br>
+                                • Ajoutez des commentaires détaillés
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmation d'action en masse -->
+<div class="modal fade confirmation-modal" id="massActionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">
+                    <i class="fas fa-tasks"></i> Action en masse
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="massActionForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Attention :</strong> Cette action sera appliquée à <span id="actionCount">0</span> événement(s).
+                    </div>
+
+                    <!-- Liste des événements concernés -->
+                    <div class="mb-3">
+                        <h6>Événements concernés :</h6>
+                        <div id="affectedEvents" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                            <!-- Sera rempli dynamiquement -->
+                        </div>
+                    </div>
+
+                    <!-- Commentaire -->
+                    <div class="mb-3">
+                        <label for="massComment" class="form-label">Commentaire :</label>
+                        <textarea class="form-control" id="massComment" name="commentaire" rows="4" 
+                                placeholder="Ajoutez un commentaire pour cette action..."></textarea>
+                        <div class="form-text" id="commentHint">
+                            <!-- Sera rempli selon l'action -->
+                        </div>
+                    </div>
+
+                    <!-- Options avancées -->
+                    <div class="accordion" id="advancedOptions">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#collapseOptions">
+                                    <i class="fas fa-cog"></i> Options avancées
+                                </button>
+                            </h2>
+                            <div id="collapseOptions" class="accordion-collapse collapse">
+                                <div class="accordion-body">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="notifyOrganizers" name="notify" checked>
+                                        <label class="form-check-label" for="notifyOrganizers">
+                                            Notifier les organisateurs par email
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="createReport" name="report">
+                                        <label class="form-check-label" for="createReport">
+                                            Générer un rapport de l'action
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Champs cachés -->
+                    <input type="hidden" name="action" id="massAction">
+                    <input type="hidden" name="evenements" id="selectedEventIds">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Annuler
+                    </button>
+                    <button type="submit" class="btn" id="confirmActionBtn">
+                        <i class="fas fa-check"></i> Confirmer l'action
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    updateStats();
+    updateActionButtons();
+
+    // Gestion des clics sur les cartes
+    $('.event-mini-card').on('click', function(e) {
+        if (!$(e.target).hasClass('form-check-input') && !$(e.target).closest('.dropdown').length) {
+            const checkbox = $(this).find('.event-checkbox');
+            checkbox.prop('checked', !checkbox.prop('checked'));
+            updateSelection();
+        }
+    });
+
+    // Gestion des checkboxes
+    $('.event-checkbox').on('change', updateSelection);
+
+    // Gestion des filtres
+    $('.filter-chip').on('click', function() {
+        $('.filter-chip').removeClass('active');
+        $(this).addClass('active');
+        applyFilter($(this).data('filter'));
+    });
+
+    function updateSelection() {
+        const selectedCards = $('.event-checkbox:checked').closest('.event-mini-card');
+        const allCards = $('.event-mini-card');
+        
+        // Mettre à jour l'apparence des cartes
+        allCards.removeClass('selected');
+        selectedCards.addClass('selected');
+        
+        // Mettre à jour les compteurs
+        const selectedCount = selectedCards.length;
+        $('#selectedCount').text(selectedCount);
+        $('#selectedEvents').text(selectedCount);
+        
+        // Mettre à jour la barre de progression
+        const progressPercent = allCards.length > 0 ? (selectedCount / allCards.length) * 100 : 0;
+        $('#selectionProgress').css('width', progressPercent + '%');
+        
+        updateActionButtons();
+    }
+
+    function updateActionButtons() {
+        const hasSelection = $('.event-checkbox:checked').length > 0;
+        
+        $('#approveBtn, #modifyBtn, #rejectBtn').prop('disabled', !hasSelection);
+        
+        if (hasSelection) {
+            $('#approveBtn, #modifyBtn, #rejectBtn').removeClass('bulk-action-btn').addClass('bulk-action-btn');
+        }
+    }
+
+    function updateStats() {
+        const total = $('.event-mini-card').length;
+        const urgent = $('.event-mini-card.urgent').length;
+        const urgencyRate = total > 0 ? Math.round((urgent / total) * 100) : 0;
+        
+        $('#totalEvents').text(total);
+        $('#urgentEvents').text(urgent);
+        $('#urgencyRate').text(urgencyRate + '%');
+        
+        // Type dominant
+        const types = {};
+        $('.event-mini-card').each(function() {
+            const typeText = $(this).find('.badge').text().trim();
+            types[typeText] = (types[typeText] || 0) + 1;
+        });
+        
+        let dominantType = '--';
+        let maxCount = 0;
+        for (const [type, count] of Object.entries(types)) {
+            if (count > maxCount) {
+                maxCount = count;
+                dominantType = type;
+            }
+        }
+        $('#dominantType').text(dominantType);
+    }
+
+    function applyFilter(filter) {
+        const cards = $('.event-mini-card');
+        cards.show();
+        
+        switch(filter) {
+            case 'urgent':
+                cards.not('.urgent').hide();
+                break;
+            case 'priority':
+                // Logique pour priorité (à implémenter selon vos critères)
+                break;
+            case 'recent':
+                const yesterday = Date.now() - (24 * 60 * 60 * 1000);
+                cards.each(function() {
+                    const created = parseInt($(this).data('created')) * 1000;
+                    if (created < yesterday) {
+                        $(this).hide();
+                    }
+                });
+                break;
+            case 'type':
+                // Permettre la sélection par type (à développer)
+                break;
+        }
+    }
+});
+
+function selectAll() {
+    $('.event-checkbox:visible').prop('checked', true);
+    $('.event-mini-card:visible').addClass('selected');
+    updateSelection();
+}
+
+function selectNone() {
+    $('.event-checkbox').prop('checked', false);
+    $('.event-mini-card').removeClass('selected');
+    updateSelection();
+}
+
+function selectUrgent() {
+    selectNone();
+    $('.event-mini-card.urgent .event-checkbox').prop('checked', true);
+    $('.event-mini-card.urgent').addClass('selected');
+    updateSelection();
+}
+
+function showMassActionModal(action) {
+    const selectedIds = $('.event-checkbox:checked').map(function() { return this.value; }).get();
+    
+    if (selectedIds.length === 0) {
+        alert('Aucun événement sélectionné');
+        return;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('massActionModal'));
+    const form = document.getElementById('massActionForm');
+    
+    // Configuration selon l'action
+    let title, buttonClass, buttonText, hint, required = false;
+    
+    switch(action) {
+        case 'approve':
+            title = 'Approuver les événements';
+            buttonClass = 'btn-success';
+            buttonText = 'Approuver tout';
+            hint = 'Commentaire optionnel pour l\'approbation en masse';
+            break;
+        case 'modify':
+            title = 'Demander des modifications';
+            buttonClass = 'btn-warning';
+            buttonText = 'Demander modifications';
+            hint = 'Décrivez les modifications à apporter (obligatoire)';
+            required = true;
+            break;
+        case 'reject':
+            title = 'Refuser les événements';
+            buttonClass = 'btn-danger';
+            buttonText = 'Refuser tout';
+            hint = 'Justifiez le refus (obligatoire)';
+            required = true;
+            break;
+    }
+    
+    // Mettre à jour le modal
+    $('#modalTitle').html(`<i class="fas fa-tasks"></i> ${title}`);
+    $('#actionCount').text(selectedIds.length);
+    $('#massAction').val(action);
+    $('#selectedEventIds').val(selectedIds.join(','));
+    $('#commentHint').text(hint);
+    $('#massComment').prop('required', required);
+    
+    const confirmBtn = $('#confirmActionBtn');
+    confirmBtn.removeClass().addClass(`btn ${buttonClass}`);
+    confirmBtn.html(`<i class="fas fa-check"></i> ${buttonText}`);
+    
+    // Remplir la liste des événements
+    const affectedEvents = $('#affectedEvents');
+    affectedEvents.empty();
+    
+    $('.event-checkbox:checked').each(function() {
+        const card = $(this).closest('.event-mini-card');
+        const title = card.find('h6').text();
+        const date = card.find('.fa-calendar').parent().text().split('|')[0].trim();
+        
+        affectedEvents.append(`
+            <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                <span>${title}</span>
+                <small class="text-muted">${date}</small>
+            </div>
+        `);
+    });
+    
+    form.action = '{% url "evenements:validation_masse" %}';
+    modal.show();
+}
+
+function autoApproveValid() {
+    // Logique pour auto-approuver les événements qui passent tous les critères
+    const validEvents = $('.event-mini-card').not('.urgent').find('.event-checkbox');
+    validEvents.prop('checked', true);
+    updateSelection();
+    
+    if (validEvents.length > 0) {
+        showMassActionModal('approve');
+        $('#massComment').val('Auto-approbation : événements répondant aux critères de validation automatique');
+    } else {
+        alert('Aucun événement éligible pour l\'auto-approbation');
+    }
+}
+
+function reviewIncomplete() {
+    // Sélectionner les événements nécessitant une révision
+    alert('Fonctionnalité de révision en développement');
+}
+
+function groupByType() {
+    // Grouper visuellement par type
+    const events = $('.event-mini-card').detach();
+    const container = $('#eventsList');
+    const types = {};
+    
+    events.each(function() {
+        const type = $(this).find('.badge').text().trim();
+        if (!types[type]) types[type] = [];
+        types[type].push(this);
+    });
+    
+    Object.keys(types).sort().forEach(type => {
+        container.append(`<h6 class="mt-3 mb-2 text-muted">${type}</h6>`);
+        types[type].forEach(event => container.append(event));
+    });
+}
+
+function quickApprove(validationId) {
+    if (confirm('Approuver rapidement cet événement ?')) {
+        const form = $('<form method="post"></form>');
+        form.attr('action', `/evenements/validation/${validationId}/approuver/`);
+        form.append('{% csrf_token %}');
+        form.append('<input type="hidden" name="commentaire" value="Approbation rapide">');
+        $('body').append(form);
+        form.submit();
+    }
+}
+
+function quickReject(validationId) {
+    const reason = prompt('Raison du refus :');
+    if (reason) {
+        const form = $('<form method="post"></form>');
+        form.attr('action', `/evenements/validation/${validationId}/refuser/`);
+        form.append('{% csrf_token %}');
+        form.append(`<input type="hidden" name="commentaire" value="${reason}">`);
+        $('body').append(form);
+        form.submit();
+    }
+}
+
+// Gestion du formulaire
+$('#massActionForm').on('submit', function(e) {
+    const action = $('#massAction').val();
+    const comment = $('#massComment').val();
+    
+    if ((action === 'reject' || action === 'modify') && !comment.trim()) {
+        e.preventDefault();
+        alert('Un commentaire est obligatoire pour cette action.');
+        $('#massComment').focus();
+    }
+});
+</script>
+{% endblock %}

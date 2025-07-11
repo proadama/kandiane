@@ -1,0 +1,32 @@
+<!-- templates/emails/evenements/promotion_liste_attente.txt -->
+Bonjour {{ recipient_name }},
+
+🎉 BONNE NOUVELLE ! Une place s'est libérée
+
+🎊 Excellente nouvelle ! Une place s'est libérée pour l'événement "{{ evenement.titre }}" et nous sommes ravis de vous proposer cette opportunité !
+
+✅ Vous avez été promu(e) de la liste d'attente !
+Votre inscription est maintenant en attente de confirmation.
+
+📋 Détails de l'événement :
+🎯 Événement : {{ evenement.titre }}
+📅 Date : {{ evenement.date_debut|date:"l d F Y à H:i" }}
+📍 Lieu : {{ evenement.lieu }}
+{% if inscription.nombre_accompagnants > 0 %}👥 Accompagnants : {{ inscription.nombre_accompagnants }}{% endif %}
+
+⏰ Temps limité : Vous avez {{ heures_restantes }} heure{% if heures_restantes > 1 %}s{% endif %} pour confirmer votre inscription, sinon votre place sera proposée au membre suivant en liste d'attente.
+
+Pour confirmer votre participation : {{ url_confirmation }}
+Pour voir les détails : {{ url_detail }}
+
+🚀 Prochaines étapes :
+1. Confirmez votre participation
+2. Recevez votre confirmation définitive par email
+3. Préparez-vous pour cet événement passionnant !
+
+Nous espérons vous voir bientôt à cet événement !
+
+Cordialement,
+L'équipe {{ site_name }}
+
+{{ site_url }}

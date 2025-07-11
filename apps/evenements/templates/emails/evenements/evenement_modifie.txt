@@ -1,0 +1,29 @@
+<!-- templates/emails/evenements/evenement_modifie.txt -->
+Bonjour {{ recipient_name }},
+
+L'événement "{{ evenement.titre }}" auquel vous êtes inscrit(e) a été modifié.
+
+ℹ️ Informations importantes : Veuillez vérifier les modifications ci-dessous et vous assurer que vous pouvez toujours participer à l'événement.
+
+🔄 Modifications apportées :
+{% for modification in modifications %}
+{{ modification.champ|title }} :
+Avant : {{ modification.ancienne_valeur }}
+Maintenant : {{ modification.nouvelle_valeur }}
+
+{% endfor %}
+
+📋 Informations actuelles de l'événement :
+🎯 Titre : {{ evenement.titre }}
+📅 Date : {{ evenement.date_debut|date:"l d F Y à H:i" }}
+📍 Lieu : {{ evenement.lieu }}
+👤 Organisateur : {{ evenement.organisateur.get_full_name }}
+
+Pour voir l'événement mis à jour : {{ url_evenement }}
+
+Si vous avez des questions concernant ces modifications, n'hésitez pas à contacter l'organisateur.
+
+Cordialement,
+L'équipe {{ site_name }}
+
+{{ site_url }}

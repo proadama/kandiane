@@ -1,0 +1,694 @@
+{% extends 'evenements/base_evenement.html' %}
+{% load static %}
+
+{% block title %}
+    {% if object %}Modifier la session{% else %}Nouvelle session{% endif %} - {{ evenement.titre }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .session-header {
+        background: linear-gradient(135deg, #6610f2, #007bff);
+        color: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    .form-section {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .form-section h5 {
+        color: #495057;
+        border-bottom: 2px solid #e9ecef;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .datetime-input {
+        position: relative;
+    }
+    .datetime-preview {
+        background: #f8f9fa;
+        border-radius: 5px;
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    .session-preview {
+        position: sticky;
+        top: 20px;
+        background: #e3f2fd;
+        border-radius: 10px;
+        padding: 1.5rem;
+        border: 1px solid #bbdefb;
+    }
+    .preview-session-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        border-left: 4px solid #007bff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .form-help {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+        border-radius: 5px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    .time-conflict {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 5px;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        display: none;
+    }
+    .duration-display {
+        background: #d1ecf1;
+        border-radius: 5px;
+        padding: 0.5rem;
+        text-align: center;
+        font-weight: bold;
+        color: #0c5460;
+    }
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 2rem;
+    }
+    .step {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 10px;
+        font-weight: bold;
+        position: relative;
+    }
+    .step.active {
+        background: #007bff;
+        color: white;
+    }
+    .step.completed {
+        background: #28a745;
+        color: white;
+    }
+    .step.pending {
+        background: #e9ecef;
+        color: #6c757d;
+    }
+    .step::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 100%;
+        width: 20px;
+        height: 2px;
+        background: #e9ecef;
+        transform: translateY(-50%);
+    }
+    .step:last-child::after {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- En-tête -->
+    <div class="session-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2><i class="fas fa-plus-circle"></i> 
+                    {% if object %}Modifier la session{% else %}Nouvelle session{% endif %}
+                </h2>
+                <h4 class="mb-2">{{ evenement.titre }}</h4>
+                <p class="mb-0">
+                    <i class="fas fa-calendar"></i> 
+                    {{ evenement.date_debut|date:"d/m/Y à H:i" }}
+                    {% if evenement.date_fin %}
+                        - {{ evenement.date_fin|date:"d/m/Y à H:i" }}
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="{% url 'evenements:sessions_liste' evenement.pk %}" class="btn btn-light">
+                    <i class="fas fa-arrow-left"></i> Retour aux sessions
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicateur d'étapes -->
+    <div class="step-indicator">
+        <div class="step active">1</div>
+        <div class="step pending">2</div>
+        <div class="step pending">3</div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Aide contextuelle -->
+            <div class="form-help">
+                <h6><i class="fas fa-lightbulb"></i> Conseils pour créer une session</h6>
+                <ul class="mb-0">
+                    <li>Définissez des horaires réalistes dans les limites de l'événement parent</li>
+                    <li>Indiquez clairement si la session est obligatoire ou optionnelle</li>
+                    <li>Spécifiez l'intervenant si différent de l'organisateur principal</li>
+                    <li>Limitez la capacité si la session nécessite un espace plus restreint</li>
+                </ul>
+            </div>
+
+            <form method="post" id="sessionForm">
+                {% csrf_token %}
+                
+                <!-- Section 1: Informations de base -->
+                <div class="form-section">
+                    <h5><i class="fas fa-info-circle"></i> Informations de base</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group mb-3">
+                                <label for="{{ form.titre_session.id_for_label }}" class="form-label">
+                                    <i class="fas fa-heading"></i> {{ form.titre_session.label }}
+                                </label>
+                                {{ form.titre_session }}
+                                {% if form.titre_session.help_text %}
+                                    <div class="form-text">{{ form.titre_session.help_text }}</div>
+                                {% endif %}
+                                {% if form.titre_session.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.titre_session.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="form-group mb-3">
+                                <label for="{{ form.ordre_session.id_for_label }}" class="form-label">
+                                    <i class="fas fa-sort-numeric-up"></i> {{ form.ordre_session.label }}
+                                </label>
+                                {{ form.ordre_session }}
+                                {% if form.ordre_session.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.ordre_session.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label for="{{ form.description_session.id_for_label }}" class="form-label">
+                            <i class="fas fa-align-left"></i> {{ form.description_session.label }}
+                        </label>
+                        {{ form.description_session }}
+                        {% if form.description_session.help_text %}
+                            <div class="form-text">{{ form.description_session.help_text }}</div>
+                        {% endif %}
+                        {% if form.description_session.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.description_session.errors }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="{{ form.intervenant.id_for_label }}" class="form-label">
+                                    <i class="fas fa-user-tie"></i> {{ form.intervenant.label }}
+                                </label>
+                                {{ form.intervenant }}
+                                {% if form.intervenant.help_text %}
+                                    <div class="form-text">{{ form.intervenant.help_text }}</div>
+                                {% endif %}
+                                {% if form.intervenant.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.intervenant.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="{{ form.capacite_session.id_for_label }}" class="form-label">
+                                    <i class="fas fa-users"></i> {{ form.capacite_session.label }}
+                                </label>
+                                {{ form.capacite_session }}
+                                <div class="form-text">
+                                    Capacité de l'événement parent : {{ evenement.capacite_max }} personnes
+                                </div>
+                                {% if form.capacite_session.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.capacite_session.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Planning -->
+                <div class="form-section">
+                    <h5><i class="fas fa-clock"></i> Planification</h5>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Contraintes de l'événement parent :</strong><br>
+                        Du {{ evenement.date_debut|date:"d/m/Y à H:i" }} 
+                        au {{ evenement.date_fin|date:"d/m/Y à H:i"|default:"(fin non définie)" }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="{{ form.date_debut_session.id_for_label }}" class="form-label">
+                                    <i class="fas fa-play"></i> {{ form.date_debut_session.label }}
+                                </label>
+                                <div class="datetime-input">
+                                    {{ form.date_debut_session }}
+                                    <div class="datetime-preview" id="debutPreview"></div>
+                                </div>
+                                {% if form.date_debut_session.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.date_debut_session.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="{{ form.date_fin_session.id_for_label }}" class="form-label">
+                                    <i class="fas fa-stop"></i> {{ form.date_fin_session.label }}
+                                </label>
+                                <div class="datetime-input">
+                                    {{ form.date_fin_session }}
+                                    <div class="datetime-preview" id="finPreview"></div>
+                                </div>
+                                {% if form.date_fin_session.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.date_fin_session.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Affichage de la durée -->
+                    <div class="duration-display" id="durationDisplay" style="display: none;">
+                        <i class="fas fa-hourglass-half"></i> Durée calculée : <span id="durationText">--</span>
+                    </div>
+
+                    <!-- Alerte de conflit -->
+                    <div class="time-conflict" id="timeConflict">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Attention :</strong> <span id="conflictMessage"></span>
+                    </div>
+                </div>
+
+                <!-- Section 3: Configuration -->
+                <div class="form-section">
+                    <h5><i class="fas fa-cog"></i> Configuration</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check mb-3">
+                                {{ form.est_obligatoire }}
+                                <label class="form-check-label" for="{{ form.est_obligatoire.id_for_label }}">
+                                    <i class="fas fa-exclamation-circle text-danger"></i>
+                                    {{ form.est_obligatoire.label }}
+                                </label>
+                                <div class="form-text">
+                                    Si coché, tous les participants devront assister à cette session
+                                </div>
+                                {% if form.est_obligatoire.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.est_obligatoire.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Erreurs générales -->
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle"></i>
+                        {{ form.non_field_errors }}
+                    </div>
+                {% endif %}
+
+                <!-- Actions -->
+                <div class="form-section">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-save"></i> 
+                                {% if object %}Mettre à jour la session{% else %}Créer la session{% endif %}
+                            </button>
+                            <a href="{% url 'evenements:sessions_liste' evenement.pk %}" class="btn btn-secondary btn-lg ms-2">
+                                <i class="fas fa-times"></i> Annuler
+                            </a>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            {% if object %}
+                                <button type="button" class="btn btn-outline-danger" onclick="supprimerSession()">
+                                    <i class="fas fa-trash"></i> Supprimer cette session
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Sidebar Aperçu -->
+        <div class="col-md-4">
+            <div class="session-preview">
+                <h5><i class="fas fa-eye"></i> Aperçu de la session</h5>
+                
+                <div class="preview-session-card" id="previewCard">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="mb-0" id="previewTitle">Nouvelle session</h6>
+                        <span class="badge bg-secondary" id="previewType">Optionnelle</span>
+                    </div>
+                    
+                    <p class="text-muted small mb-2" id="previewDescription">
+                        Description de la session...
+                    </p>
+                    
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">
+                                <i class="fas fa-play"></i> Début<br>
+                                <strong id="previewStart">--:--</strong>
+                            </small>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">
+                                <i class="fas fa-stop"></i> Fin<br>
+                                <strong id="previewEnd">--:--</strong>
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-2">
+                    
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">
+                                <i class="fas fa-user-tie"></i> Intervenant<br>
+                                <strong id="previewSpeaker">{{ evenement.organisateur.get_full_name }}</strong>
+                            </small>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">
+                                <i class="fas fa-users"></i> Capacité<br>
+                                <strong id="previewCapacity">{{ evenement.capacite_max }}</strong>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Autres sessions -->
+                {% if evenement.sessions.all %}
+                <div class="mt-3">
+                    <h6><i class="fas fa-layer-group"></i> Autres sessions</h6>
+                    {% for session in evenement.sessions.all %}
+                        {% if not object or session.pk != object.pk %}
+                        <div class="border-start border-3 border-info ps-2 mb-2">
+                            <small>
+                                <strong>Session {{ session.ordre_session }}:</strong> {{ session.titre_session }}<br>
+                                <span class="text-muted">{{ session.date_debut_session|date:"d/m H:i" }}</span>
+                            </small>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Conseils -->
+                <div class="mt-3">
+                    <div class="card border-light">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="fas fa-lightbulb"></i> Conseils</h6>
+                            <small class="text-muted">
+                                • Numérotez vos sessions dans l'ordre chronologique<br>
+                                • Prévoyez des pauses entre les sessions<br>
+                                • Limitez la capacité si nécessaire<br>
+                                • Indiquez l'intervenant pour faciliter l'organisation
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de suppression -->
+{% if object %}
+<div class="modal fade" id="suppressionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle text-danger"></i> Supprimer la session
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Êtes-vous sûr de vouloir supprimer cette session ?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>{{ object.titre_session }}</strong><br>
+                    Cette action est irréversible.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Annuler
+                </button>
+                <a href="{% url 'evenements:session_supprimer' object.pk %}" class="btn btn-danger">
+                    <i class="fas fa-trash"></i> Supprimer définitivement
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Données de l'événement parent
+    const evenementDebut = new Date('{{ evenement.date_debut|date:"c" }}');
+    const evenementFin = new Date('{{ evenement.date_fin|date:"c"|default:"" }}');
+    
+    // Mise à jour de l'aperçu en temps réel
+    function updatePreview() {
+        // Titre
+        const titre = $('#id_titre_session').val() || 'Nouvelle session';
+        $('#previewTitle').text(`Session ${$('#id_ordre_session').val() || '?'}: ${titre}`);
+        
+        // Description
+        const description = $('#id_description_session').val() || 'Description de la session...';
+        $('#previewDescription').text(description.length > 100 ? description.substring(0, 100) + '...' : description);
+        
+        // Type obligatoire/optionnel
+        const obligatoire = $('#id_est_obligatoire').is(':checked');
+        const badge = $('#previewType');
+        if (obligatoire) {
+            badge.removeClass('bg-secondary').addClass('bg-danger').text('Obligatoire');
+        } else {
+            badge.removeClass('bg-danger').addClass('bg-secondary').text('Optionnelle');
+        }
+        
+        // Dates
+        const dateDebut = $('#id_date_debut_session').val();
+        const dateFin = $('#id_date_fin_session').val();
+        
+        if (dateDebut) {
+            const debut = new Date(dateDebut);
+            $('#previewStart').text(debut.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'}));
+            $('#debutPreview').text(`${debut.toLocaleDateString('fr-FR')} à ${debut.toLocaleTimeString('fr-FR')}`);
+        }
+        
+        if (dateFin) {
+            const fin = new Date(dateFin);
+            $('#previewEnd').text(fin.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'}));
+            $('#finPreview').text(`${fin.toLocaleDateString('fr-FR')} à ${fin.toLocaleTimeString('fr-FR')}`);
+        }
+        
+        // Intervenant
+        const intervenant = $('#id_intervenant').val() || '{{ evenement.organisateur.get_full_name }}';
+        $('#previewSpeaker').text(intervenant);
+        
+        // Capacité
+        const capacite = $('#id_capacite_session').val() || '{{ evenement.capacite_max }}';
+        $('#previewCapacity').text(capacite);
+        
+        // Calcul de la durée
+        if (dateDebut && dateFin) {
+            const debut = new Date(dateDebut);
+            const fin = new Date(dateFin);
+            const dureeMs = fin - debut;
+            
+            if (dureeMs > 0) {
+                const heures = Math.floor(dureeMs / (1000 * 60 * 60));
+                const minutes = Math.floor((dureeMs % (1000 * 60 * 60)) / (1000 * 60));
+                
+                let dureeText = '';
+                if (heures > 0) dureeText += `${heures}h `;
+                if (minutes > 0) dureeText += `${minutes}min`;
+                
+                $('#durationText').text(dureeText || '< 1min');
+                $('#durationDisplay').show();
+            } else {
+                $('#durationDisplay').hide();
+            }
+        } else {
+            $('#durationDisplay').hide();
+        }
+        
+        // Vérification des conflits
+        checkTimeConflicts();
+    }
+    
+    function checkTimeConflicts() {
+        const dateDebut = $('#id_date_debut_session').val();
+        const dateFin = $('#id_date_fin_session').val();
+        const conflictDiv = $('#timeConflict');
+        
+        if (!dateDebut) {
+            conflictDiv.hide();
+            return;
+        }
+        
+        const debut = new Date(dateDebut);
+        const fin = dateFin ? new Date(dateFin) : null;
+        let hasConflict = false;
+        let conflictMessage = '';
+        
+        // Vérifier les limites de l'événement parent
+        if (debut < evenementDebut) {
+            hasConflict = true;
+            conflictMessage = 'La session commence avant le début de l\'événement parent';
+        } else if (evenementFin && debut > evenementFin) {
+            hasConflict = true;
+            conflictMessage = 'La session commence après la fin de l\'événement parent';
+        } else if (fin && evenementFin && fin > evenementFin) {
+            hasConflict = true;
+            conflictMessage = 'La session se termine après la fin de l\'événement parent';
+        } else if (fin && fin <= debut) {
+            hasConflict = true;
+            conflictMessage = 'La date de fin doit être postérieure à la date de début';
+        }
+        
+        if (hasConflict) {
+            $('#conflictMessage').text(conflictMessage);
+            conflictDiv.show();
+        } else {
+            conflictDiv.hide();
+        }
+    }
+    
+    // Écouteurs d'événements
+    $('#id_titre_session, #id_description_session, #id_intervenant, #id_capacite_session, #id_ordre_session').on('input', updatePreview);
+    $('#id_est_obligatoire').on('change', updatePreview);
+    $('#id_date_debut_session, #id_date_fin_session').on('change', updatePreview);
+    
+    // Mise à jour de l'indicateur d'étapes
+    function updateSteps() {
+        const titre = $('#id_titre_session').val();
+        const dateDebut = $('#id_date_debut_session').val();
+        
+        // Étape 1 : Informations de base
+        if (titre) {
+            $('.step').eq(0).removeClass('pending').addClass('completed');
+            $('.step').eq(1).removeClass('pending').addClass('active');
+        }
+        
+        // Étape 2 : Planning
+        if (dateDebut) {
+            $('.step').eq(1).removeClass('pending active').addClass('completed');
+            $('.step').eq(2).removeClass('pending').addClass('active');
+        }
+        
+        // Étape 3 : Configuration (toujours accessible)
+        if (titre && dateDebut) {
+            $('.step').eq(2).removeClass('pending active').addClass('completed');
+        }
+    }
+    
+    $('#id_titre_session, #id_date_debut_session').on('input change', updateSteps);
+    
+    // Suggestions automatiques
+    $('#id_titre_session').on('input', function() {
+        const value = $(this).val().toLowerCase();
+        let suggestions = [];
+        
+        if (value.includes('ouverture') || value.includes('accueil')) {
+            $('#id_ordre_session').val(1);
+        } else if (value.includes('clôture') || value.includes('fermeture')) {
+            $('#id_ordre_session').val(99);
+        }
+        
+        updatePreview();
+    });
+    
+    // Validation en temps réel
+    $('#sessionForm').on('submit', function(e) {
+        const hasConflict = $('#timeConflict').is(':visible');
+        if (hasConflict) {
+            e.preventDefault();
+            alert('Veuillez résoudre les conflits d\'horaires avant de soumettre le formulaire.');
+            return false;
+        }
+    });
+    
+    // Initialisation
+    updatePreview();
+    updateSteps();
+    
+    // Auto-complétion intervenant
+    $('#id_intervenant').autocomplete({
+        source: [
+            '{{ evenement.organisateur.get_full_name }}',
+            'Intervenant externe',
+            'Expert invité',
+            'Formateur'
+        ],
+        minLength: 0
+    }).focus(function() {
+        $(this).autocomplete('search', '');
+    });
+});
+
+function supprimerSession() {
+    const modal = new bootstrap.Modal(document.getElementById('suppressionModal'));
+    modal.show();
+}
+
+// Raccourcis clavier
+$(document).keydown(function(e) {
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        $('#sessionForm').submit();
+    }
+});
+</script>
+{% endblock %}

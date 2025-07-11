@@ -99,6 +99,76 @@
                 </div>
             </div>
             
+            <!-- AJOUTER cette section dans le template de détail membre -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-calendar-event me-2"></i>Participation aux Événements
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if membre.get_prochains_evenements %}
+                        <h6 class="text-primary">Prochains événements</h6>
+                        <div class="row">
+                            {% for inscription in membre.get_prochains_evenements %}
+                                <div class="col-md-6 mb-2">
+                                    <div class="border-start border-primary border-3 ps-3">
+                                        <strong>{{ inscription.evenement.titre }}</strong><br>
+                                        <small class="text-muted">
+                                            {{ inscription.evenement.date_debut|date:"d/m/Y H:i" }} - 
+                                            <span class="badge bg-{{ inscription.statut|default:'secondary' }}">
+                                                {{ inscription.get_statut_display }}
+                                            </span>
+                                        </small>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <hr>
+                    {% endif %}
+                    
+                    {% with stats=membre.get_statistiques_participation %}
+                        <h6 class="text-primary">Statistiques de participation</h6>
+                        <div class="row">
+                            <div class="col-md-3 text-center">
+                                <h4 class="text-success">{{ stats.total_inscriptions }}</h4>
+                                <small class="text-muted">Inscriptions totales</small>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <h4 class="text-info">{{ stats.inscriptions_presentes }}</h4>
+                                <small class="text-muted">Présences</small>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <h4 class="text-warning">{{ stats.taux_presence }}%</h4>
+                                <small class="text-muted">Taux de présence</small>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <h4 class="text-primary">{{ stats.montant_total_paye }}€</h4>
+                                <small class="text-muted">Total payé</small>
+                            </div>
+                        </div>
+                        
+                        {% if stats.evenements_par_type %}
+                            <hr>
+                            <h6 class="text-primary">Participation par type d'événement</h6>
+                            <div class="row">
+                                {% for type, count in stats.evenements_par_type.items %}
+                                    <div class="col-md-4 mb-2">
+                                        <span class="badge bg-secondary me-2">{{ count }}</span>
+                                        {{ type }}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <hr>
+                    <a href="{% url 'evenements:mes_inscriptions' %}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-list me-1"></i>Voir l'historique complet
+                    </a>
+                </div>
+            </div>
+
             <!-- Commentaires -->
             <div class="card mb-4">
                 <div class="card-header bg-light">

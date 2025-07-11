@@ -1,0 +1,136 @@
+<!-- templates/emails/evenements/promotion_liste_attente.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bonne nouvelle - Place disponible</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            padding: 20px; 
+        }
+        .header { 
+            background-color: #28a745; 
+            color: white; 
+            padding: 20px; 
+            text-align: center; 
+            border-radius: 8px 8px 0 0; 
+        }
+        .content { 
+            background-color: #f8f9fa; 
+            padding: 30px; 
+            border-radius: 0 0 8px 8px; 
+        }
+        .alert { 
+            padding: 15px; 
+            border-radius: 5px; 
+            margin: 20px 0; 
+        }
+        .alert-success { 
+            background-color: #d4edda; 
+            border: 1px solid #c3e6cb; 
+            color: #155724; 
+        }
+        .btn { 
+            display: inline-block; 
+            padding: 12px 24px; 
+            background-color: #007bff; 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 5px; 
+            margin: 10px 5px; 
+        }
+        .btn-success { 
+            background-color: #28a745; 
+            font-weight: bold; 
+        }
+        .good-news { 
+            background: linear-gradient(135deg, #28a745, #20c997); 
+            color: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            text-align: center; 
+            margin: 20px 0; 
+        }
+        .footer { 
+            text-align: center; 
+            margin-top: 30px; 
+            padding-top: 20px; 
+            border-top: 1px solid #dee2e6; 
+            color: #6c757d; 
+            font-size: 14px; 
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎉 BONNE NOUVELLE !</h1>
+        <p>Une place s'est libérée</p>
+    </div>
+    
+    <div class="content">
+        <p>Bonjour <strong>{{ recipient_name }}</strong>,</p>
+        
+        <div class="good-news">
+            <h2>🎊 Excellente nouvelle !</h2>
+            <p>Une place s'est libérée pour l'événement <strong>{{ evenement.titre }}</strong> 
+            et nous sommes ravis de vous proposer cette opportunité !</p>
+        </div>
+        
+        <div class="alert alert-success">
+            <strong>✅ Vous avez été promu(e) de la liste d'attente !</strong><br>
+            Votre inscription est maintenant <strong>en attente de confirmation</strong>.
+        </div>
+        
+        <div style="background-color: white; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; margin: 20px 0;">
+            <h3>📋 Détails de l'événement</h3>
+            <p><strong>🎯 Événement :</strong> {{ evenement.titre }}</p>
+            <p><strong>📅 Date :</strong> {{ evenement.date_debut|date:"l d F Y à H:i" }}</p>
+            <p><strong>📍 Lieu :</strong> {{ evenement.lieu }}</p>
+            {% if inscription.nombre_accompagnants > 0 %}
+            <p><strong>👥 Accompagnants :</strong> {{ inscription.nombre_accompagnants }}</p>
+            {% endif %}
+        </div>
+        
+        <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <strong>⏰ Temps limité :</strong> Vous avez <strong>{{ heures_restantes }} heure{% if heures_restantes > 1 %}s{% endif %}</strong> 
+            pour confirmer votre inscription, sinon votre place sera proposée au membre suivant en liste d'attente.
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ url_confirmation }}" class="btn btn-success">
+                ✅ CONFIRMER MA PARTICIPATION
+            </a>
+            <a href="{{ url_detail }}" class="btn">
+                👁️ Voir les détails
+            </a>
+        </div>
+        
+        <div style="background-color: #e9ecef; padding: 15px; border-radius: 5px; margin-top: 20px;">
+            <p><strong>🚀 Prochaines étapes :</strong></p>
+            <ol>
+                <li>Confirmez votre participation en cliquant sur le bouton ci-dessus</li>
+                <li>Recevez votre confirmation définitive par email</li>
+                <li>Préparez-vous pour cet événement passionnant !</li>
+            </ol>
+        </div>
+        
+        <p>Nous espérons vous voir bientôt à cet événement !</p>
+        
+        <p>Cordialement,<br>
+        L'équipe {{ site_name }}</p>
+    </div>
+    
+    <div class="footer">
+        <p>
+            © {{ current_year }} {{ site_name }}<br>
+            <a href="{{ site_url }}">{{ site_url }}</a>
+        </p>
+    </div>
+</body>
+</html>

@@ -296,8 +296,53 @@ class Cotisation(BaseModel):
         default=dict,
         blank=True,
         verbose_name=_("Métadonnées")
+    )   
+    evenement_id = models.IntegerField(
+    null=True,
+    blank=True,
+    verbose_name=_("ID Événement lié"),
+    help_text=_("ID de l'événement si cette cotisation est liée à un événement")
     )
-    
+    inscription_evenement_id = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("ID Inscription Événement"),
+        help_text=_("ID de l'inscription à l'événement liée à cette cotisation")
+    )
+    type_cotisation = models.CharField(
+        max_length=20,
+        choices=[
+            ('adhesion', _('Adhésion')),
+            ('cotisation', _('Cotisation')),
+            ('evenement', _('Événement')),
+            ('autre', _('Autre')),
+        ],
+        default='cotisation',
+        verbose_name=_("Type de cotisation")
+    )
+    evenement_id = models.IntegerField(
+    null=True,
+    blank=True,
+    verbose_name=_("ID Événement lié"),
+    help_text=_("ID de l'événement si cette cotisation est liée à un événement")
+    )
+    inscription_evenement_id = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("ID Inscription Événement"),
+        help_text=_("ID de l'inscription à l'événement liée à cette cotisation")
+    )
+    type_cotisation = models.CharField(
+        max_length=20,
+        choices=[
+            ('adhesion', _('Adhésion')),
+            ('cotisation', _('Cotisation')),
+            ('evenement', _('Événement')),
+            ('autre', _('Autre')),
+        ],
+        default='cotisation',
+        verbose_name=_("Type de cotisation")
+    )
     # Utiliser le gestionnaire personnalisé
     objects = CotisationManager()
     
@@ -367,12 +412,17 @@ class Cotisation(BaseModel):
     def _generer_reference(self):
         """
         Génère une référence unique pour la cotisation.
-        Format: COT-YYYYMM-XXXXX (année, mois, numéro séquentiel)
+        Format: COT-YYYYMM-XXXXX (standard) ou EVENT-YYYYMM-XXXXX (événement)
         """
         import random
         import string
         
-        prefix = 'COT'
+        # Préfixe selon le type de cotisation
+        if self.type_cotisation == 'evenement':
+            prefix = 'EVENT'
+        else:
+            prefix = 'COT'
+        
         date_part = timezone.now().strftime('%Y%m')
         
         # Générer un identifiant aléatoire de 5 caractères
@@ -389,7 +439,10 @@ class Cotisation(BaseModel):
         # S'assurer que la référence est unique
         while Cotisation.objects.filter(reference=reference).exists():
             random_part = ''.join(random.choice(chars) for _ in range(5))
-            reference = f"{prefix}-{date_part}-{random_part}"
+            if self.membre and self.membre.id:
+                reference = f"{prefix}-{date_part}-{membre_part}-{random_part}"
+            else:
+                reference = f"{prefix}-{date_part}-{random_part}"
         
         return reference
     
@@ -485,6 +538,270 @@ class Cotisation(BaseModel):
         """
         return self.statut_paiement == 'payee'
 
+    @property
+    def est_cotisation_evenement(self):
+        """Vérifie si c'est une cotisation d'événement"""
+        return self.type_cotisation == 'evenement'
+
+    def get_evenement(self):
+        """Récupère l'événement lié si existe"""
+        if self.evenement_id:
+            try:
+                from apps.evenements.models import Evenement
+                return Evenement.objects.get(id=self.evenement_id)
+            except:
+                return None
+        return None
+
+    def get_inscription_evenement(self):
+        """Récupère l'inscription événement liée si existe"""
+        if self.inscription_evenement_id:
+            try:
+                from apps.evenements.models import InscriptionEvenement
+                return InscriptionEvenement.objects.get(id=self.inscription_evenement_id)
+            except:
+                return None
+        return None
+
+    def peut_etre_remboursee(self):
+        """Vérifie si la cotisation peut être remboursée selon les règles"""
+        if not self.est_cotisation_evenement:
+            return False, "Seules les cotisations d'événements peuvent être remboursées automatiquement"
+        
+        if self.statut_paiement != 'payee':
+            return False, "La cotisation n'est pas entièrement payée"
+        
+        evenement = self.get_evenement()
+        if not evenement:
+            return False, "Événement non trouvé"
+        
+        # Vérifier le délai de 48h
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        maintenant = timezone.now()
+        limite_remboursement = evenement.date_debut - timedelta(hours=48)
+        
+        if maintenant > limite_remboursement:
+            return False, "Délai de remboursement dépassé (48h avant l'événement)"
+        
+        return True, "Remboursement possible"
+
+    def effectuer_remboursement(self, raison="", utilisateur=None):
+        """Effectue le remboursement de la cotisation"""
+        peut_rembourser, message = self.peut_etre_remboursee()
+        
+        if not peut_rembourser:
+            return False, message
+        
+        try:
+            # Créer un paiement de remboursement
+            paiement_remboursement = Paiement.objects.create(
+                cotisation=self,
+                montant=self.montant,
+                type_transaction='remboursement',
+                mode_paiement=None,
+                commentaire=f"Remboursement: {raison}",
+                cree_par=utilisateur,
+                statut=self.statut,
+                metadata={
+                    'raison_remboursement': raison,
+                    'date_demande': timezone.now().isoformat(),
+                    'cotisation_originale': self.reference
+                }
+            )
+            
+            # Mettre à jour le statut de la cotisation
+            self.commentaire = f"{self.commentaire}\nRemboursement effectué: {raison}".strip()
+            self.save()
+            
+            return True, f"Remboursement effectué: {paiement_remboursement.reference_paiement}"
+            
+        except Exception as e:
+            return False, f"Erreur lors du remboursement: {str(e)}"
+
+    @classmethod
+    def creer_pour_evenement(cls, inscription_evenement, utilisateur=None):
+        """Crée une cotisation pour une inscription à un événement"""
+        from datetime import timedelta
+        
+        evenement = inscription_evenement.evenement
+        membre = inscription_evenement.membre
+        
+        # Calculer le montant total (membre + accompagnants)
+        montant_total = inscription_evenement.calculer_montant_total()
+        
+        if montant_total <= 0:
+            return None, "Événement gratuit, pas de cotisation à créer"
+        
+        # Date d'échéance = date événement - 2 jours
+        date_echeance = evenement.date_debut.date() - timedelta(days=2)
+        
+        # Période couverte = date événement
+        periode_debut = evenement.date_debut.date()
+        periode_fin = evenement.date_fin.date() if evenement.date_fin else periode_debut
+        
+        try:
+            cotisation = cls.objects.create(
+                membre=membre,
+                montant=montant_total,
+                date_echeance=date_echeance,
+                periode_debut=periode_debut,
+                periode_fin=periode_fin,
+                annee=evenement.date_debut.year,
+                mois=evenement.date_debut.month,
+                type_cotisation='evenement',
+                evenement_id=evenement.id,
+                inscription_evenement_id=inscription_evenement.id,
+                commentaire=f"Cotisation pour l'événement: {evenement.titre}",
+                cree_par=utilisateur,
+                metadata={
+                    'evenement_titre': evenement.titre,
+                    'evenement_date': evenement.date_debut.isoformat(),
+                    'evenement_lieu': evenement.lieu,
+                    'nombre_accompagnants': inscription_evenement.nombre_accompagnants,
+                    'tarif_membre': float(evenement.calculer_tarif_membre(membre)),
+                    'tarif_accompagnants': float(evenement.tarif_invite * inscription_evenement.nombre_accompagnants)
+                }
+            )
+            
+            return cotisation, "Cotisation créée avec succès"
+            
+        except Exception as e:
+            return None, f"Erreur création cotisation: {str(e)}"
+    
+    @property
+    def est_cotisation_evenement(self):
+        """Vérifie si c'est une cotisation d'événement"""
+        return self.type_cotisation == 'evenement'
+
+    def get_evenement(self):
+        """Récupère l'événement lié si existe"""
+        if self.evenement_id:
+            try:
+                from apps.evenements.models import Evenement
+                return Evenement.objects.get(id=self.evenement_id)
+            except:
+                return None
+        return None
+
+    def get_inscription_evenement(self):
+        """Récupère l'inscription événement liée si existe"""
+        if self.inscription_evenement_id:
+            try:
+                from apps.evenements.models import InscriptionEvenement
+                return InscriptionEvenement.objects.get(id=self.inscription_evenement_id)
+            except:
+                return None
+        return None
+
+    def peut_etre_remboursee(self):
+        """Vérifie si la cotisation peut être remboursée selon les règles"""
+        if not self.est_cotisation_evenement:
+            return False, "Seules les cotisations d'événements peuvent être remboursées automatiquement"
+        
+        if self.statut_paiement != 'payee':
+            return False, "La cotisation n'est pas entièrement payée"
+        
+        evenement = self.get_evenement()
+        if not evenement:
+            return False, "Événement non trouvé"
+        
+        # Vérifier le délai de 48h
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        maintenant = timezone.now()
+        limite_remboursement = evenement.date_debut - timedelta(hours=48)
+        
+        if maintenant > limite_remboursement:
+            return False, "Délai de remboursement dépassé (48h avant l'événement)"
+        
+        return True, "Remboursement possible"
+
+    def effectuer_remboursement(self, raison="", utilisateur=None):
+        """Effectue le remboursement de la cotisation"""
+        peut_rembourser, message = self.peut_etre_remboursee()
+        
+        if not peut_rembourser:
+            return False, message
+        
+        try:
+            # Créer un paiement de remboursement
+            paiement_remboursement = Paiement.objects.create(
+                cotisation=self,
+                montant=self.montant,
+                type_transaction='remboursement',
+                mode_paiement=None,  # Sera défini selon le mode original
+                commentaire=f"Remboursement: {raison}",
+                cree_par=utilisateur,
+                statut=self.statut,  # Même statut que la cotisation
+                metadata={
+                    'raison_remboursement': raison,
+                    'date_demande': timezone.now().isoformat(),
+                    'cotisation_originale': self.reference
+                }
+            )
+            
+            # Mettre à jour le statut de la cotisation
+            self.statut_paiement = 'remboursee'  # Nouveau statut à ajouter si nécessaire
+            self.commentaire = f"{self.commentaire}\nRemboursement effectué: {raison}".strip()
+            self.save()
+            
+            return True, f"Remboursement effectué: {paiement_remboursement.reference_paiement}"
+            
+        except Exception as e:
+            return False, f"Erreur lors du remboursement: {str(e)}"
+
+    @classmethod
+    def creer_pour_evenement(cls, inscription_evenement, utilisateur=None):
+        """Crée une cotisation pour une inscription à un événement"""
+        from datetime import timedelta
+        
+        evenement = inscription_evenement.evenement
+        membre = inscription_evenement.membre
+        
+        # Calculer le montant total (membre + accompagnants)
+        montant_total = inscription_evenement.calculer_montant_total()
+        
+        if montant_total <= 0:
+            return None, "Événement gratuit, pas de cotisation à créer"
+        
+        # Date d'échéance = date événement - 2 jours
+        date_echeance = evenement.date_debut.date() - timedelta(days=2)
+        
+        # Période couverte = date événement
+        periode_debut = evenement.date_debut.date()
+        periode_fin = evenement.date_fin.date() if evenement.date_fin else periode_debut
+        
+        try:
+            cotisation = cls.objects.create(
+                membre=membre,
+                montant=montant_total,
+                date_echeance=date_echeance,
+                periode_debut=periode_debut,
+                periode_fin=periode_fin,
+                annee=evenement.date_debut.year,
+                mois=evenement.date_debut.month,
+                type_cotisation='evenement',
+                evenement_id=evenement.id,
+                inscription_evenement_id=inscription_evenement.id,
+                commentaire=f"Cotisation pour l'événement: {evenement.titre}",
+                cree_par=utilisateur,
+                metadata={
+                    'evenement_titre': evenement.titre,
+                    'evenement_date': evenement.date_debut.isoformat(),
+                    'evenement_lieu': evenement.lieu,
+                    'nombre_accompagnants': inscription_evenement.nombre_accompagnants,
+                    'tarif_membre': float(evenement.calculer_tarif_membre(membre)),
+                    'tarif_accompagnants': float(evenement.tarif_invite * inscription_evenement.nombre_accompagnants)
+                }
+            )
+            
+            return cotisation, "Cotisation créée avec succès"
+            
+        except Exception as e:
+            return None, f"Erreur création cotisation: {str(e)}"
 
 class Paiement(BaseModel):
     """

@@ -317,6 +317,37 @@ class UserProfile(BaseModel):
         verbose_name=_("Préférences")
     )
     
+     # AJOUTER ces constantes de classe
+    NOTIFICATION_TYPES = {
+        'evenement_invitation': 'Invitations aux événements',
+        'evenement_rappel_confirmation': 'Rappels de confirmation',
+        'evenement_modification': 'Modifications d\'événements',
+        'evenement_annulation': 'Annulations d\'événements',
+        'evenement_promotion_liste': 'Promotions depuis liste d\'attente',
+        'evenement_nouveau_type': 'Nouveaux types d\'événements'
+    }
+    
+    # AJOUTER ces méthodes après la méthode __str__
+    def get_notification_preference(self, type_notification):
+        """Récupère une préférence de notification"""
+        notifications = self.preferences.get('notifications', {})
+        return notifications.get(type_notification, True)  # Activé par défaut
+    
+    def set_notification_preference(self, type_notification, enabled):
+        """Définit une préférence de notification"""
+        if 'notifications' not in self.preferences:
+            self.preferences['notifications'] = {}
+        self.preferences['notifications'][type_notification] = enabled
+        self.save(update_fields=['preferences'])
+    
+    def get_all_notification_preferences(self):
+        """Retourne toutes les préférences de notification"""
+        notifications = self.preferences.get('notifications', {})
+        return {
+            notif_type: notifications.get(notif_type, True)
+            for notif_type in self.NOTIFICATION_TYPES.keys()
+        }
+    
     class Meta:
         verbose_name = _("Profil utilisateur")
         verbose_name_plural = _("Profils utilisateurs")
@@ -378,3 +409,36 @@ class UserLoginHistory(BaseModel):
         
     def __str__(self):
         return f"{self.user.email} - {self.created_at}"
+    
+class Log(BaseModel):
+    """Modèle pour la journalisation des actions"""
+    utilisateur = models.ForeignKey(
+        'accounts.CustomUser',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Utilisateur"
+    )
+    action = models.CharField(
+        max_length=255,
+        verbose_name="Action"
+    )
+    details = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Détails"
+    )
+    adresse_ip = models.GenericIPAddressField(
+        blank=True,
+        null=True,
+        verbose_name="Adresse IP"
+    )
+    
+    class Meta:
+        db_table = 'logs'
+        verbose_name = "Log"
+        verbose_name_plural = "Logs"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.action} - {self.created_at}"

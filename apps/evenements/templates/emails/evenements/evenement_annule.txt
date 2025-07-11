@@ -1,0 +1,33 @@
+<!-- templates/emails/evenements/evenement_annule.txt -->
+Bonjour {{ recipient_name }},
+
+❌ ANNULATION : Nous sommes désolés de vous informer que l'événement "{{ evenement.titre }}" a été annulé.
+
+💔 Nous sommes désolés
+L'événement "{{ evenement.titre }}" prévu le {{ evenement.date_debut|date:"l d F Y à H:i" }} a dû être annulé.
+
+{% if raison %}
+📝 Raison de l'annulation :
+{{ raison }}
+{% endif %}
+
+📋 Détails de l'événement annulé :
+🎯 Titre : {{ evenement.titre }}
+📅 Date prévue : {{ evenement.date_debut|date:"l d F Y à H:i" }}
+📍 Lieu : {{ evenement.lieu }}
+👤 Organisateur : {{ evenement.organisateur.get_full_name }}
+
+🔄 Prochaines étapes :
+- Votre inscription a été automatiquement annulée
+- Si vous aviez effectué un paiement, vous serez remboursé(e)
+- Vous recevrez des informations sur le remboursement sous 48h
+- Surveillez nos prochains événements qui pourraient vous intéresser
+
+Page de l'événement : {{ url_evenement }}
+
+Nous nous excusons pour ce désagrément et espérons vous retrouver bientôt lors d'un prochain événement.
+
+Cordialement,
+L'équipe {{ site_name }}
+
+{{ site_url }}

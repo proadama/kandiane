@@ -1,0 +1,773 @@
+{% extends "evenements/base_evenement.html" %}
+{% load static %}
+
+{% block page_title %}Recherche avancée{% endblock page_title %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+.search-hero {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 20px;
+    padding: 3rem 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+.search-hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 300px;
+    height: 300px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 50%;
+    z-index: 1;
+}
+.search-hero::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -10%;
+    width: 200px;
+    height: 200px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 50%;
+    z-index: 1;
+}
+.search-hero .content {
+    position: relative;
+    z-index: 2;
+}
+.search-form-main {
+    background: white;
+    border-radius: 50px;
+    padding: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    margin-top: 2rem;
+}
+.search-input-main {
+    border: none;
+    padding: 15px 25px;
+    font-size: 1.1rem;
+    border-radius: 40px;
+    background: transparent;
+}
+.search-input-main:focus {
+    outline: none;
+    box-shadow: none;
+}
+.search-btn-main {
+    border-radius: 40px;
+    padding: 15px 30px;
+    font-weight: 600;
+    border: none;
+}
+.facet-section {
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+.facet-header {
+    background: #f8f9fa;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #dee2e6;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+.facet-header:hover {
+    background: #e9ecef;
+}
+.facet-body {
+    padding: 1.5rem;
+}
+.facet-option {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f8f9fa;
+}
+.facet-option:last-child {
+    border-bottom: none;
+}
+.facet-count {
+    background: #e9ecef;
+    color: #6c757d;
+    padding: 0.2rem 0.6rem;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+.result-card {
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+.result-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+.result-image {
+    height: 180px;
+    background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+    position: relative;
+    overflow: hidden;
+}
+.result-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.result-image .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.6));
+    display: flex;
+    align-items: flex-end;
+    padding: 1rem;
+    color: white;
+}
+.result-meta {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10;
+}
+.search-suggestions {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+.suggestion-tag {
+    display: inline-block;
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    margin: 0.2rem;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+.suggestion-tag:hover {
+    background: #1976d2;
+    color: white;
+    transform: translateY(-2px);
+}
+.sort-options {
+    background: white;
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+.view-toggle-search {
+    background: white;
+    border-radius: 10px;
+    padding: 0.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+.loading-results {
+    text-align: center;
+    padding: 3rem;
+    color: #6c757d;
+}
+.no-results {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+.price-range-slider {
+    margin: 1rem 0;
+}
+.range-values {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-top: 0.5rem;
+}
+.filter-tag {
+    display: inline-flex;
+    align-items: center;
+    background: #007bff;
+    color: white;
+    padding: 0.3rem 0.8rem;
+    border-radius: 15px;
+    margin: 0.2rem;
+    font-size: 0.85rem;
+}
+.filter-tag .remove {
+    margin-left: 0.5rem;
+    cursor: pointer;
+    font-weight: bold;
+}
+.search-stats {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+</style>
+{% endblock extra_css %}
+
+{% block evenement_content %}
+<!-- Section héro avec recherche principale -->
+<div class="search-hero">
+    <div class="content">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1 class="display-5 fw-bold mb-3">
+                    <i class="fas fa-search me-3"></i>
+                    Trouvez l'événement parfait
+                </h1>
+                <p class="lead mb-0">
+                    Recherche avancée parmi {{ page_obj.paginator.count|default:"tous nos" }} événements disponibles
+                </p>
+            </div>
+            <div class="col-lg-4">
+                <div class="text-end">
+                    <i class="fas fa-calendar-alt fa-4x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Barre de recherche principale -->
+        <form method="get" class="search-form-main">
+            <div class="input-group">
+                <input type="text" class="form-control search-input-main" 
+                       name="q" value="{{ query }}"
+                       placeholder="Rechercher par mot-clé, lieu, organisateur...">
+                <button class="btn btn-primary search-btn-main" type="submit">
+                    <i class="fas fa-search me-2"></i>Rechercher
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Suggestions de recherche -->
+{% if not query %}
+<div class="search-suggestions">
+    <h6 class="mb-3">
+        <i class="fas fa-lightbulb text-warning me-2"></i>
+        Suggestions populaires
+    </h6>
+    <div>
+        <a href="?q=formation" class="suggestion-tag">Formation</a>
+        <a href="?q=webinaire" class="suggestion-tag">Webinaire</a>
+        <a href="?q=sortie" class="suggestion-tag">Sortie</a>
+        <a href="?q=gratuit" class="suggestion-tag">Gratuit</a>
+        <a href="?q=ce+mois" class="suggestion-tag">Ce mois</a>
+        <a href="?q=weekend" class="suggestion-tag">Weekend</a>
+        {% for type in types_evenements %}
+        <a href="?types={{ type.pk }}" class="suggestion-tag">{{ type.libelle }}</a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <!-- Sidebar des filtres -->
+    <div class="col-lg-3">
+        <form method="get" id="advancedSearchForm">
+            <input type="hidden" name="q" value="{{ query }}">
+            
+            <!-- Filtres actifs -->
+            {% if selected_types or sort or request.GET.prix_min or request.GET.prix_max %}
+            <div class="facet-section">
+                <div class="facet-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-filter me-2"></i>Filtres actifs
+                    </h6>
+                </div>
+                <div class="facet-body">
+                    <div id="activeFilters">
+                        {% for type_id in selected_types %}
+                        <span class="filter-tag">
+                            Type: {{ type_id }}
+                            <span class="remove" onclick="removeFilter('types', '{{ type_id }}')">&times;</span>
+                        </span>
+                        {% endfor %}
+                        {% if request.GET.prix_min %}
+                        <span class="filter-tag">
+                            Prix min: {{ request.GET.prix_min }}€
+                            <span class="remove" onclick="removeFilter('prix_min', '')">&times;</span>
+                        </span>
+                        {% endif %}
+                        {% if request.GET.prix_max %}
+                        <span class="filter-tag">
+                            Prix max: {{ request.GET.prix_max }}€
+                            <span class="remove" onclick="removeFilter('prix_max', '')">&times;</span>
+                        </span>
+                        {% endif %}
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="clearAllFilters()">
+                        <i class="fas fa-times me-1"></i>Tout effacer
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Types d'événements -->
+            <div class="facet-section">
+                <div class="facet-header" data-bs-toggle="collapse" data-bs-target="#typesFacet">
+                    <h6 class="mb-0">
+                        <i class="fas fa-tags me-2"></i>
+                        Types d'événements
+                        <i class="fas fa-chevron-down float-end"></i>
+                    </h6>
+                </div>
+                <div class="facet-body collapse show" id="typesFacet">
+                    {% for type in types_evenements %}
+                    <div class="facet-option">
+                        <div class="form-check flex-grow-1">
+                            <input class="form-check-input" type="checkbox" 
+                                   name="types" value="{{ type.pk }}" 
+                                   id="type_{{ type.pk }}"
+                                   {% if type.pk|stringformat:"s" in selected_types %}checked{% endif %}>
+                            <label class="form-check-label d-flex align-items-center" for="type_{{ type.pk }}">
+                                <span class="legend-color me-2" 
+                                      style="width: 12px; height: 12px; background-color: {{ type.couleur_affichage }}; border-radius: 2px;"></span>
+                                {{ type.libelle }}
+                            </label>
+                        </div>
+                        <span class="facet-count">{{ type.evenements_count|default:0 }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Fourchette de prix -->
+            <div class="facet-section">
+                <div class="facet-header" data-bs-toggle="collapse" data-bs-target="#priceFacet">
+                    <h6 class="mb-0">
+                        <i class="fas fa-euro-sign me-2"></i>
+                        Prix
+                        <i class="fas fa-chevron-down float-end"></i>
+                    </h6>
+                </div>
+                <div class="facet-body collapse show" id="priceFacet">
+                    <div class="row">
+                        <div class="col-6">
+                            <label class="form-label">Min (€)</label>
+                            <input type="number" class="form-control form-control-sm" 
+                                   name="prix_min" value="{{ request.GET.prix_min }}" 
+                                   min="0" step="5">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Max (€)</label>
+                            <input type="number" class="form-control form-control-sm" 
+                                   name="prix_max" value="{{ request.GET.prix_max }}" 
+                                   min="0" step="5">
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="gratuit" value="1" 
+                                   id="gratuit" {% if request.GET.gratuit %}checked{% endif %}>
+                            <label class="form-check-label" for="gratuit">
+                                Événements gratuits seulement
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Date -->
+            <div class="facet-section">
+                <div class="facet-header" data-bs-toggle="collapse" data-bs-target="#dateFacet">
+                    <h6 class="mb-0">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        Date
+                        <i class="fas fa-chevron-down float-end"></i>
+                    </h6>
+                </div>
+                <div class="facet-body collapse show" id="dateFacet">
+                    <div class="mb-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="periode" value="today" 
+                                   id="today" {% if request.GET.periode == 'today' %}checked{% endif %}>
+                            <label class="form-check-label" for="today">Aujourd'hui</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="periode" value="this_week" 
+                                   id="this_week" {% if request.GET.periode == 'this_week' %}checked{% endif %}>
+                            <label class="form-check-label" for="this_week">Cette semaine</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="periode" value="this_month" 
+                                   id="this_month" {% if request.GET.periode == 'this_month' %}checked{% endif %}>
+                            <label class="form-check-label" for="this_month">Ce mois</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="periode" value="next_month" 
+                                   id="next_month" {% if request.GET.periode == 'next_month' %}checked{% endif %}>
+                            <label class="form-check-label" for="next_month">Mois prochain</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Lieu -->
+            <div class="facet-section">
+                <div class="facet-header" data-bs-toggle="collapse" data-bs-target="#lieuFacet">
+                    <h6 class="mb-0">
+                        <i class="fas fa-map-marker-alt me-2"></i>
+                        Lieu
+                        <i class="fas fa-chevron-down float-end"></i>
+                    </h6>
+                </div>
+                <div class="facet-body collapse" id="lieuFacet">
+                    <input type="text" class="form-control" name="lieu" 
+                           value="{{ request.GET.lieu }}" placeholder="Ville, adresse...">
+                </div>
+            </div>
+            
+            <!-- Options supplémentaires -->
+            <div class="facet-section">
+                <div class="facet-header" data-bs-toggle="collapse" data-bs-target="#optionsFacet">
+                    <h6 class="mb-0">
+                        <i class="fas fa-cog me-2"></i>
+                        Options
+                        <i class="fas fa-chevron-down float-end"></i>
+                    </h6>
+                </div>
+                <div class="facet-body collapse" id="optionsFacet">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="places_disponibles" value="1" 
+                               id="places_disponibles" {% if request.GET.places_disponibles %}checked{% endif %}>
+                        <label class="form-check-label" for="places_disponibles">
+                            Avec places disponibles
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="inscriptions_ouvertes" value="1" 
+                               id="inscriptions_ouvertes" {% if request.GET.inscriptions_ouvertes %}checked{% endif %}>
+                        <label class="form-check-label" for="inscriptions_ouvertes">
+                            Inscriptions ouvertes
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="permet_accompagnants" value="1" 
+                               id="permet_accompagnants" {% if request.GET.permet_accompagnants %}checked{% endif %}>
+                        <label class="form-check-label" for="permet_accompagnants">
+                            Autorise les accompagnants
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Bouton d'application des filtres -->
+            <div class="d-grid gap-2 mt-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search me-2"></i>Appliquer les filtres
+                </button>
+                <a href="{% url 'evenements:recherche' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-refresh me-2"></i>Réinitialiser
+                </a>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Résultats de recherche -->
+    <div class="col-lg-9">
+        <!-- Statistiques et tri -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="search-stats">
+                {% if evenements %}
+                    <i class="fas fa-info-circle me-2"></i>
+                    {{ evenements|length }} résultat{{ evenements|length|pluralize }} trouvé{{ evenements|length|pluralize }}
+                    {% if query %}pour "<strong>{{ query }}</strong>"{% endif %}
+                {% else %}
+                    <i class="fas fa-search me-2"></i>
+                    Aucun résultat trouvé
+                {% endif %}
+            </div>
+            
+            <div class="d-flex gap-2 align-items-center">
+                <!-- Tri -->
+                <div class="sort-options">
+                    <select class="form-select form-select-sm" name="sort" form="advancedSearchForm" onchange="this.form.submit()">
+                        <option value="date_debut" {% if sort == 'date_debut' %}selected{% endif %}>Date (plus proche)</option>
+                        <option value="titre" {% if sort == 'titre' %}selected{% endif %}>Titre (A-Z)</option>
+                        <option value="prix" {% if sort == 'prix' %}selected{% endif %}>Prix (croissant)</option>
+                        <option value="popularite" {% if sort == 'popularite' %}selected{% endif %}>Popularité</option>
+                        <option value="places" {% if sort == 'places' %}selected{% endif %}>Places disponibles</option>
+                    </select>
+                </div>
+                
+                <!-- Toggle vue -->
+                <div class="view-toggle-search d-flex">
+                    <button class="btn btn-sm btn-outline-secondary active" id="cardViewBtn" data-view="card">
+                        <i class="fas fa-th"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" id="listViewBtn" data-view="list">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Résultats -->
+        <div id="searchResults">
+            {% if evenements %}
+            <div class="row" id="resultsContainer">
+                {% for evenement in evenements %}
+                <div class="col-md-6 col-xl-4 mb-4 result-item">
+                    <div class="result-card">
+                        <!-- Image -->
+                        <div class="result-image">
+                            {% if evenement.image %}
+                                <img src="{{ evenement.image.url }}" alt="{{ evenement.titre }}">
+                            {% else %}
+                                <div class="d-flex align-items-center justify-content-center h-100">
+                                    <i class="fas fa-calendar-alt fa-3x text-muted"></i>
+                                </div>
+                            {% endif %}
+                            
+                            <!-- Meta badges -->
+                            <div class="result-meta">
+                                {% if evenement.est_payant %}
+                                <span class="badge bg-primary">{{ evenement.tarif_membre }}€</span>
+                                {% else %}
+                                <span class="badge bg-success">Gratuit</span>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Overlay avec type -->
+                            <div class="overlay">
+                                <span class="badge" style="background-color: {{ evenement.type_evenement.couleur_affichage }}">
+                                    {{ evenement.type_evenement.libelle }}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="card-body">
+                            <!-- Titre -->
+                            <h5 class="card-title">
+                                <a href="{% url 'evenements:detail' evenement.pk %}" class="text-decoration-none">
+                                    {{ evenement.titre }}
+                                </a>
+                            </h5>
+                            
+                            <!-- Description -->
+                            <p class="card-text text-muted small">
+                                {{ evenement.description|truncatewords:15 }}
+                            </p>
+                            
+                            <!-- Métadonnées -->
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="fas fa-calendar-alt text-primary me-2"></i>
+                                    <small>{{ evenement.date_debut|date:"d/m/Y H:i" }}</small>
+                                </div>
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                                    <small>{{ evenement.lieu|truncatechars:25 }}</small>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-users text-primary me-2"></i>
+                                    <small>{{ evenement.places_disponibles }} places disponibles</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card-footer bg-transparent">
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'evenements:detail' evenement.pk %}" 
+                                   class="btn btn-outline-primary btn-sm flex-grow-1">
+                                    <i class="fas fa-eye me-1"></i>Voir détails
+                                </a>
+                                {% if evenement.peut_s_inscrire %}
+                                <a href="{% url 'evenements:inscription_creer' evenement_pk=evenement.pk %}" 
+                                   class="btn btn-primary btn-sm">
+                                    <i class="fas fa-ticket-alt me-1"></i>S'inscrire
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <nav aria-label="Navigation des résultats" class="mt-4">
+                {% include 'includes/pagination.html' with page_obj=page_obj %}
+            </nav>
+            {% endif %}
+            
+            {% else %}
+            <!-- Aucun résultat -->
+            <div class="no-results">
+                <i class="fas fa-search fa-4x text-muted mb-3"></i>
+                <h4>Aucun événement trouvé</h4>
+                <p class="text-muted mb-4">
+                    {% if query %}
+                        Votre recherche "{{ query }}" n'a donné aucun résultat.
+                    {% else %}
+                        Aucun événement ne correspond à vos critères.
+                    {% endif %}
+                </p>
+                
+                <div class="row justify-content-center">
+                    <div class="col-md-8">
+                        <h6>Suggestions :</h6>
+                        <ul class="list-unstyled text-start">
+                            <li>• Vérifiez l'orthographe de vos mots-clés</li>
+                            <li>• Essayez des termes plus généraux</li>
+                            <li>• Réduisez le nombre de filtres appliqués</li>
+                            <li>• Consultez tous les événements disponibles</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <a href="{% url 'evenements:liste' %}" class="btn btn-primary me-2">
+                        <i class="fas fa-list me-2"></i>Voir tous les événements
+                    </a>
+                    <a href="{% url 'evenements:recherche' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-refresh me-2"></i>Nouvelle recherche
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock evenement_content %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-soumission des filtres
+    const form = document.getElementById('advancedSearchForm');
+    const checkboxes = form.querySelectorAll('input[type="checkbox"], input[type="radio"]');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            clearTimeout(this.timeout);
+            this.timeout = setTimeout(() => {
+                form.submit();
+            }, 300);
+        });
+    });
+    
+    // Gestion des vues
+    const cardViewBtn = document.getElementById('cardViewBtn');
+    const listViewBtn = document.getElementById('listViewBtn');
+    const resultsContainer = document.getElementById('resultsContainer');
+    
+    cardViewBtn.addEventListener('click', function() {
+        resultsContainer.className = 'row';
+        document.querySelectorAll('.result-item').forEach(item => {
+            item.className = 'col-md-6 col-xl-4 mb-4 result-item';
+        });
+        this.classList.add('active');
+        listViewBtn.classList.remove('active');
+    });
+    
+    listViewBtn.addEventListener('click', function() {
+        resultsContainer.className = 'row';
+        document.querySelectorAll('.result-item').forEach(item => {
+            item.className = 'col-12 mb-3 result-item';
+        });
+        this.classList.add('active');
+        cardViewBtn.classList.remove('active');
+    });
+    
+    // Animation des résultats
+    const resultCards = document.querySelectorAll('.result-card');
+    resultCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+
+// Suppression d'un filtre actif
+function removeFilter(filterName, filterValue) {
+    const form = document.getElementById('advancedSearchForm');
+    const inputs = form.querySelectorAll(`[name="${filterName}"]`);
+    
+    inputs.forEach(input => {
+        if (input.type === 'checkbox' || input.type === 'radio') {
+            if (input.value === filterValue || filterValue === '') {
+                input.checked = false;
+            }
+        } else {
+            if (filterValue === '') {
+                input.value = '';
+            }
+        }
+    });
+    
+    form.submit();
+}
+
+// Effacement de tous les filtres
+function clearAllFilters() {
+    const form = document.getElementById('advancedSearchForm');
+    
+    // Effacer tous les champs
+    form.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(input => {
+        input.checked = false;
+    });
+    
+    form.querySelectorAll('input[type="text"], input[type="number"]').forEach(input => {
+        input.value = '';
+    });
+    
+    form.querySelectorAll('select').forEach(select => {
+        select.selectedIndex = 0;
+    });
+    
+    form.submit();
+}
+
+// Sauvegarde de la recherche (optionnel)
+function saveSearch() {
+    const searchParams = new URLSearchParams(window.location.search);
+    const searchData = {
+        query: searchParams.get('q') || '',
+        filters: Object.fromEntries(searchParams.entries()),
+        timestamp: new Date().toISOString()
+    };
+    
+    localStorage.setItem('lastSearch', JSON.stringify(searchData));
+}
+
+// Restauration de la dernière recherche (optionnel)
+function restoreLastSearch() {
+    const lastSearch = localStorage.getItem('lastSearch');
+    if (lastSearch) {
+        const searchData = JSON.parse(lastSearch);
+        // Implémenter la logique de restauration si nécessaire
+    }
+}
+</script>
+{% endblock extra_js %}

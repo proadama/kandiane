@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+        {% if "confirmée" in message %}Inscription confirmée{% else %}Inscription annulée{% endif %} 
+        - {{ inscription.evenement.titre }}
+    </title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .success-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            max-width: 600px;
+            width: 100%;
+            margin: 20px;
+            text-align: center;
+        }
+        .success-header {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 2rem;
+        }
+        .cancelled-header {
+            background: linear-gradient(135deg, #6c757d, #495057);
+            color: white;
+            padding: 2rem;
+        }
+        .success-body {
+            padding: 2rem;
+        }
+        .icon-large {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            border: none;
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 123, 255, 0.3);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            border: none;
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(40, 167, 69, 0.3);
+        }
+        .info-card {
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 1rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+            text-align: left;
+        }
+        .next-steps {
+            background: #e3f2fd;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        .event-summary {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid #dee2e6;
+        }
+        .animate-checkmark {
+            animation: checkmarkBounce 1s ease-in-out;
+        }
+        .animate-cross {
+            animation: crossShake 0.8s ease-in-out;
+        }
+        @keyframes checkmarkBounce {
+            0% { transform: scale(0) rotate(0deg); }
+            50% { transform: scale(1.3) rotate(180deg); }
+            100% { transform: scale(1) rotate(360deg); }
+        }
+        @keyframes crossShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .confetti {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <!-- Effet confetti pour les confirmations réussies -->
+    {% if "confirmée" in message %}
+    <div class="confetti" id="confetti"></div>
+    {% endif %}
+
+    <div class="success-card">
+        <!-- En-tête selon le type d'action -->
+        {% if "confirmée" in message %}
+        <div class="success-header">
+            <i class="fas fa-check-circle icon-large animate-checkmark"></i>
+            <h2 class="mb-2">Inscription confirmée !</h2>
+            <p class="mb-0">Votre participation est maintenant assurée</p>
+        </div>
+        {% else %}
+        <div class="cancelled-header">
+            <i class="fas fa-times-circle icon-large animate-cross"></i>
+            <h2 class="mb-2">Inscription annulée</h2>
+            <p class="mb-0">Votre inscription a été annulée avec succès</p>
+        </div>
+        {% endif %}
+
+        <!-- Corps du message -->
+        <div class="success-body">
+            <!-- Message principal -->
+            <div class="alert {% if 'confirmée' in message %}alert-success{% else %}alert-info{% endif %}">
+                <h5><i class="fas fa-info-circle"></i> {{ message }}</h5>
+            </div>
+
+            <!-- Résumé de l'événement -->
+            <div class="event-summary">
+                <h5><i class="fas fa-calendar"></i> Détails de l'événement</h5>
+                <div class="row text-start">
+                    <div class="col-md-6">
+                        <p><strong>Événement :</strong> {{ inscription.evenement.titre }}</p>
+                        <p><strong>Date :</strong> {{ inscription.evenement.date_debut|date:"d/m/Y à H:i" }}</p>
+                        <p><strong>Lieu :</strong> {{ inscription.evenement.lieu }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Participant :</strong> {{ inscription.membre.prenom }} {{ inscription.membre.nom }}</p>
+                        {% if inscription.nombre_accompagnants > 0 %}
+                            <p><strong>Accompagnants :</strong> {{ inscription.nombre_accompagnants }}</p>
+                        {% endif %}
+                        <p><strong>Statut :</strong> 
+                            <span class="badge {% if 'confirmée' in message %}badge-success{% else %}badge-secondary{% endif %}">
+                                {{ inscription.get_statut_display }}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Étapes suivantes selon le statut -->
+            {% if "confirmée" in message %}
+            <div class="next-steps">
+                <h5><i class="fas fa-list-check"></i> Prochaines étapes</h5>
+                <div class="text-start">
+                    <ul class="mb-0">
+                        {% if inscription.evenement.est_payant and inscription.montant_restant > 0 %}
+                            <li><strong>Paiement :</strong> Effectuez le règlement de {{ inscription.montant_restant }}€ avant l'événement</li>
+                        {% endif %}
+                        <li><strong>Préparation :</strong> Notez la date et l'heure dans votre agenda</li>
+                        {% if inscription.evenement.materiel_requis %}
+                            <li><strong>Matériel :</strong> {{ inscription.evenement.materiel_requis }}</li>
+                        {% endif %}
+                        <li><strong>Contact :</strong> En cas de questions, contactez l'organisateur</li>
+                        <li><strong>Rappel :</strong> Vous recevrez un email de rappel avant l'événement</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Informations de paiement si nécessaire -->
+            {% if inscription.evenement.est_payant %}
+            <div class="info-card">
+                <h6><i class="fas fa-credit-card"></i> Informations de paiement</h6>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p class="mb-1"><strong>Montant total :</strong> {{ inscription.calculer_montant_total }}€</p>
+                        <p class="mb-1"><strong>Montant payé :</strong> {{ inscription.montant_paye }}€</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="mb-1"><strong>Montant restant :</strong> 
+                            <span class="{% if inscription.montant_restant > 0 %}text-danger{% else %}text-success{% endif %}">
+                                {{ inscription.montant_restant }}€
+                            </span>
+                        </p>
+                    </div>
+                </div>
+                {% if inscription.montant_restant > 0 %}
+                <small class="text-muted">
+                    Modalités de paiement : Contactez l'organisateur pour les détails
+                </small>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% else %}
+            <!-- Message pour annulation -->
+            <div class="next-steps">
+                <h5><i class="fas fa-info-circle"></i> Que se passe-t-il maintenant ?</h5>
+                <div class="text-start">
+                    <ul class="mb-0">
+                        <li>Votre place a été libérée pour d'autres participants</li>
+                        <li>Les personnes en liste d'attente seront automatiquement promues</li>
+                        {% if inscription.montant_paye > 0 %}
+                            <li>Si vous avez déjà payé, l'organisateur vous contactera pour le remboursement</li>
+                        {% endif %}
+                        <li>Vous pouvez vous inscrire à nouveau si vous changez d'avis (dans la limite des places disponibles)</li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Actions disponibles -->
+            <div class="mt-4">
+                <div class="d-grid gap-2">
+                    {% if "confirmée" in message %}
+                        <a href="{% url 'evenements:evenement_public_detail' inscription.evenement.pk %}" class="btn btn-primary">
+                            <i class="fas fa-eye"></i> Voir les détails de l'événement
+                        </a>
+                        <a href="{% url 'evenements:evenements_publics' %}" class="btn btn-success">
+                            <i class="fas fa-calendar-plus"></i> Découvrir d'autres événements
+                        </a>
+                    {% else %}
+                        <a href="{% url 'evenements:evenements_publics' %}" class="btn btn-primary">
+                            <i class="fas fa-calendar"></i> Voir d'autres événements
+                        </a>
+                        <a href="{% url 'evenements:evenement_public_detail' inscription.evenement.pk %}" class="btn btn-secondary">
+                            <i class="fas fa-undo"></i> Revenir à l'événement
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Contact organisateur -->
+            <div class="mt-4">
+                <div class="alert alert-light">
+                    <h6><i class="fas fa-user-tie"></i> Contact organisateur</h6>
+                    <p class="mb-1"><strong>{{ inscription.evenement.organisateur.get_full_name }}</strong></p>
+                    {% if inscription.evenement.organisateur.email %}
+                        <p class="mb-0">
+                            <a href="mailto:{{ inscription.evenement.organisateur.email }}?subject=Question sur {{ inscription.evenement.titre }}">
+                                <i class="fas fa-envelope"></i> {{ inscription.evenement.organisateur.email }}
+                            </a>
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Informations de référence -->
+            <div class="mt-3">
+                <small class="text-muted">
+                    <strong>Référence :</strong> {{ inscription.evenement.reference }} - INS-{{ inscription.pk }}
+                    <br>
+                    <strong>Date de traitement :</strong> {{ "now"|date:"d/m/Y à H:i:s" }}
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Animation sur les boutons
+        document.querySelectorAll('.btn').forEach(button => {
+            button.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-2px) scale(1.05)';
+            });
+            
+            button.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0) scale(1)';
+            });
+        });
+
+        // Effet confetti pour les confirmations réussies
+        {% if "confirmée" in message %}
+        function createConfetti() {
+            const confettiContainer = document.getElementById('confetti');
+            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3'];
+            
+            for (let i = 0; i < 50; i++) {
+                const confettiPiece = document.createElement('div');
+                confettiPiece.style.position = 'absolute';
+                confettiPiece.style.width = '10px';
+                confettiPiece.style.height = '10px';
+                confettiPiece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confettiPiece.style.left = Math.random() * 100 + '%';
+                confettiPiece.style.top = '-10px';
+                confettiPiece.style.borderRadius = '50%';
+                confettiPiece.style.animation = `confettiFall ${Math.random() * 2 + 2}s linear forwards`;
+                
+                confettiContainer.appendChild(confettiPiece);
+                
+                // Supprimer après l'animation
+                setTimeout(() => {
+                    confettiPiece.remove();
+                }, 4000);
+            }
+        }
+
+        // Ajouter l'animation CSS pour les confettis
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes confettiFall {
+                to {
+                    transform: translateY(100vh) rotate(360deg);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Lancer les confettis après un court délai
+        setTimeout(createConfetti, 500);
+        {% endif %}
+
+        // Animation d'entrée de la carte
+        window.addEventListener('load', () => {
+            const card = document.querySelector('.success-card');
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(50px) scale(0.9)';
+            
+            setTimeout(() => {
+                card.style.transition = 'all 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0) scale(1)';
+            }, 100);
+        });
+
+        // Sauvegarde dans localStorage pour éviter les doublons
+        const referenceKey = 'confirmation_{{ inscription.pk }}_{{ inscription.evenement.reference }}';
+        if (!localStorage.getItem(referenceKey)) {
+            localStorage.setItem(referenceKey, '{{ "now"|date:"c" }}');
+        }
+    </script>
+</body>
+</html>

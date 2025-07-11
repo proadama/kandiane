@@ -1,0 +1,74 @@
+<!-- templates/emails/evenements/evenement_approuve.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Événement approuvé</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #28a745; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background-color: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px; }
+        .success-card { background-color: #d4edda; padding: 20px; border-radius: 8px; border: 1px solid #c3e6cb; margin: 20px 0; }
+        .btn { display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
+        .btn-success { background-color: #28a745; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; color: #6c757d; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>✅ Événement approuvé</h1>
+        <p>{{ site_name }}</p>
+    </div>
+    
+    <div class="content">
+        <p>Bonjour <strong>{{ recipient_name }}</strong>,</p>
+        
+        <div class="success-card">
+            <h3>🎉 Bonne nouvelle !</h3>
+            <p>Votre événement <strong>{{ evenement.titre }}</strong> a été approuvé et est maintenant publié.</p>
+        </div>
+        
+        <div style="background-color: white; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; margin: 20px 0;">
+            <h3>📋 Détails de votre événement</h3>
+            <p><strong>🎯 Titre :</strong> {{ evenement.titre }}</p>
+            <p><strong>📅 Date :</strong> {{ evenement.date_debut|date:"l d F Y à H:i" }}</p>
+            <p><strong>📍 Lieu :</strong> {{ evenement.lieu }}</p>
+            <p><strong>👥 Capacité :</strong> {{ evenement.capacite_max }} participants</p>
+            <p><strong>📊 Statut :</strong> <span style="color: #28a745; font-weight: bold;">Publié</span></p>
+        </div>
+        
+        {% if commentaire %}
+        <div style="background-color: #e2e3e5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h4>💬 Commentaire du validateur :</h4>
+            <p style="font-style: italic;">{{ commentaire }}</p>
+        </div>
+        {% endif %}
+        
+        <div style="background-color: #d1ecf1; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h4>🚀 Prochaines étapes :</h4>
+            <ul>
+                <li>Votre événement est maintenant visible par tous les membres</li>
+                <li>Les inscriptions sont ouvertes</li>
+                <li>Vous recevrez des notifications pour chaque nouvelle inscription</li>
+                <li>Surveillez le taux de participation dans votre tableau de bord</li>
+            </ul>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ url_evenement }}" class="btn btn-success">
+                👁️ Voir mon événement
+            </a>
+        </div>
+        
+        <p>Félicitations pour la validation de votre événement ! Nous vous souhaitons une excellente participation.</p>
+        
+        <p>Cordialement,<br>
+        L'équipe {{ site_name }}</p>
+    </div>
+    
+    <div class="footer">
+        <p>© {{ current_year }} {{ site_name }}<br><a href="{{ site_url }}">{{ site_url }}</a></p>
+    </div>
+</body>
+</html>

@@ -9,6 +9,8 @@ import datetime
 import json
 import logging
 from django.urls import reverse
+from apps.evenements.models import Evenement, InscriptionEvenement, TypeEvenement
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
+
         # Initialiser les données par défaut
         context.update({
             'membres_total': 0,
@@ -252,44 +254,192 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             import traceback
             logger.error(f"Détails de l'erreur: {traceback.format_exc()}")
         
-        # Essayer de récupérer les données de l'application Événements si elle existe
+
+        # Récupérer les données de l'application Événements - AMÉLIORATION
         try:
-            from apps.evenements.models import Evenement, Inscription
+            from apps.evenements.models import Evenement, InscriptionEvenement, ValidationEvenement
             
-            # Statistiques des événements
+            # Statistiques générales des événements
             evenements_total = Evenement.objects.count()
             evenements_venir = Evenement.objects.filter(date_debut__gte=today).count()
-            inscriptions_attente = Inscription.objects.filter(statut='en_attente').count()
+            evenements_publies = Evenement.objects.filter(statut='publie').count()
             
             # Mettre à jour le contexte avec les données des événements
             context.update({
                 'evenements_total': evenements_total,
                 'evenements_venir': evenements_venir,
-                'inscriptions_attente': inscriptions_attente,
+                'evenements_publies': evenements_publies,
             })
             
+            # === NOUVEAUX WIDGETS ÉVÉNEMENTS ===
+            
+            # 1. PROCHAINS ÉVÉNEMENTS PUBLICS (pour tous)
+            prochains_evenements = Evenement.objects.filter(
+                statut='publie',
+                date_debut__gte=timezone.now(),
+                inscriptions_ouvertes=True
+            ).order_by('date_debut')[:5]
+            
+            context['prochains_evenements'] = prochains_evenements
+            
+            # 2. MES INSCRIPTIONS (si membre)
+            mes_inscriptions = []
+            try:
+                membre = Membre.objects.get(utilisateur=user)
+                mes_inscriptions = InscriptionEvenement.objects.filter(
+                    membre=membre,
+                    statut__in=['confirmee', 'en_attente'],
+                    evenement__date_debut__gte=timezone.now()
+                ).select_related('evenement').order_by('evenement__date_debut')[:5]
+                
+                context['mes_inscriptions'] = mes_inscriptions
+                
+                # Statistiques personnelles
+                context['mes_stats_evenements'] = {
+                    'total_inscriptions': InscriptionEvenement.objects.filter(membre=membre).count(),
+                    'inscriptions_confirmees': InscriptionEvenement.objects.filter(
+                        membre=membre, statut='confirmee'
+                    ).count(),
+                    'prochaines_inscriptions': mes_inscriptions.count()
+                }
+                
+            except Membre.DoesNotExist:
+                context['mes_inscriptions'] = []
+                context['mes_stats_evenements'] = {}
+            
+            # 3. DONNÉES ORGANISATEUR (si staff ou organisateur)
+            if user.is_staff:
+                # Mes événements organisés
+                mes_evenements = Evenement.objects.filter(organisateur=user)
+                context['mes_evenements'] = mes_evenements[:5]
+                
+                # Statistiques organisateur
+                from django.db.models import Count, Sum
+                stats_organisateur = mes_evenements.aggregate(
+                    total_organise=Count('id'),
+                    evenements_venir=Count('id', filter=Q(date_debut__gte=timezone.now())),
+                    total_inscriptions=Count('inscriptions'),
+                    total_participants=Sum('inscriptions__nombre_accompagnants')
+                )
+                context['stats_organisateur'] = stats_organisateur
+                
+                # 4. ALERTES VALIDATION (si staff)
+                validations_attente = ValidationEvenement.objects.filter(
+                    statut_validation='en_attente'
+                ).select_related('evenement').order_by('evenement__date_debut')[:5]
+                
+                context['validations_attente'] = validations_attente
+                context['nb_validations_attente'] = validations_attente.count()
+                
+                # Alertes urgentes (événements dans moins de 7 jours)
+                from datetime import timedelta
+                date_limite_urgente = timezone.now() + timedelta(days=7)
+                validations_urgentes = validations_attente.filter(
+                    evenement__date_debut__lte=date_limite_urgente
+                )
+                context['validations_urgentes'] = validations_urgentes.count()
+            
+            # 5. MÉTRIQUES DU MOIS
+            # Événements du mois
+            evenements_mois = Evenement.objects.filter(
+                date_debut__gte=first_day_of_month,
+                date_debut__lt=timezone.now().replace(day=1) + timedelta(days=32)
+            ).count()
+            
+            # Inscriptions du mois
+            inscriptions_mois = InscriptionEvenement.objects.filter(
+                date_inscription__gte=first_day_of_month
+            ).count()
+            
+            # Revenus événements du mois (si système cotisations intégré)
+            revenus_evenements_mois = 0
+            try:
+                from apps.cotisations.models import Cotisation
+                revenus_evenements = Cotisation.objects.filter(
+                    type_cotisation='evenement',
+                    date_creation__gte=first_day_of_month,
+                    statut_paiement='payee'
+                ).aggregate(total=Sum('montant'))
+                revenus_evenements_mois = revenus_evenements['total'] or 0
+            except (ImportError, AttributeError):
+                pass
+            
+            context.update({
+                'evenements_mois': evenements_mois,
+                'inscriptions_mois': inscriptions_mois,
+                'revenus_evenements_mois': revenus_evenements_mois,
+            })
+            
+            # 6. DONNÉES POUR GRAPHIQUES
+            # Évolution des inscriptions par mois (6 derniers mois)
+            inscriptions_par_mois = []
+            for i in range(6):
+                date_mois = (timezone.now().replace(day=1) - timedelta(days=32*i)).replace(day=1)
+                date_mois_suivant = (date_mois + timedelta(days=32)).replace(day=1)
+                
+                count = InscriptionEvenement.objects.filter(
+                    date_inscription__gte=date_mois,
+                    date_inscription__lt=date_mois_suivant
+                ).count()
+                
+                inscriptions_par_mois.append({
+                    'label': date_mois.strftime('%B %Y'),
+                    'value': count
+                })
+            
+            inscriptions_par_mois.reverse()  # Ordre chronologique
+            context['inscriptions_par_mois_json'] = json.dumps(inscriptions_par_mois)
+            
             # Récupérer également quelques événements récents pour les activités
-            evenements_recents = Evenement.objects.order_by('-date_creation')[:5]
+            evenements_recents = Evenement.objects.order_by('-created_at')[:3]
             for evenement in evenements_recents:
                 try:
-                    # Convertir datetime en date pour la comparaison
-                    date_creation = evenement.date_creation
-                    # Créer un timestamp pour le tri
+                    date_creation = evenement.created_at
                     date_timestamp = date_creation.timestamp() if isinstance(date_creation, datetime.datetime) else 0
+                    
+                    # Utiliser reverse() pour l'URL si disponible
+                    try:
+                        from django.urls import reverse
+                        evenement_url = reverse('evenements:detail', kwargs={'pk': evenement.id})
+                    except:
+                        evenement_url = f"/evenements/{evenement.id}/"
                     
                     context['activites_recentes'].append({
                         'type': 'evenement',
                         'date': date_creation,
-                        'date_timestamp': date_timestamp,  # Pour le tri
+                        'date_timestamp': date_timestamp,
                         'description': f"Nouvel événement : {evenement.titre}",
-                        'lien': f"/evenements/{evenement.id}/"
+                        'lien': evenement_url
                     })
                 except Exception:
                     continue
-                
+                    
         except (ImportError, ModuleNotFoundError):
-            # L'application Événements n'est pas disponible ou configurée
-            pass
+            # L'application Événements n'est pas disponible
+            context.update({
+                'evenements_total': 0,
+                'evenements_venir': 0,
+                'prochains_evenements': [],
+                'mes_inscriptions': [],
+                'mes_evenements': [],
+                'validations_attente': [],
+                'nb_validations_attente': 0,
+                'validations_urgentes': 0,
+                'inscriptions_par_mois_json': json.dumps([]),
+            })
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération des données d'événements: {str(e)}")
+            # Valeurs par défaut en cas d'erreur
+            context.update({
+                'evenements_total': 0,
+                'evenements_venir': 0,
+                'prochains_evenements': [],
+                'mes_inscriptions': [],
+                'mes_evenements': [],
+                'validations_attente': [],
+                'nb_validations_attente': 0,
+                'validations_urgentes': 0,
+            })
         
         # Trier les activités récentes par timestamp (valeur numérique sûre pour le tri)
         try:

@@ -1,0 +1,474 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block title %}Événements à Venir{% endblock %}
+
+{% block extra_css %}
+<style>
+.hero-section {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+    padding: 4rem 0;
+    margin-bottom: 2rem;
+}
+
+.event-card {
+    transition: all 0.3s ease;
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    height: 100%;
+}
+
+.event-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.event-date {
+    background: linear-gradient(45deg, #007bff, #0056b3);
+    color: white;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.event-date .day {
+    font-size: 2rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.event-date .month {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+}
+
+.event-type-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 2rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: white;
+}
+
+.event-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.places-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.search-section {
+    background: #f8f9fa;
+    padding: 2rem 0;
+    margin-bottom: 2rem;
+}
+
+.filter-tabs {
+    border-bottom: 2px solid #e9ecef;
+    margin-bottom: 2rem;
+}
+
+.filter-tab {
+    background: none;
+    border: none;
+    padding: 1rem 1.5rem;
+    color: #6c757d;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.filter-tab.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+}
+
+.filter-tab:hover {
+    color: #007bff;
+}
+
+.no-events {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #6c757d;
+}
+
+.upcoming-event {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    display: inline-block;
+    margin-bottom: 1rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero-section">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1 class="display-4 fw-bold mb-3">
+                    Découvrez Nos Événements
+                </h1>
+                <p class="lead mb-4">
+                    Rejoignez notre communauté et participez à des événements enrichissants. 
+                    Formations, rencontres, sorties... Il y en a pour tous les goûts !
+                </p>
+                <div class="d-flex gap-3">
+                    <a href="#evenements" class="btn btn-light btn-lg">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        Voir les Événements
+                    </a>
+                    <a href="{% url 'evenements:calendrier_public' %}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-calendar me-2"></i>
+                        Calendrier
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-4 text-center">
+                <div class="upcoming-event">
+                    <i class="fas fa-star me-2"></i>
+                    {{ evenements.count }} événement{{ evenements.count|pluralize }} à venir
+                </div>
+                <div class="mt-3">
+                    <i class="fas fa-users fa-3x opacity-75"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Section de recherche -->
+<section class="search-section">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <form method="get" class="d-flex gap-2">
+                    <input type="text" name="recherche" class="form-control" 
+                           placeholder="Rechercher un événement..." 
+                           value="{{ request.GET.recherche }}">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Filtres par onglets -->
+<div class="container">
+    <div class="filter-tabs">
+        <button class="filter-tab active" data-filter="all">
+            <i class="fas fa-calendar-alt me-2"></i>
+            Tous les événements
+        </button>
+        <button class="filter-tab" data-filter="gratuit">
+            <i class="fas fa-gift me-2"></i>
+            Gratuits
+        </button>
+        <button class="filter-tab" data-filter="payant">
+            <i class="fas fa-euro-sign me-2"></i>
+            Payants
+        </button>
+        <button class="filter-tab" data-filter="cette-semaine">
+            <i class="fas fa-clock me-2"></i>
+            Cette semaine
+        </button>
+    </div>
+</div>
+
+<!-- Liste des événements -->
+<div class="container" id="evenements">
+    {% if evenements %}
+        <div class="row" id="events-container">
+            {% for evenement in evenements %}
+                <div class="col-lg-4 col-md-6 mb-4 event-item" 
+                     data-type="{{ evenement.type_evenement.libelle|lower }}"
+                     data-payant="{% if evenement.est_payant %}payant{% else %}gratuit{% endif %}"
+                     data-date="{{ evenement.date_debut|date:'Y-m-d' }}">
+                    <div class="card event-card">
+                        <div class="position-relative">
+                            {% if evenement.image %}
+                                <img src="{{ evenement.image.url }}" class="card-img-top" 
+                                     alt="{{ evenement.titre }}" style="height: 200px; object-fit: cover;">
+                            {% else %}
+                                <div class="card-img-top bg-light d-flex align-items-center justify-content-center" 
+                                     style="height: 200px;">
+                                    <i class="fas fa-calendar-alt fa-3x text-muted"></i>
+                                </div>
+                            {% endif %}
+                            
+                            <div class="event-type-badge" 
+                                 style="background-color: {{ evenement.type_evenement.couleur_affichage }};">
+                                {{ evenement.type_evenement.libelle }}
+                            </div>
+                        </div>
+                        
+                        <div class="card-body d-flex flex-column">
+                            <!-- Date -->
+                            <div class="event-date">
+                                <div class="day">{{ evenement.date_debut|date:"d" }}</div>
+                                <div class="month">{{ evenement.date_debut|date:"M Y" }}</div>
+                            </div>
+                            
+                            <!-- Titre et description -->
+                            <h5 class="card-title">
+                                <a href="{% url 'evenements:evenement_public_detail' evenement.pk %}" 
+                                   class="text-decoration-none text-dark">
+                                    {{ evenement.titre }}
+                                </a>
+                            </h5>
+                            
+                            <p class="card-text text-muted flex-grow-1">
+                                {{ evenement.description|truncatewords:15 }}
+                            </p>
+                            
+                            <!-- Informations pratiques -->
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center text-muted mb-2">
+                                    <i class="fas fa-clock me-2"></i>
+                                    <small>{{ evenement.date_debut|date:"H:i" }}</small>
+                                </div>
+                                
+                                <div class="d-flex align-items-center text-muted mb-2">
+                                    <i class="fas fa-map-marker-alt me-2"></i>
+                                    <small>{{ evenement.lieu }}</small>
+                                </div>
+                                
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <!-- Prix -->
+                                    <div class="event-status">
+                                        {% if evenement.est_payant %}
+                                            <i class="fas fa-euro-sign text-warning"></i>
+                                            <span class="text-warning fw-bold">{{ evenement.tarif_membre }}€</span>
+                                        {% else %}
+                                            <i class="fas fa-gift text-success"></i>
+                                            <span class="text-success fw-bold">Gratuit</span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <!-- Places disponibles -->
+                                    <div class="places-indicator">
+                                        {% if evenement.places_disponibles > 0 %}
+                                            <i class="fas fa-users text-success"></i>
+                                            <small class="text-success">
+                                                {{ evenement.places_disponibles }} place{{ evenement.places_disponibles|pluralize }}
+                                            </small>
+                                        {% else %}
+                                            <i class="fas fa-users text-danger"></i>
+                                            <small class="text-danger">Complet</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Actions -->
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'evenements:evenement_public_detail' evenement.pk %}" 
+                                   class="btn btn-outline-primary flex-grow-1">
+                                    <i class="fas fa-eye me-1"></i>
+                                    Détails
+                                </a>
+                                
+                                {% if evenement.inscriptions_ouvertes and evenement.places_disponibles > 0 %}
+                                    <a href="{% url 'accounts:login' %}?next={% url 'evenements:inscription_creer' evenement.pk %}" 
+                                       class="btn btn-primary">
+                                        <i class="fas fa-user-plus me-1"></i>
+                                        S'inscrire
+                                    </a>
+                                {% elif evenement.est_complet %}
+                                    <button class="btn btn-secondary" disabled>
+                                        <i class="fas fa-users me-1"></i>
+                                        Complet
+                                    </button>
+                                {% else %}
+                                    <button class="btn btn-secondary" disabled>
+                                        <i class="fas fa-lock me-1"></i>
+                                        Fermé
+                                    </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+            <nav aria-label="Navigation des événements">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                                <i class="fas fa-angle-left"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                                <i class="fas fa-angle-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        {% endif %}
+    {% else %}
+        <div class="no-events">
+            <i class="fas fa-calendar-times fa-4x mb-4"></i>
+            <h3>Aucun événement programmé</h3>
+            <p class="lead">
+                {% if request.GET.recherche %}
+                    Aucun événement ne correspond à votre recherche "{{ request.GET.recherche }}".
+                {% else %}
+                    Revenez bientôt pour découvrir nos prochains événements !
+                {% endif %}
+            </p>
+            {% if request.GET.recherche %}
+                <a href="{% url 'evenements:evenements_publics' %}" class="btn btn-primary">
+                    <i class="fas fa-arrow-left me-2"></i>
+                    Voir tous les événements
+                </a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<!-- Section d'appel à l'action -->
+<section class="bg-light py-5 mt-5">
+    <div class="container text-center">
+        <h2 class="mb-3">Rejoignez Notre Communauté</h2>
+        <p class="lead mb-4">
+            Devenez membre pour accéder à tous nos événements et bénéficier de tarifs préférentiels.
+        </p>
+        <div class="d-flex justify-content-center gap-3">
+            <a href="{% url 'accounts:register' %}" class="btn btn-primary btn-lg">
+                <i class="fas fa-user-plus me-2"></i>
+                S'inscrire
+            </a>
+            <a href="{% url 'accounts:login' %}" class="btn btn-outline-primary btn-lg">
+                <i class="fas fa-sign-in-alt me-2"></i>
+                Se connecter
+            </a>
+        </div>
+    </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Gestion des filtres
+    const filterTabs = document.querySelectorAll('.filter-tab');
+    const eventItems = document.querySelectorAll('.event-item');
+    
+    filterTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            // Mise à jour des onglets actifs
+            filterTabs.forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            
+            const filter = this.getAttribute('data-filter');
+            
+            eventItems.forEach(item => {
+                let show = true;
+                
+                switch(filter) {
+                    case 'gratuit':
+                        show = item.getAttribute('data-payant') === 'gratuit';
+                        break;
+                    case 'payant':
+                        show = item.getAttribute('data-payant') === 'payant';
+                        break;
+                    case 'cette-semaine':
+                        const eventDate = new Date(item.getAttribute('data-date'));
+                        const today = new Date();
+                        const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+                        show = eventDate >= today && eventDate <= weekFromNow;
+                        break;
+                    case 'all':
+                    default:
+                        show = true;
+                }
+                
+                // Animation de masquage/affichage
+                if (show) {
+                    item.style.display = 'block';
+                    setTimeout(() => {
+                        item.style.opacity = '1';
+                        item.style.transform = 'translateY(0)';
+                    }, 10);
+                } else {
+                    item.style.opacity = '0';
+                    item.style.transform = 'translateY(20px)';
+                    setTimeout(() => {
+                        item.style.display = 'none';
+                    }, 300);
+                }
+            });
+        });
+    });
+    
+    // Animation d'apparition des cartes
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, observerOptions);
+    
+    eventItems.forEach(item => {
+        item.style.opacity = '0';
+        item.style.transform = 'translateY(30px)';
+        item.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(item);
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,331 @@
+{% extends 'evenements/base_evenement.html' %}
+{% load static %}
+
+{% block title %}
+    {% if object %}Modifier{% else %}Créer{% endif %} un Type d'Événement
+{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'evenements:dashboard' %}">Événements</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'evenements:types_liste' %}">Types</a></li>
+        <li class="breadcrumb-item active">
+            {% if object %}Modifier{% else %}Créer{% endif %}
+        </li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-{% if object %}edit{% else %}plus{% endif %} text-primary me-2"></i>
+                        {% if object %}
+                            Modifier le Type : {{ object.libelle }}
+                        {% else %}
+                            Créer un Nouveau Type d'Événement
+                        {% endif %}
+                    </h4>
+                </div>
+                
+                <form method="post" enctype="multipart/form-data" novalidate>
+                    <div class="card-body">
+                        {% csrf_token %}
+                        
+                        <!-- Messages d'erreurs globales -->
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger" role="alert">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                {{ form.non_field_errors|first }}
+                            </div>
+                        {% endif %}
+
+                        <div class="row">
+                            <!-- Informations générales -->
+                            <div class="col-12">
+                                <h6 class="text-primary border-bottom pb-2 mb-3">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Informations Générales
+                                </h6>
+                            </div>
+                            
+                            <!-- Libellé -->
+                            <div class="col-md-8 mb-3">
+                                <label for="{{ form.libelle.id_for_label }}" class="form-label">
+                                    {{ form.libelle.label }}
+                                    <span class="text-danger">*</span>
+                                </label>
+                                {{ form.libelle }}
+                                {% if form.libelle.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.libelle.errors|first }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    Nom du type d'événement (ex: Formation, Réunion, Sortie)
+                                </div>
+                            </div>
+                            
+                            <!-- Ordre d'affichage -->
+                            <div class="col-md-4 mb-3">
+                                <label for="{{ form.ordre_affichage.id_for_label }}" class="form-label">
+                                    {{ form.ordre_affichage.label }}
+                                </label>
+                                {{ form.ordre_affichage }}
+                                {% if form.ordre_affichage.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.ordre_affichage.errors|first }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    Ordre d'affichage dans les listes
+                                </div>
+                            </div>
+                            
+                            <!-- Description -->
+                            <div class="col-12 mb-3">
+                                <label for="{{ form.description.id_for_label }}" class="form-label">
+                                    {{ form.description.label }}
+                                </label>
+                                {{ form.description }}
+                                {% if form.description.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.description.errors|first }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    Description détaillée du type d'événement
+                                </div>
+                            </div>
+                            
+                            <!-- Couleur -->
+                            <div class="col-md-6 mb-4">
+                                <label for="{{ form.couleur_affichage.id_for_label }}" class="form-label">
+                                    {{ form.couleur_affichage.label }}
+                                </label>
+                                <div class="input-group">
+                                    {{ form.couleur_affichage }}
+                                    <div class="input-group-text">
+                                        <span id="color-preview" class="d-inline-block" style="width: 20px; height: 20px; border-radius: 3px; background-color: {{ form.couleur_affichage.value|default:'#007bff' }};"></span>
+                                    </div>
+                                </div>
+                                {% if form.couleur_affichage.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.couleur_affichage.errors|first }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    Couleur d'affichage dans le calendrier
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <!-- Configuration -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h6 class="text-primary border-bottom pb-2 mb-3">
+                                    <i class="fas fa-cogs me-1"></i>
+                                    Configuration
+                                </h6>
+                            </div>
+                            
+                            <!-- Options de validation -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <div class="form-check">
+                                            {{ form.necessite_validation }}
+                                            <label class="form-check-label" for="{{ form.necessite_validation.id_for_label }}">
+                                                <strong>{{ form.necessite_validation.label }}</strong>
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            Les événements de ce type devront être validés par un administrateur avant publication
+                                        </small>
+                                        {% if form.necessite_validation.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.necessite_validation.errors|first }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Options accompagnants -->
+                            <div class="col-md-6 mb-3">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <div class="form-check">
+                                            {{ form.permet_accompagnants }}
+                                            <label class="form-check-label" for="{{ form.permet_accompagnants.id_for_label }}">
+                                                <strong>{{ form.permet_accompagnants.label }}</strong>
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            Les événements de ce type permettront l'ajout d'accompagnants
+                                        </small>
+                                        {% if form.permet_accompagnants.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.permet_accompagnants.errors|first }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Aperçu du type -->
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <h6 class="text-primary border-bottom pb-2 mb-3">
+                                    <i class="fas fa-eye me-1"></i>
+                                    Aperçu
+                                </h6>
+                                <div class="card">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-center">
+                                            <span class="badge me-3" id="preview-badge" style="background-color: {{ form.couleur_affichage.value|default:'#007bff' }}; color: white; font-size: 1em;">
+                                                <span id="preview-text">{{ form.libelle.value|default:'Nouveau Type' }}</span>
+                                            </span>
+                                            <div>
+                                                <div class="mb-1">
+                                                    <span id="preview-validation" class="badge bg-{% if form.necessite_validation.value %}warning{% else %}success{% endif %} me-2">
+                                                        <i class="fas fa-{% if form.necessite_validation.value %}check-circle{% else %}times-circle{% endif %} me-1"></i>
+                                                        Validation {% if form.necessite_validation.value %}requise{% else %}automatique{% endif %}
+                                                    </span>
+                                                    <span id="preview-accompagnants" class="badge bg-{% if form.permet_accompagnants.value %}info{% else %}secondary{% endif %}">
+                                                        <i class="fas fa-{% if form.permet_accompagnants.value %}users{% else %}user{% endif %} me-1"></i>
+                                                        Accompagnants {% if form.permet_accompagnants.value %}autorisés{% else %}interdits{% endif %}
+                                                    </span>
+                                                </div>
+                                                <small class="text-muted" id="preview-description">
+                                                    {{ form.description.value|default:'Description du type d'événement' }}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="card-footer bg-light">
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'evenements:types_liste' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>
+                                Retour
+                            </a>
+                            <div>
+                                <button type="reset" class="btn btn-outline-secondary me-2">
+                                    <i class="fas fa-undo me-1"></i>
+                                    Réinitialiser
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-1"></i>
+                                    {% if object %}Modifier{% else %}Créer{% endif %} le Type
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Aperçu en temps réel
+    const libelleField = document.getElementById('{{ form.libelle.id_for_label }}');
+    const descriptionField = document.getElementById('{{ form.description.id_for_label }}');
+    const couleurField = document.getElementById('{{ form.couleur_affichage.id_for_label }}');
+    const validationField = document.getElementById('{{ form.necessite_validation.id_for_label }}');
+    const accompagnantsField = document.getElementById('{{ form.permet_accompagnants.id_for_label }}');
+    
+    const previewText = document.getElementById('preview-text');
+    const previewDescription = document.getElementById('preview-description');
+    const previewBadge = document.getElementById('preview-badge');
+    const previewValidation = document.getElementById('preview-validation');
+    const previewAccompagnants = document.getElementById('preview-accompagnants');
+    const colorPreview = document.getElementById('color-preview');
+    
+    // Mise à jour du libellé
+    if (libelleField) {
+        libelleField.addEventListener('input', function() {
+            previewText.textContent = this.value || 'Nouveau Type';
+        });
+    }
+    
+    // Mise à jour de la description
+    if (descriptionField) {
+        descriptionField.addEventListener('input', function() {
+            previewDescription.textContent = this.value || 'Description du type d\'événement';
+        });
+    }
+    
+    // Mise à jour de la couleur
+    if (couleurField) {
+        couleurField.addEventListener('input', function() {
+            previewBadge.style.backgroundColor = this.value;
+            colorPreview.style.backgroundColor = this.value;
+        });
+    }
+    
+    // Mise à jour validation
+    if (validationField) {
+        validationField.addEventListener('change', function() {
+            const isChecked = this.checked;
+            previewValidation.className = `badge bg-${isChecked ? 'warning' : 'success'} me-2`;
+            previewValidation.innerHTML = `
+                <i class="fas fa-${isChecked ? 'check-circle' : 'times-circle'} me-1"></i>
+                Validation ${isChecked ? 'requise' : 'automatique'}
+            `;
+        });
+    }
+    
+    // Mise à jour accompagnants
+    if (accompagnantsField) {
+        accompagnantsField.addEventListener('change', function() {
+            const isChecked = this.checked;
+            previewAccompagnants.className = `badge bg-${isChecked ? 'info' : 'secondary'}`;
+            previewAccompagnants.innerHTML = `
+                <i class="fas fa-${isChecked ? 'users' : 'user'} me-1"></i>
+                Accompagnants ${isChecked ? 'autorisés' : 'interdits'}
+            `;
+        });
+    }
+});
+</script>
+
+<style>
+.form-check-label {
+    cursor: pointer;
+}
+
+.input-group-text {
+    border-left: none;
+}
+
+.card.bg-light {
+    border: 1px solid #e9ecef;
+}
+
+#preview-badge {
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+}
+
+.form-text {
+    font-size: 0.875em;
+    color: #6c757d;
+}
+</style>
+{% endblock %}

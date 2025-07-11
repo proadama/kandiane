@@ -1,0 +1,469 @@
+{% extends 'evenements/base_evenement.html' %}
+{% load static %}
+
+{% block title %}Inscription - {{ evenement.titre }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .event-header {
+        background: linear-gradient(135deg, #007bff, #0056b3);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+    .pricing-card {
+        border: 1px solid #e3f2fd;
+        border-radius: 8px;
+        padding: 1rem;
+        background: #f8f9fa;
+        margin-bottom: 1rem;
+    }
+    .accompagnant-item {
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 10px;
+        background: #fff;
+    }
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 2rem;
+    }
+    .step {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 10px;
+        font-weight: bold;
+    }
+    .step.active {
+        background: #007bff;
+        color: white;
+    }
+    .step.completed {
+        background: #28a745;
+        color: white;
+    }
+    .step.pending {
+        background: #e9ecef;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8">
+            <!-- En-tête Événement -->
+            <div class="event-header">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h1 class="mb-2">{{ evenement.titre }}</h1>
+                        <p class="mb-1">
+                            <i class="fas fa-calendar"></i> 
+                            {{ evenement.date_debut|date:"d/m/Y à H:i" }}
+                            {% if evenement.date_fin %}
+                                - {{ evenement.date_fin|date:"d/m/Y à H:i" }}
+                            {% endif %}
+                        </p>
+                        <p class="mb-0">
+                            <i class="fas fa-map-marker-alt"></i> {{ evenement.lieu }}
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-right">
+                        <div class="badge badge-info badge-lg">
+                            {{ evenement.places_disponibles }} places disponibles
+                        </div>
+                        {% if evenement.est_payant %}
+                            <div class="mt-2">
+                                <span class="h4 text-warning">{{ tarif_applicable }}€</span>
+                            </div>
+                        {% else %}
+                            <div class="mt-2">
+                                <span class="h4 text-success">Gratuit</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Indicateur d'étapes -->
+            <div class="step-indicator">
+                <div class="step active">1</div>
+                <div class="step pending">2</div>
+                <div class="step pending">3</div>
+            </div>
+
+            <!-- Formulaire d'inscription -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-user-plus"></i> Inscription à l'événement</h3>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="inscriptionForm" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <!-- Informations du membre -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h5><i class="fas fa-user"></i> Vos informations</h5>
+                                <div class="form-group">
+                                    <label>Nom complet</label>
+                                    <input type="text" class="form-control" value="{{ membre.prenom }} {{ membre.nom }}" readonly>
+                                </div>
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <input type="email" class="form-control" value="{{ membre.email }}" readonly>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h5><i class="fas fa-info-circle"></i> Type de membre</h5>
+                                <div class="form-group">
+                                    {% for type_membre in membre.get_types_actifs %}
+                                        <span class="badge badge-primary mr-1">{{ type_membre.libelle }}</span>
+                                    {% empty %}
+                                        <span class="badge badge-secondary">Membre standard</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Commentaire -->
+                        <div class="form-group">
+                            <label for="{{ form.commentaire.id_for_label }}">
+                                <i class="fas fa-comment"></i> {{ form.commentaire.label }}
+                            </label>
+                            {{ form.commentaire }}
+                            {% if form.commentaire.help_text %}
+                                <small class="form-text text-muted">{{ form.commentaire.help_text }}</small>
+                            {% endif %}
+                            {% if form.commentaire.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.commentaire.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Accompagnants -->
+                        {% if evenement.permet_accompagnants %}
+                        <div class="form-group">
+                            <label for="{{ form.nombre_accompagnants.id_for_label }}">
+                                <i class="fas fa-users"></i> {{ form.nombre_accompagnants.label }}
+                            </label>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    {{ form.nombre_accompagnants }}
+                                </div>
+                                <div class="col-md-9">
+                                    <small class="form-text text-muted">
+                                        Maximum {{ evenement.nombre_max_accompagnants }} accompagnants autorisés
+                                    </small>
+                                </div>
+                            </div>
+                            {% if form.nombre_accompagnants.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.nombre_accompagnants.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Détails des accompagnants -->
+                        <div id="accompagnants-container" style="display: none;">
+                            <h5><i class="fas fa-user-friends"></i> Détails des accompagnants</h5>
+                            <div id="accompagnants-list"></div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="add-accompagnant">
+                                <i class="fas fa-plus"></i> Ajouter un accompagnant
+                            </button>
+                        </div>
+                        {% endif %}
+
+                        <!-- Paiement (si événement payant) -->
+                        {% if evenement.est_payant %}
+                        <div class="mt-4">
+                            <h5><i class="fas fa-credit-card"></i> Informations de paiement</h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.mode_paiement.id_for_label }}">{{ form.mode_paiement.label }}</label>
+                                        {{ form.mode_paiement }}
+                                        {% if form.mode_paiement.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.mode_paiement.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.reference_paiement.id_for_label }}">{{ form.reference_paiement.label }}</label>
+                                        {{ form.reference_paiement }}
+                                        {% if form.reference_paiement.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.reference_paiement.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Conditions -->
+                        <div class="form-group mt-4">
+                            <div class="form-check">
+                                {{ form.accepter_conditions }}
+                                <label class="form-check-label" for="{{ form.accepter_conditions.id_for_label }}">
+                                    {{ form.accepter_conditions.label }}
+                                </label>
+                            </div>
+                            {% if form.accepter_conditions.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.accepter_conditions.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Champ caché pour les données accompagnants -->
+                        {{ form.accompagnants_data }}
+
+                        <!-- Erreurs générales -->
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {{ form.non_field_errors }}
+                            </div>
+                        {% endif %}
+
+                        <!-- Boutons -->
+                        <div class="form-group mt-4">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-check"></i> Confirmer l'inscription
+                            </button>
+                            <a href="{% url 'evenements:detail' evenement.pk %}" class="btn btn-secondary btn-lg ml-2">
+                                <i class="fas fa-arrow-left"></i> Retour
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar avec résumé -->
+        <div class="col-md-4">
+            <div class="card position-sticky" style="top: 20px;">
+                <div class="card-header">
+                    <h5><i class="fas fa-receipt"></i> Résumé de l'inscription</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Tarification -->
+                    <div class="pricing-card">
+                        <h6>Tarification</h6>
+                        <div class="d-flex justify-content-between">
+                            <span>Votre participation :</span>
+                            <span id="tarif-membre">{{ tarif_applicable }}€</span>
+                        </div>
+                        <div class="d-flex justify-content-between" id="tarif-accompagnants" style="display: none !important;">
+                            <span>Accompagnants (<span id="nb-accompagnants">0</span>) :</span>
+                            <span id="montant-accompagnants">0€</span>
+                        </div>
+                        <hr>
+                        <div class="d-flex justify-content-between font-weight-bold">
+                            <span>Total :</span>
+                            <span id="total-inscription">{{ tarif_applicable }}€</span>
+                        </div>
+                    </div>
+
+                    <!-- Informations importantes -->
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> À savoir</h6>
+                        <ul class="mb-0">
+                            <li>Délai de confirmation : {{ evenement.delai_confirmation }}h</li>
+                            {% if evenement.instructions_particulieres %}
+                                <li>{{ evenement.instructions_particulieres|truncatewords:20 }}</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    <!-- Contact organisateur -->
+                    <div class="card border-0 bg-light">
+                        <div class="card-body">
+                            <h6><i class="fas fa-user-tie"></i> Organisateur</h6>
+                            <p class="mb-1">{{ evenement.organisateur.get_full_name }}</p>
+                            {% if evenement.organisateur.email %}
+                                <small class="text-muted">{{ evenement.organisateur.email }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template pour un accompagnant -->
+<template id="accompagnant-template">
+    <div class="accompagnant-item">
+        <div class="row">
+            <div class="col-md-4">
+                <input type="text" class="form-control accompagnant-nom" placeholder="Nom" required>
+            </div>
+            <div class="col-md-4">
+                <input type="text" class="form-control accompagnant-prenom" placeholder="Prénom" required>
+            </div>
+            <div class="col-md-3">
+                <input type="email" class="form-control accompagnant-email" placeholder="Email (optionnel)">
+            </div>
+            <div class="col-md-1">
+                <button type="button" class="btn btn-danger btn-sm remove-accompagnant">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-md-6">
+                <input type="text" class="form-control accompagnant-telephone" placeholder="Téléphone (optionnel)">
+            </div>
+            <div class="col-md-6">
+                <input type="text" class="form-control accompagnant-restrictions" placeholder="Restrictions alimentaires">
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    const maxAccompagnants = {{ evenement.nombre_max_accompagnants }};
+    const tarifAccompagnant = {{ evenement.tarif_invite }};
+    const tarifMembre = {{ tarif_applicable }};
+    let accompagnants = [];
+
+    // Gestion du nombre d'accompagnants
+    $('#id_nombre_accompagnants').on('change', function() {
+        const nombre = parseInt($(this).val()) || 0;
+        updateAccompagnants(nombre);
+        updatePricing();
+    });
+
+    // Ajouter un accompagnant
+    $('#add-accompagnant').on('click', function() {
+        const nombreActuel = $('#accompagnants-list .accompagnant-item').length;
+        if (nombreActuel < maxAccompagnants) {
+            addAccompagnant();
+            $('#id_nombre_accompagnants').val(nombreActuel + 1).trigger('change');
+        }
+    });
+
+    // Supprimer un accompagnant
+    $(document).on('click', '.remove-accompagnant', function() {
+        $(this).closest('.accompagnant-item').remove();
+        const nouveauNombre = $('#accompagnants-list .accompagnant-item').length;
+        $('#id_nombre_accompagnants').val(nouveauNombre).trigger('change');
+        updateAccompagnantsData();
+    });
+
+    // Mettre à jour les données quand on modifie les champs
+    $(document).on('input', '.accompagnant-nom, .accompagnant-prenom, .accompagnant-email, .accompagnant-telephone, .accompagnant-restrictions', function() {
+        updateAccompagnantsData();
+    });
+
+    function updateAccompagnants(nombre) {
+        const container = $('#accompagnants-container');
+        const list = $('#accompagnants-list');
+        
+        if (nombre > 0) {
+            container.show();
+            
+            // Ajuster le nombre d'accompagnants
+            const current = list.find('.accompagnant-item').length;
+            
+            if (nombre > current) {
+                for (let i = current; i < nombre; i++) {
+                    addAccompagnant();
+                }
+            } else if (nombre < current) {
+                list.find('.accompagnant-item').slice(nombre).remove();
+            }
+        } else {
+            container.hide();
+            list.empty();
+        }
+        
+        updateAccompagnantsData();
+    }
+
+    function addAccompagnant() {
+        const template = $('#accompagnant-template').html();
+        $('#accompagnants-list').append(template);
+    }
+
+    function updateAccompagnantsData() {
+        accompagnants = [];
+        
+        $('#accompagnants-list .accompagnant-item').each(function() {
+            const item = $(this);
+            accompagnants.push({
+                nom: item.find('.accompagnant-nom').val(),
+                prenom: item.find('.accompagnant-prenom').val(),
+                email: item.find('.accompagnant-email').val(),
+                telephone: item.find('.accompagnant-telephone').val(),
+                restrictions_alimentaires: item.find('.accompagnant-restrictions').val()
+            });
+        });
+        
+        $('#id_accompagnants_data').val(JSON.stringify(accompagnants));
+    }
+
+    function updatePricing() {
+        const nbAccompagnants = parseInt($('#id_nombre_accompagnants').val()) || 0;
+        const montantAccompagnants = nbAccompagnants * tarifAccompagnant;
+        const total = tarifMembre + montantAccompagnants;
+
+        $('#nb-accompagnants').text(nbAccompagnants);
+        $('#montant-accompagnants').text(montantAccompagnants + '€');
+        $('#total-inscription').text(total + '€');
+
+        if (nbAccompagnants > 0) {
+            $('#tarif-accompagnants').show();
+        } else {
+            $('#tarif-accompagnants').hide();
+        }
+    }
+
+    // Validation du formulaire
+    $('#inscriptionForm').on('submit', function(e) {
+        let valid = true;
+        
+        // Vérifier que tous les accompagnants ont nom et prénom
+        $('#accompagnants-list .accompagnant-item').each(function() {
+            const nom = $(this).find('.accompagnant-nom').val().trim();
+            const prenom = $(this).find('.accompagnant-prenom').val().trim();
+            
+            if (!nom || !prenom) {
+                valid = false;
+                $(this).find('.accompagnant-nom, .accompagnant-prenom').addClass('is-invalid');
+            } else {
+                $(this).find('.accompagnant-nom, .accompagnant-prenom').removeClass('is-invalid');
+            }
+        });
+        
+        if (!valid) {
+            e.preventDefault();
+            alert('Veuillez remplir le nom et prénom de tous les accompagnants.');
+        } else {
+            updateAccompagnantsData();
+        }
+    });
+
+    // Initialisation
+    updatePricing();
+});
+</script>
+{% endblock %}

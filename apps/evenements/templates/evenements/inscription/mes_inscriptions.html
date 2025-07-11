@@ -1,0 +1,558 @@
+{% extends 'evenements/base_evenement.html' %}
+{% load static %}
+
+{% block title %}Mes inscriptions{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .stat-item {
+        text-align: center;
+        padding: 1rem;
+    }
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        display: block;
+    }
+    .inscription-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+        margin-bottom: 1rem;
+    }
+    .inscription-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+    }
+    .status-badge {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.8rem;
+    }
+    .event-date {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 0.5rem;
+        text-align: center;
+        min-width: 80px;
+    }
+    .event-date .day {
+        font-size: 1.5rem;
+        font-weight: bold;
+        display: block;
+        line-height: 1;
+    }
+    .event-date .month {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        color: #6c757d;
+    }
+    .tab-content {
+        padding: 2rem 0;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+    }
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    .filter-bar {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 2rem;
+    }
+    .quick-actions {
+        position: sticky;
+        top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- En-tête avec statistiques -->
+    <div class="stats-card">
+        <div class="row">
+            <div class="col-md-8">
+                <h2><i class="fas fa-ticket-alt"></i> Mes inscriptions</h2>
+                <p class="mb-0">Gérez toutes vos participations aux événements</p>
+            </div>
+            <div class="col-md-4">
+                {% if stats %}
+                <div class="row">
+                    <div class="col-6 stat-item">
+                        <span class="stat-number">{{ stats.total_inscriptions|default:0 }}</span>
+                        <small>Total</small>
+                    </div>
+                    <div class="col-6 stat-item">
+                        <span class="stat-number">{{ stats.inscriptions_presentes|default:0 }}</span>
+                        <small>Participations</small>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-9">
+            <!-- Filtres et recherche -->
+            <div class="filter-bar">
+                <form method="get" class="row g-3" id="filterForm">
+                    <div class="col-md-4">
+                        <input type="text" name="search" class="form-control" placeholder="Rechercher un événement..." value="{{ request.GET.search }}">
+                    </div>
+                    <div class="col-md-3">
+                        <select name="statut" class="form-control">
+                            <option value="">Tous les statuts</option>
+                            <option value="en_attente" {% if request.GET.statut == 'en_attente' %}selected{% endif %}>En attente</option>
+                            <option value="confirmee" {% if request.GET.statut == 'confirmee' %}selected{% endif %}>Confirmée</option>
+                            <option value="liste_attente" {% if request.GET.statut == 'liste_attente' %}selected{% endif %}>Liste d'attente</option>
+                            <option value="presente" {% if request.GET.statut == 'presente' %}selected{% endif %}>Présent(e)</option>
+                            <option value="annulee" {% if request.GET.statut == 'annulee' %}selected{% endif %}>Annulée</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select name="periode" class="form-control">
+                            <option value="">Toutes les périodes</option>
+                            <option value="futures" {% if request.GET.periode == 'futures' %}selected{% endif %}>À venir</option>
+                            <option value="passees" {% if request.GET.periode == 'passees' %}selected{% endif %}>Passées</option>
+                            <option value="en_cours" {% if request.GET.periode == 'en_cours' %}selected{% endif %}>En cours</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> Filtrer
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Onglets -->
+            <ul class="nav nav-tabs" id="inscriptionTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="actives-tab" data-bs-toggle="tab" data-bs-target="#actives" type="button" role="tab" aria-controls="actives" aria-selected="true">
+                        <i class="fas fa-clock"></i> Actives ({{ inscriptions|length }})
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="historique-tab" data-bs-toggle="tab" data-bs-target="#historique" type="button" role="tab" aria-controls="historique" aria-selected="false">
+                        <i class="fas fa-history"></i> Historique
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="actions-tab" data-bs-toggle="tab" data-bs-target="#actions" type="button" role="tab" aria-controls="actions" aria-selected="false">
+                        <i class="fas fa-exclamation-triangle"></i> Actions requises
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="inscriptionTabsContent">
+                <!-- Onglet Actives -->
+                <div class="tab-pane fade show active" id="actives" role="tabpanel" aria-labelledby="actives-tab">
+                    {% if inscriptions %}
+                        {% for inscription in inscriptions %}
+                            {% if inscription.statut != 'annulee' and not inscription.evenement.est_termine %}
+                            <div class="inscription-card card">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <!-- Date de l'événement -->
+                                        <div class="col-md-2">
+                                            <div class="event-date">
+                                                <span class="day">{{ inscription.evenement.date_debut|date:"d" }}</span>
+                                                <span class="month">{{ inscription.evenement.date_debut|date:"M" }}</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Informations événement -->
+                                        <div class="col-md-6">
+                                            <h5 class="card-title mb-1">
+                                                <a href="{% url 'evenements:detail' inscription.evenement.pk %}" class="text-decoration-none">
+                                                    {{ inscription.evenement.titre }}
+                                                </a>
+                                            </h5>
+                                            <p class="text-muted mb-1">
+                                                <i class="fas fa-calendar"></i> {{ inscription.evenement.date_debut|date:"d/m/Y à H:i" }}
+                                                <span class="mx-2">|</span>
+                                                <i class="fas fa-map-marker-alt"></i> {{ inscription.evenement.lieu }}
+                                            </p>
+                                            <small class="text-muted">
+                                                <i class="fas fa-user-tie"></i> {{ inscription.evenement.organisateur.get_full_name }}
+                                                {% if inscription.nombre_accompagnants > 0 %}
+                                                    <span class="mx-2">|</span>
+                                                    <i class="fas fa-users"></i> +{{ inscription.nombre_accompagnants }} accompagnant(s)
+                                                {% endif %}
+                                            </small>
+                                        </div>
+
+                                        <!-- Statut -->
+                                        <div class="col-md-2 text-center">
+                                            {% if inscription.statut == 'en_attente' %}
+                                                <span class="badge bg-warning status-badge">
+                                                    <i class="fas fa-clock"></i> En attente
+                                                </span>
+                                                {% if inscription.date_limite_confirmation %}
+                                                    <br><small class="text-muted">Confirmer avant {{ inscription.date_limite_confirmation|date:"d/m H:i" }}</small>
+                                                {% endif %}
+                                            {% elif inscription.statut == 'confirmee' %}
+                                                <span class="badge bg-success status-badge">
+                                                    <i class="fas fa-check-circle"></i> Confirmée
+                                                </span>
+                                            {% elif inscription.statut == 'liste_attente' %}
+                                                <span class="badge bg-info status-badge">
+                                                    <i class="fas fa-hourglass-half"></i> Liste d'attente
+                                                </span>
+                                            {% elif inscription.statut == 'presente' %}
+                                                <span class="badge bg-primary status-badge">
+                                                    <i class="fas fa-user-check"></i> Présent(e)
+                                                </span>
+                                            {% endif %}
+
+                                            <!-- Paiement si nécessaire -->
+                                            {% if inscription.evenement.est_payant %}
+                                                <br>
+                                                {% if inscription.est_payee %}
+                                                    <small class="text-success">
+                                                        <i class="fas fa-check-circle"></i> Payé
+                                                    </small>
+                                                {% else %}
+                                                    <small class="text-danger">
+                                                        <i class="fas fa-exclamation-circle"></i> {{ inscription.montant_restant }}€ restant
+                                                    </small>
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Actions -->
+                                        <div class="col-md-2">
+                                            <div class="btn-group-vertical w-100" role="group">
+                                                <a href="{% url 'evenements:inscription_detail' inscription.pk %}" class="btn btn-outline-primary btn-sm">
+                                                    <i class="fas fa-eye"></i> Détails
+                                                </a>
+                                                
+                                                {% if inscription.statut == 'en_attente' %}
+                                                    <a href="{% url 'evenements:inscription_confirmer' inscription.pk %}" class="btn btn-success btn-sm">
+                                                        <i class="fas fa-check"></i> Confirmer
+                                                    </a>
+                                                {% endif %}
+                                                
+                                                {% if inscription.statut in 'en_attente,confirmee' %}
+                                                    <button class="btn btn-outline-danger btn-sm" onclick="annulerInscription({{ inscription.pk }})">
+                                                        <i class="fas fa-times"></i> Annuler
+                                                    </button>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <i class="fas fa-calendar-times"></i>
+                            <h4>Aucune inscription active</h4>
+                            <p>Vous n'avez pas encore d'inscription en cours.</p>
+                            <a href="{% url 'evenements:evenements_publics' %}" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Découvrir les événements
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Onglet Historique -->
+                <div class="tab-pane fade" id="historique" role="tabpanel" aria-labelledby="historique-tab">
+                    {% if inscriptions %}
+                        {% for inscription in inscriptions %}
+                            {% if inscription.evenement.est_termine or inscription.statut == 'annulee' %}
+                            <div class="inscription-card card">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-2">
+                                            <div class="event-date">
+                                                <span class="day">{{ inscription.evenement.date_debut|date:"d" }}</span>
+                                                <span class="month">{{ inscription.evenement.date_debut|date:"M Y" }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-7">
+                                            <h5 class="card-title mb-1">{{ inscription.evenement.titre }}</h5>
+                                            <p class="text-muted mb-1">
+                                                <i class="fas fa-calendar"></i> {{ inscription.evenement.date_debut|date:"d/m/Y à H:i" }}
+                                                <span class="mx-2">|</span>
+                                                <i class="fas fa-map-marker-alt"></i> {{ inscription.evenement.lieu }}
+                                            </p>
+                                        </div>
+                                        <div class="col-md-2 text-center">
+                                            {% if inscription.statut == 'presente' %}
+                                                <span class="badge bg-success status-badge">
+                                                    <i class="fas fa-user-check"></i> Présent(e)
+                                                </span>
+                                            {% elif inscription.statut == 'absente' %}
+                                                <span class="badge bg-warning status-badge">
+                                                    <i class="fas fa-user-times"></i> Absent(e)
+                                                </span>
+                                            {% elif inscription.statut == 'annulee' %}
+                                                <span class="badge bg-danger status-badge">
+                                                    <i class="fas fa-times-circle"></i> Annulée
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-secondary status-badge">
+                                                    {{ inscription.get_statut_display }}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-md-1">
+                                            <a href="{% url 'evenements:inscription_detail' inscription.pk %}" class="btn btn-outline-secondary btn-sm">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <i class="fas fa-history"></i>
+                            <h4>Aucun historique</h4>
+                            <p>Votre historique de participation apparaîtra ici.</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Onglet Actions requises -->
+                <div class="tab-pane fade" id="actions" role="tabpanel" aria-labelledby="actions-tab">
+                    {% for inscription in inscriptions %}
+                        {% if inscription.statut == 'en_attente' or inscription.montant_restant > 0 %}
+                        <div class="inscription-card card border-warning">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-8">
+                                        <h5 class="card-title mb-1">{{ inscription.evenement.titre }}</h5>
+                                        <p class="text-muted mb-1">
+                                            <i class="fas fa-calendar"></i> {{ inscription.evenement.date_debut|date:"d/m/Y à H:i" }}
+                                        </p>
+                                        
+                                        {% if inscription.statut == 'en_attente' %}
+                                            <div class="alert alert-warning mb-0">
+                                                <i class="fas fa-exclamation-triangle"></i>
+                                                <strong>Confirmation requise</strong> - 
+                                                Vous devez confirmer avant {{ inscription.date_limite_confirmation|date:"d/m/Y à H:i" }}
+                                            </div>
+                                        {% endif %}
+                                        
+                                        {% if inscription.montant_restant > 0 %}
+                                            <div class="alert alert-info mb-0">
+                                                <i class="fas fa-credit-card"></i>
+                                                <strong>Paiement en attente</strong> - 
+                                                Il reste {{ inscription.montant_restant }}€ à payer
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        {% if inscription.statut == 'en_attente' %}
+                                            <a href="{% url 'evenements:inscription_confirmer' inscription.pk %}" class="btn btn-warning mb-1">
+                                                <i class="fas fa-check"></i> Confirmer
+                                            </a>
+                                        {% endif %}
+                                        {% if inscription.montant_restant > 0 %}
+                                            <a href="{% url 'evenements:inscription_paiement' inscription.pk %}" class="btn btn-success mb-1">
+                                                <i class="fas fa-credit-card"></i> Payer
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="empty-state">
+                            <i class="fas fa-check-circle text-success"></i>
+                            <h4>Tout est à jour !</h4>
+                            <p>Aucune action n'est requise pour vos inscriptions.</p>
+                        </div>
+                        {% endfor %}
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <nav aria-label="Navigation des inscriptions">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1">Première</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Précédente</a>
+                        </li>
+                    {% endif %}
+
+                    <li class="page-item active">
+                        <span class="page-link">
+                            Page {{ page_obj.number }} sur {{ page_obj.paginator.num_pages }}
+                        </span>
+                    </li>
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Suivante</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Dernière</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar Actions rapides -->
+        <div class="col-md-3">
+            <div class="quick-actions">
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="fas fa-rocket"></i> Actions rapides</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'evenements:evenements_publics' %}" class="btn btn-primary">
+                                <i class="fas fa-calendar-plus"></i> Nouveaux événements
+                            </a>
+                            <a href="{% url 'evenements:calendrier_public' %}" class="btn btn-outline-primary">
+                                <i class="fas fa-calendar"></i> Calendrier public
+                            </a>
+                            <a href="{% url 'evenements:export_calendrier' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-download"></i> Export calendrier
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistiques détaillées -->
+                {% if stats %}
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-chart-bar"></i> Mes statistiques</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="border-end">
+                                    <div class="h4 text-primary">{{ stats.inscriptions_confirmees|default:0 }}</div>
+                                    <small class="text-muted">Confirmées</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="h4 text-warning">{{ stats.inscriptions_annulees|default:0 }}</div>
+                                <small class="text-muted">Annulées</small>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="text-center">
+                            <div class="h5 text-success">{{ stats.montant_total_paye|default:0 }}€</div>
+                            <small class="text-muted">Total payé</small>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal d'annulation -->
+<div class="modal fade" id="annulerModal" tabindex="-1" aria-labelledby="annulerModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="annulerModalLabel">
+                    <i class="fas fa-times-circle text-danger"></i> Annuler l'inscription
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" id="annulerForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p>Êtes-vous sûr de vouloir annuler cette inscription ?</p>
+                    <div class="form-group">
+                        <label for="raison">Raison de l'annulation (optionnel) :</label>
+                        <textarea name="raison" class="form-control" rows="3" placeholder="Expliquez pourquoi vous annulez..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Fermer
+                    </button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-check"></i> Confirmer l'annulation
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Auto-soumission des filtres
+    $('#filterForm select').on('change', function() {
+        $('#filterForm').submit();
+    });
+
+    // Gestion des onglets avec mémorisation
+    const activeTab = localStorage.getItem('activeInscriptionTab') || 'actives-tab';
+    $(`#${activeTab}`).tab('show');
+    
+    $('.nav-link').on('click', function() {
+        localStorage.setItem('activeInscriptionTab', this.id);
+    });
+
+    // Animation des cartes
+    $('.inscription-card').each(function(index) {
+        $(this).css('opacity', '0').css('transform', 'translateY(20px)');
+        $(this).delay(index * 100).animate({
+            opacity: 1
+        }, 500, function() {
+            $(this).css('transform', 'translateY(0)');
+        });
+    });
+
+    // Mise à jour automatique des inscriptions en attente
+    setInterval(function() {
+        $('.badge:contains("En attente")').closest('.inscription-card').each(function() {
+            const dateElement = $(this).find('small:contains("Confirmer avant")');
+            if (dateElement.length) {
+                // Vérifier si le délai est dépassé et recharger si nécessaire
+                const now = new Date();
+                const dateText = dateElement.text().match(/(\d{2}\/\d{2} \d{2}:\d{2})/);
+                if (dateText) {
+                    // Logique de vérification du délai
+                    console.log('Vérification des délais...');
+                }
+            }
+        });
+    }, 60000); // Chaque minute
+});
+
+function annulerInscription(inscriptionId) {
+    const modal = new bootstrap.Modal(document.getElementById('annulerModal'));
+    const form = document.getElementById('annulerForm');
+    form.action = `/evenements/inscriptions/${inscriptionId}/annuler/`;
+    modal.show();
+}
+</script>
+{% endblock %}

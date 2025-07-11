@@ -1,0 +1,604 @@
+{% extends 'evenements/base_evenement.html' %}
+{% load static %}
+
+{% block title %}Validation - {{ validation.evenement.titre }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .validation-header {
+        background: linear-gradient(135deg, #ffc107, #fd7e14);
+        color: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    .event-preview {
+        border: 2px solid #e9ecef;
+        border-radius: 10px;
+        padding: 1.5rem;
+        background: #f8f9fa;
+        margin-bottom: 2rem;
+    }
+    .validation-checklist {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .checklist-item {
+        padding: 0.75rem;
+        border-radius: 5px;
+        margin-bottom: 0.5rem;
+        transition: all 0.3s ease;
+    }
+    .checklist-item.valid {
+        background: #d4edda;
+        border-left: 4px solid #28a745;
+    }
+    .checklist-item.warning {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+    }
+    .checklist-item.error {
+        background: #f8d7da;
+        border-left: 4px solid #dc3545;
+    }
+    .decision-panel {
+        position: sticky;
+        top: 20px;
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .urgency-indicator {
+        position: absolute;
+        top: -10px;
+        right: 20px;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: bold;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+    }
+    .urgency-high {
+        background: #dc3545;
+        color: white;
+        animation: pulse 1.5s infinite;
+    }
+    .urgency-medium {
+        background: #ffc107;
+        color: #000;
+    }
+    .urgency-low {
+        background: #28a745;
+        color: white;
+    }
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+    .history-timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    .history-timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e9ecef;
+    }
+    .timeline-item {
+        position: relative;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -24px;
+        top: 15px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #007bff;
+    }
+    .organizer-info {
+        background: #e3f2fd;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- En-tête avec indicateur d'urgence -->
+    <div class="validation-header position-relative">
+        <!-- Indicateur d'urgence -->
+        {% with jours_restants=validation.evenement.date_debut|timeuntil %}
+        {% if '1 jour' in jours_restants or 'jour' not in jours_restants %}
+            <div class="urgency-indicator urgency-high">
+                <i class="fas fa-fire"></i> URGENT - {{ jours_restants }}
+            </div>
+        {% elif '7 jour' in jours_restants %}
+            <div class="urgency-indicator urgency-medium">
+                <i class="fas fa-exclamation-triangle"></i> PRIORITÉ - {{ jours_restants }}
+            </div>
+        {% else %}
+            <div class="urgency-indicator urgency-low">
+                <i class="fas fa-check"></i> {{ jours_restants }}
+            </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2><i class="fas fa-gavel"></i> Validation d'événement</h2>
+                <h3 class="mb-2">{{ validation.evenement.titre }}</h3>
+                <p class="mb-0">
+                    Demandé par {{ validation.evenement.organisateur.get_full_name }} 
+                    le {{ validation.created_at|date:"d/m/Y à H:i" }}
+                </p>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="{% url 'evenements:validation_liste' %}" class="btn btn-light">
+                    <i class="fas fa-arrow-left"></i> Retour à la liste
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Aperçu de l'événement -->
+            <div class="event-preview">
+                <h4><i class="fas fa-eye"></i> Aperçu de l'événement</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <td><strong>Titre :</strong></td>
+                                <td>{{ validation.evenement.titre }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Type :</strong></td>
+                                <td>
+                                    <span class="badge" style="background-color: {{ validation.evenement.type_evenement.couleur_affichage }}">
+                                        {{ validation.evenement.type_evenement.libelle }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Date début :</strong></td>
+                                <td>{{ validation.evenement.date_debut|date:"d/m/Y à H:i" }}</td>
+                            </tr>
+                            {% if validation.evenement.date_fin %}
+                            <tr>
+                                <td><strong>Date fin :</strong></td>
+                                <td>{{ validation.evenement.date_fin|date:"d/m/Y à H:i" }}</td>
+                            </tr>
+                            {% endif %}
+                            <tr>
+                                <td><strong>Lieu :</strong></td>
+                                <td>{{ validation.evenement.lieu }}</td>
+                            </tr>
+                            {% if validation.evenement.adresse_complete %}
+                            <tr>
+                                <td><strong>Adresse :</strong></td>
+                                <td>{{ validation.evenement.adresse_complete }}</td>
+                            </tr>
+                            {% endif %}
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <td><strong>Capacité :</strong></td>
+                                <td>{{ validation.evenement.capacite_max }} personnes</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Tarification :</strong></td>
+                                <td>
+                                    {% if validation.evenement.est_payant %}
+                                        Payant - {{ validation.evenement.tarif_membre }}€
+                                    {% else %}
+                                        <span class="text-success">Gratuit</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Accompagnants :</strong></td>
+                                <td>
+                                    {% if validation.evenement.permet_accompagnants %}
+                                        <i class="fas fa-check text-success"></i> 
+                                        Autorisés (max {{ validation.evenement.nombre_max_accompagnants }})
+                                    {% else %}
+                                        <i class="fas fa-times text-danger"></i> Non autorisés
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Délai confirmation :</strong></td>
+                                <td>{{ validation.evenement.delai_confirmation }}h</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Inscriptions :</strong></td>
+                                <td>
+                                    {% if validation.evenement.inscriptions_ouvertes %}
+                                        <i class="fas fa-check text-success"></i> Ouvertes
+                                    {% else %}
+                                        <i class="fas fa-times text-danger"></i> Fermées
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div class="mt-3">
+                    <h6><i class="fas fa-align-left"></i> Description</h6>
+                    <div class="border rounded p-3 bg-white">
+                        {{ validation.evenement.description|linebreaks }}
+                    </div>
+                </div>
+
+                <!-- Instructions particulières -->
+                {% if validation.evenement.instructions_particulieres %}
+                <div class="mt-3">
+                    <h6><i class="fas fa-info-circle"></i> Instructions particulières</h6>
+                    <div class="alert alert-info">
+                        {{ validation.evenement.instructions_particulieres|linebreaks }}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Matériel requis -->
+                {% if validation.evenement.materiel_requis %}
+                <div class="mt-3">
+                    <h6><i class="fas fa-tools"></i> Matériel requis</h6>
+                    <div class="alert alert-warning">
+                        {{ validation.evenement.materiel_requis|linebreaks }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Liste de vérification -->
+            <div class="validation-checklist">
+                <h4><i class="fas fa-tasks"></i> Liste de vérification</h4>
+                
+                <!-- Vérification des dates -->
+                <div class="checklist-item {% if validation.evenement.date_debut > 'now'|date %}valid{% else %}error{% endif %}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas {% if validation.evenement.date_debut > 'now'|date %}fa-check-circle text-success{% else %}fa-times-circle text-danger{% endif %}"></i>
+                            <strong>Date de l'événement</strong>
+                        </div>
+                        <div>
+                            {% if validation.evenement.date_debut > 'now'|date %}
+                                <span class="badge bg-success">Valide</span>
+                            {% else %}
+                                <span class="badge bg-danger">Date passée</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <small class="text-muted">L'événement doit avoir lieu dans le futur</small>
+                </div>
+
+                <!-- Vérification organisateur -->
+                <div class="checklist-item valid">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-check-circle text-success"></i>
+                            <strong>Organisateur valide</strong>
+                        </div>
+                        <div>
+                            <span class="badge bg-success">Vérifié</span>
+                        </div>
+                    </div>
+                    <small class="text-muted">{{ validation.evenement.organisateur.get_full_name }} est membre actif</small>
+                </div>
+
+                <!-- Vérification du lieu -->
+                <div class="checklist-item {% if validation.evenement.lieu and validation.evenement.lieu|length > 3 %}valid{% else %}warning{% endif %}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas {% if validation.evenement.lieu and validation.evenement.lieu|length > 3 %}fa-check-circle text-success{% else %}fa-exclamation-triangle text-warning{% endif %}"></i>
+                            <strong>Lieu spécifié</strong>
+                        </div>
+                        <div>
+                            {% if validation.evenement.lieu and validation.evenement.lieu|length > 3 %}
+                                <span class="badge bg-success">Complet</span>
+                            {% else %}
+                                <span class="badge bg-warning">Incomplet</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <small class="text-muted">Le lieu doit être clairement indiqué</small>
+                </div>
+
+                <!-- Vérification de la description -->
+                <div class="checklist-item {% if validation.evenement.description|length > 50 %}valid{% else %}warning{% endif %}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas {% if validation.evenement.description|length > 50 %}fa-check-circle text-success{% else %}fa-exclamation-triangle text-warning{% endif %}"></i>
+                            <strong>Description détaillée</strong>
+                        </div>
+                        <div>
+                            {% if validation.evenement.description|length > 50 %}
+                                <span class="badge bg-success">Suffisante</span>
+                            {% else %}
+                                <span class="badge bg-warning">Trop courte</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <small class="text-muted">La description doit être informative ({{ validation.evenement.description|length }} caractères)</small>
+                </div>
+
+                <!-- Vérification capacité -->
+                <div class="checklist-item {% if validation.evenement.capacite_max >= 5 %}valid{% else %}warning{% endif %}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas {% if validation.evenement.capacite_max >= 5 %}fa-check-circle text-success{% else %}fa-exclamation-triangle text-warning{% endif %}"></i>
+                            <strong>Capacité raisonnable</strong>
+                        </div>
+                        <div>
+                            {% if validation.evenement.capacite_max >= 5 %}
+                                <span class="badge bg-success">{{ validation.evenement.capacite_max }} places</span>
+                            {% else %}
+                                <span class="badge bg-warning">{{ validation.evenement.capacite_max }} places seulement</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <small class="text-muted">La capacité doit permettre une participation significative</small>
+                </div>
+
+                <!-- Vérification tarification -->
+                {% if validation.evenement.est_payant %}
+                <div class="checklist-item {% if validation.evenement.tarif_membre > 0 %}valid{% else %}error{% endif %}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas {% if validation.evenement.tarif_membre > 0 %}fa-check-circle text-success{% else %}fa-times-circle text-danger{% endif %}"></i>
+                            <strong>Tarification cohérente</strong>
+                        </div>
+                        <div>
+                            {% if validation.evenement.tarif_membre > 0 %}
+                                <span class="badge bg-success">{{ validation.evenement.tarif_membre }}€</span>
+                            {% else %}
+                                <span class="badge bg-danger">Gratuit mais marqué payant</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <small class="text-muted">Les tarifs doivent être cohérents avec le statut payant</small>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Informations sur l'organisateur -->
+            <div class="organizer-info mt-4">
+                <h5><i class="fas fa-user-tie"></i> Informations organisateur</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Nom :</strong> {{ validation.evenement.organisateur.get_full_name }}</p>
+                        <p><strong>Email :</strong> {{ validation.evenement.organisateur.email }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Membre depuis :</strong> 
+                            {% if validation.evenement.organisateur.membre.date_adhesion %}
+                                {{ validation.evenement.organisateur.membre.date_adhesion|date:"d/m/Y" }}
+                            {% else %}
+                                Non renseigné
+                            {% endif %}
+                        </p>
+                        <p><strong>Dernière connexion :</strong> 
+                            {% if validation.evenement.organisateur.last_login %}
+                                {{ validation.evenement.organisateur.last_login|date:"d/m/Y à H:i" }}
+                            {% else %}
+                                Jamais connecté
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Historique des modifications -->
+            {% if validation.modifications_demandees %}
+            <div class="mt-4">
+                <h5><i class="fas fa-history"></i> Historique des modifications</h5>
+                <div class="history-timeline">
+                    {% for modification in validation.modifications_demandees %}
+                    <div class="timeline-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">Modifications demandées</h6>
+                                <p class="mb-1">{{ modification.modifications }}</p>
+                                <small class="text-muted">{{ modification.validateur }} - {{ modification.date|date:"d/m/Y à H:i" }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar de décision -->
+        <div class="col-md-4">
+            <div class="decision-panel">
+                <h5><i class="fas fa-gavel"></i> Décision de validation</h5>
+                
+                <!-- Formulaire de validation -->
+                <form method="post" id="validationForm">
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    
+                    <!-- Actions de validation -->
+                    <div class="d-grid gap-2 mt-3">
+                        <button type="button" class="btn btn-success btn-lg" onclick="setDecision('approuver')">
+                            <i class="fas fa-check-circle"></i> Approuver l'événement
+                        </button>
+                        
+                        <button type="button" class="btn btn-warning btn-lg" onclick="setDecision('demander_modifications')">
+                            <i class="fas fa-edit"></i> Demander des modifications
+                        </button>
+                        
+                        <button type="button" class="btn btn-danger btn-lg" onclick="setDecision('refuser')">
+                            <i class="fas fa-times-circle"></i> Refuser l'événement
+                        </button>
+                    </div>
+                    
+                    <!-- Zone de commentaire dynamique -->
+                    <div id="commentaireZone" class="mt-3" style="display: none;">
+                        <div class="alert alert-info">
+                            <small id="commentaireHint"></small>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Aperçu de l'événement -->
+                <div class="mt-4">
+                    <h6><i class="fas fa-eye"></i> Aperçu public</h6>
+                    <a href="{% url 'evenements:detail' validation.evenement.pk %}" target="_blank" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-external-link-alt"></i> Voir comme un membre
+                    </a>
+                </div>
+
+                <!-- Actions supplémentaires -->
+                <div class="mt-4">
+                    <h6><i class="fas fa-tools"></i> Actions supplémentaires</h6>
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'evenements:modifier' validation.evenement.pk %}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-edit"></i> Modifier l'événement
+                        </a>
+                        <button class="btn btn-outline-info btn-sm" onclick="contactOrganizer()">
+                            <i class="fas fa-envelope"></i> Contacter l'organisateur
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Aide à la décision -->
+                <div class="mt-4">
+                    <div class="card border-light">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-lightbulb"></i> Aide à la décision</h6>
+                        </div>
+                        <div class="card-body">
+                            <small class="text-muted">
+                                <strong>Approuver si :</strong><br>
+                                • Toutes les informations sont complètes<br>
+                                • L'événement respecte les règles<br>
+                                • Le lieu et la date sont réalistes<br><br>
+                                
+                                <strong>Demander modifications si :</strong><br>
+                                • Informations incomplètes<br>
+                                • Description trop vague<br>
+                                • Problèmes mineurs<br><br>
+                                
+                                <strong>Refuser si :</strong><br>
+                                • Contenu inapproprié<br>
+                                • Événement impossible<br>
+                                • Non-conformité aux règles
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setDecision(decision) {
+    // Mettre à jour le champ radio
+    $(`input[name="decision"][value="${decision}"]`).prop('checked', true);
+    
+    // Afficher/masquer la zone de commentaire
+    const commentaireZone = $('#commentaireZone');
+    const commentaireHint = $('#commentaireHint');
+    const textarea = $('#id_commentaire_validation');
+    
+    if (decision === 'approuver') {
+        commentaireZone.show();
+        commentaireHint.text('Commentaire optionnel pour l\'approbation');
+        textarea.attr('placeholder', 'Commentaire de validation (optionnel)...');
+        textarea.prop('required', false);
+    } else if (decision === 'demander_modifications') {
+        commentaireZone.show();
+        commentaireHint.text('Décrivez précisément les modifications à apporter');
+        textarea.attr('placeholder', 'Listez les modifications requises...');
+        textarea.prop('required', true);
+    } else if (decision === 'refuser') {
+        commentaireZone.show();
+        commentaireHint.text('Justifiez obligatoirement le refus');
+        textarea.attr('placeholder', 'Expliquez les raisons du refus...');
+        textarea.prop('required', true);
+    }
+    
+    // Soumettre automatiquement après confirmation
+    setTimeout(() => {
+        if (confirm(`Confirmez-vous cette décision : ${decision} ?`)) {
+            $('#validationForm').submit();
+        }
+    }, 100);
+}
+
+function contactOrganizer() {
+    const email = '{{ validation.evenement.organisateur.email }}';
+    const subject = encodeURIComponent('Votre événement : {{ validation.evenement.titre }}');
+    const body = encodeURIComponent(`Bonjour,\n\nConcernant votre événement "${validation.evenement.titre}" prévu le {{ validation.evenement.date_debut|date:"d/m/Y" }}...\n\nCordialement`);
+    
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+}
+
+$(document).ready(function() {
+    // Animation de la checklist
+    $('.checklist-item').each(function(index) {
+        $(this).css('opacity', '0').css('transform', 'translateX(-20px)');
+        $(this).delay(index * 100).animate({
+            opacity: 1
+        }, 400, function() {
+            $(this).css('transform', 'translateX(0)');
+        });
+    });
+
+    // Validation du formulaire
+    $('#validationForm').on('submit', function(e) {
+        const decision = $('input[name="decision"]:checked').val();
+        const commentaire = $('#id_commentaire_validation').val();
+        
+        if ((decision === 'refuser' || decision === 'demander_modifications') && !commentaire.trim()) {
+            e.preventDefault();
+            alert('Un commentaire est obligatoire pour cette action.');
+            $('#id_commentaire_validation').focus();
+        }
+    });
+
+    // Auto-save du commentaire
+    let saveTimeout;
+    $('#id_commentaire_validation').on('input', function() {
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            localStorage.setItem(`validation_${{{ validation.pk }}}_comment`, $(this).val());
+        }, 1000);
+    });
+
+    // Restaurer le commentaire sauvegardé
+    const savedComment = localStorage.getItem(`validation_${{{ validation.pk }}}_comment`);
+    if (savedComment) {
+        $('#id_commentaire_validation').val(savedComment);
+    }
+});
+</script>
+{% endblock %}

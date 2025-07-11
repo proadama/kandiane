@@ -1,0 +1,217 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+
+{% block extra_css %}
+<link href="{% static 'css/style.css' %}" rel="stylesheet">
+<style>
+.evenement-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+.evenement-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+.statut-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+.places-info {
+    background: linear-gradient(45deg, #007bff, #0056b3);
+    color: white;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    text-align: center;
+}
+.inscription-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+}
+.calendar-day {
+    min-height: 100px;
+    border: 1px solid #dee2e6;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.calendar-day:hover {
+    background-color: #f8f9fa;
+}
+.event-chip {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    margin: 1px 0;
+    border-radius: 10px;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.loading-spinner {
+    display: none;
+}
+.loading .loading-spinner {
+    display: inline-block;
+}
+</style>
+{% endblock extra_css %}
+
+{% block extra_js %}
+<script src="{% static 'js/main.js' %}"></script>
+<script>
+// Configuration globale pour l'application événements
+window.EvenementsConfig = {
+    urls: {
+        placesDisponibles: '{% url "evenements:ajax:places_disponibles" pk=0 %}'.replace('0', '__PK__'),
+        peutInscrire: '{% url "evenements:ajax:peut_inscrire" pk=0 %}'.replace('0', '__PK__'),
+        calculerTarif: '{% url "evenements:ajax:calculer_tarif" pk=0 %}'.replace('0', '__PK__'),
+        autocompleteLieux: '{% url "evenements:ajax:autocomplete_lieux" %}',
+        autocompleteOrganisateurs: '{% url "evenements:ajax:autocomplete_organisateurs" %}'
+    },
+    messages: {
+        confirmationInscription: 'Êtes-vous sûr de vouloir vous inscrire à cet événement ?',
+        confirmationAnnulation: 'Êtes-vous sûr de vouloir annuler cette inscription ?',
+        erreurChargement: 'Erreur lors du chargement des données.',
+        inscriptionReussie: 'Inscription réussie !',
+        erreurInscription: 'Erreur lors de l\'inscription.'
+    }
+};
+
+// Fonctions utilitaires
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('fr-FR', {
+        style: 'currency',
+        currency: 'EUR'
+    }).format(amount);
+}
+
+function formatDate(dateString) {
+    return new Intl.DateTimeFormat('fr-FR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(new Date(dateString));
+}
+
+// Initialisation des tooltips Bootstrap
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
+{% endblock extra_js %}
+
+{% block title %}
+{% block page_title %}Événements{% endblock page_title %} - {{ block.super }}
+{% endblock title %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Navigation spécifique aux événements -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4 rounded">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'evenements:dashboard' %}">
+                <i class="fas fa-calendar-alt me-2"></i>Événements
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#evenementsNavbar">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="evenementsNavbar">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" 
+                           href="{% url 'evenements:dashboard' %}">
+                            <i class="fas fa-tachometer-alt me-1"></i>Tableau de bord
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'liste' %}active{% endif %}" 
+                           href="{% url 'evenements:liste' %}">
+                            <i class="fas fa-list me-1"></i>Tous les événements
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'calendrier' %}active{% endif %}" 
+                           href="{% url 'evenements:calendrier' %}">
+                            <i class="fas fa-calendar me-1"></i>Calendrier
+                        </a>
+                    </li>
+                    {% if user.is_staff %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="gestionDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-cog me-1"></i>Gestion
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'evenements:creer' %}">
+                                <i class="fas fa-plus me-1"></i>Nouvel événement
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'evenements:validation:liste' %}">
+                                <i class="fas fa-check me-1"></i>Validations
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'evenements:types:liste' %}">
+                                <i class="fas fa-tags me-1"></i>Types d'événements
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'evenements:rapports:dashboard' %}">
+                                <i class="fas fa-chart-bar me-1"></i>Rapports
+                            </a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <div class="d-flex align-items-center">
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'evenements:mes_inscriptions' %}" class="btn btn-outline-primary me-2">
+                        <i class="fas fa-ticket-alt me-1"></i>Mes inscriptions
+                    </a>
+                    {% endif %}
+                    
+                    <form class="d-flex" action="{% url 'evenements:recherche' %}" method="get">
+                        <input class="form-control me-2" type="search" placeholder="Rechercher..." 
+                               name="q" value="{{ request.GET.q }}">
+                        <button class="btn btn-outline-success" type="submit">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Messages -->
+    {% include 'includes/messages.html' %}
+
+    <!-- Contenu spécifique à chaque page -->
+    {% block evenement_content %}
+    {% endblock evenement_content %}
+</div>
+
+<!-- Modale universelle pour les actions AJAX -->
+<div class="modal fade" id="universalModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="universalModalTitle">Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="universalModalBody">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Chargement...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" id="universalModalFooter">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

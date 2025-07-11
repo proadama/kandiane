@@ -1,0 +1,593 @@
+{% extends 'evenements/base_evenement.html' %}
+{% load static %}
+
+{% block title %}Validation des événements{% endblock %}
+
+{% block extra_css %}
+<style>
+    .validation-header {
+        background: linear-gradient(135deg, #ffc107, #fd7e14);
+        color: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    .validation-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+    }
+    .validation-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+    }
+    .urgence-high {
+        border-left: 4px solid #dc3545;
+        background: #fff5f5;
+    }
+    .urgence-medium {
+        border-left: 4px solid #ffc107;
+        background: #fffcf0;
+    }
+    .urgence-low {
+        border-left: 4px solid #28a745;
+        background: #f8fff9;
+    }
+    .priority-badge {
+        position: absolute;
+        top: -8px;
+        right: 15px;
+        z-index: 10;
+    }
+    .event-date {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 0.5rem;
+        text-align: center;
+        min-width: 80px;
+    }
+    .event-date .day {
+        font-size: 1.5rem;
+        font-weight: bold;
+        display: block;
+        line-height: 1;
+    }
+    .event-date .month {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        color: #6c757d;
+    }
+    .stats-summary {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .quick-actions {
+        position: sticky;
+        top: 20px;
+    }
+    .validation-toolbar {
+        background: #fff;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .batch-actions {
+        background: #e3f2fd;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- En-tête validation -->
+    <div class="validation-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2><i class="fas fa-clipboard-check"></i> Validation des événements</h2>
+                <p class="mb-0">Gérez les demandes de validation et approuvez les événements</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="text-center">
+                            <div class="h3 mb-0">{{ validations.count }}</div>
+                            <small>En attente</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center">
+                            <div class="h3 mb-0 text-danger">{{ validations_urgentes.count }}</div>
+                            <small>Urgentes</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-9">
+            <!-- Barre d'outils -->
+            <div class="validation-toolbar">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="selectAll">
+                            <label class="form-check-label" for="selectAll">
+                                Sélectionner tout
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-secondary" id="filterUrgent">
+                                <i class="fas fa-exclamation-triangle"></i> Urgents
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="filterRecent">
+                                <i class="fas fa-clock"></i> Récents
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="showAll">
+                                <i class="fas fa-list"></i> Tous
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions en lot -->
+            <div class="batch-actions" id="batchActions">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <strong><span id="selectedCount">0</span> événement(s) sélectionné(s)</strong>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button type="button" class="btn btn-success btn-sm" onclick="approuverSelection()">
+                            <i class="fas fa-check"></i> Approuver
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="refuserSelection()">
+                            <i class="fas fa-times"></i> Refuser
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Liste des validations -->
+            {% if validations %}
+                {% for validation in validations %}
+                <div class="validation-card card position-relative 
+                    {% if validation.evenement_date|date:'U'|add:'-604800' < 'now'|date:'U' %}urgence-high
+                    {% elif validation.evenement_date|date:'U'|add:'-1209600' < 'now'|date:'U' %}urgence-medium
+                    {% else %}urgence-low{% endif %}" 
+                    data-validation-id="{{ validation.pk }}">
+                    
+                    <!-- Badge de priorité -->
+                    {% if validation.evenement_date|date:'U'|add:'-604800' < 'now'|date:'U' %}
+                        <span class="badge bg-danger priority-badge">
+                            <i class="fas fa-fire"></i> URGENT
+                        </span>
+                    {% elif validation.evenement_date|date:'U'|add:'-1209600' < 'now'|date:'U' %}
+                        <span class="badge bg-warning priority-badge">
+                            <i class="fas fa-exclamation-triangle"></i> PRIORITÉ
+                        </span>
+                    {% endif %}
+
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <!-- Checkbox sélection -->
+                            <div class="col-md-1">
+                                <div class="form-check">
+                                    <input class="form-check-input validation-checkbox" 
+                                           type="checkbox" 
+                                           value="{{ validation.pk }}"
+                                           id="validation{{ validation.pk }}">
+                                </div>
+                            </div>
+
+                            <!-- Date de l'événement -->
+                            <div class="col-md-2">
+                                <div class="event-date">
+                                    <span class="day">{{ validation.evenement.date_debut|date:"d" }}</span>
+                                    <span class="month">{{ validation.evenement.date_debut|date:"M" }}</span>
+                                </div>
+                                <small class="text-muted d-block text-center mt-1">
+                                    {{ validation.evenement.date_debut|date:"Y" }}
+                                </small>
+                            </div>
+
+                            <!-- Informations événement -->
+                            <div class="col-md-5">
+                                <h5 class="card-title mb-1">
+                                    <a href="{% url 'evenements:validation_detail' validation.pk %}" class="text-decoration-none">
+                                        {{ validation.evenement.titre }}
+                                    </a>
+                                </h5>
+                                <p class="text-muted mb-1">
+                                    <i class="fas fa-tag"></i> {{ validation.evenement.type_evenement.libelle }}
+                                    <span class="mx-2">|</span>
+                                    <i class="fas fa-map-marker-alt"></i> {{ validation.evenement.lieu }}
+                                </p>
+                                <p class="text-muted mb-1">
+                                    <i class="fas fa-user-tie"></i> {{ validation.evenement.organisateur.get_full_name }}
+                                    <span class="mx-2">|</span>
+                                    <i class="fas fa-users"></i> {{ validation.evenement.capacite_max }} places
+                                </p>
+                                <small class="text-muted">
+                                    <i class="fas fa-clock"></i> Demandé le {{ validation.created_at|date:"d/m/Y à H:i" }}
+                                </small>
+                            </div>
+
+                            <!-- Indicateurs -->
+                            <div class="col-md-2">
+                                <!-- Délai -->
+                                {% with jours_restants=validation.evenement.date_debut|timeuntil %}
+                                    {% if 'jour' in jours_restants %}
+                                        <div class="text-center mb-2">
+                                            <span class="badge bg-info">{{ jours_restants }}</span>
+                                        </div>
+                                    {% else %}
+                                        <div class="text-center mb-2">
+                                            <span class="badge bg-danger">Aujourd'hui</span>
+                                        </div>
+                                    {% endif %}
+                                {% endwith %}
+
+                                <!-- Tarif -->
+                                {% if validation.evenement.est_payant %}
+                                    <div class="text-center">
+                                        <small class="text-muted">{{ validation.evenement.tarif_membre }}€</small>
+                                    </div>
+                                {% else %}
+                                    <div class="text-center">
+                                        <small class="text-success">Gratuit</small>
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="col-md-2">
+                                <div class="btn-group-vertical w-100" role="group">
+                                    <a href="{% url 'evenements:validation_detail' validation.pk %}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-eye"></i> Examiner
+                                    </a>
+                                    
+                                    <button type="button" class="btn btn-success btn-sm" 
+                                            onclick="approuverEvenement({{ validation.pk }})">
+                                        <i class="fas fa-check"></i> Approuver
+                                    </button>
+                                    
+                                    <button type="button" class="btn btn-danger btn-sm" 
+                                            onclick="refuserEvenement({{ validation.pk }})">
+                                        <i class="fas fa-times"></i> Refuser
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Informations supplémentaires si modification demandée -->
+                        {% if validation.modifications_demandees %}
+                        <div class="row mt-2">
+                            <div class="col-12">
+                                <div class="alert alert-warning alert-sm mb-0">
+                                    <i class="fas fa-edit"></i> 
+                                    <strong>Modifications demandées :</strong>
+                                    {% for modif in validation.modifications_demandees %}
+                                        {{ modif.modifications|truncatewords:15 }}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+
+                <!-- Pagination -->
+                {% if is_paginated %}
+                <nav aria-label="Navigation validation">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1">Première</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Précédente</a>
+                            </li>
+                        {% endif %}
+
+                        <li class="page-item active">
+                            <span class="page-link">
+                                Page {{ page_obj.number }} sur {{ page_obj.paginator.num_pages }}
+                            </span>
+                        </li>
+
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">Suivante</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Dernière</a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-check-circle text-success" style="font-size: 4rem; opacity: 0.5;"></i>
+                    <h4 class="mt-3">Aucune validation en attente</h4>
+                    <p class="text-muted">Tous les événements sont validés !</p>
+                    <a href="{% url 'evenements:liste' %}" class="btn btn-primary">
+                        <i class="fas fa-calendar"></i> Voir tous les événements
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-md-3">
+            <div class="quick-actions">
+                <!-- Actions rapides -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-lightning-bolt"></i> Actions rapides</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success" onclick="approuverToutUrgent()">
+                                <i class="fas fa-check-double"></i> Approuver tous urgents
+                            </button>
+                            <a href="{% url 'evenements:validation_masse' %}" class="btn btn-outline-primary">
+                                <i class="fas fa-tasks"></i> Validation en masse
+                            </a>
+                            <a href="{% url 'evenements:creer' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-plus"></i> Nouvel événement
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistiques -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-chart-pie"></i> Statistiques</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="border-end">
+                                    <div class="h4 text-warning">{{ validations.count }}</div>
+                                    <small class="text-muted">En attente</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="h4 text-danger">{{ validations_urgentes.count }}</div>
+                                <small class="text-muted">Urgentes</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aide -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="fas fa-question-circle"></i> Aide</h6>
+                    </div>
+                    <div class="card-body">
+                        <small class="text-muted">
+                            <strong>Priorités :</strong><br>
+                            <span class="badge bg-danger">Rouge</span> : &lt; 7 jours<br>
+                            <span class="badge bg-warning">Orange</span> : &lt; 14 jours<br>
+                            <span class="badge bg-success">Vert</span> : &gt; 14 jours
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal d'approbation rapide -->
+<div class="modal fade" id="approuverModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle text-success"></i> Approuver l'événement
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="approuverForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p>Confirmez-vous l'approbation de cet événement ?</p>
+                    <div class="form-group">
+                        <label for="commentaire">Commentaire (optionnel) :</label>
+                        <textarea name="commentaire" class="form-control" rows="3" 
+                                placeholder="Commentaire de validation..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Annuler
+                    </button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check"></i> Approuver
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de refus -->
+<div class="modal fade" id="refuserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-times-circle text-danger"></i> Refuser l'événement
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="refuserForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        L'organisateur sera notifié du refus avec votre commentaire.
+                    </div>
+                    <div class="form-group">
+                        <label for="commentaire">Raison du refus (obligatoire) :</label>
+                        <textarea name="commentaire" class="form-control" rows="4" 
+                                placeholder="Expliquez pourquoi cet événement est refusé..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Annuler
+                    </button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-ban"></i> Refuser
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Gestion de la sélection multiple
+    $('#selectAll').on('change', function() {
+        $('.validation-checkbox').prop('checked', this.checked);
+        updateBatchActions();
+    });
+
+    $('.validation-checkbox').on('change', function() {
+        updateBatchActions();
+        
+        // Mettre à jour la case "Sélectionner tout"
+        const totalCheckboxes = $('.validation-checkbox').length;
+        const checkedCheckboxes = $('.validation-checkbox:checked').length;
+        $('#selectAll').prop('checked', totalCheckboxes === checkedCheckboxes);
+    });
+
+    // Filtres
+    $('#filterUrgent').on('click', function() {
+        $('.validation-card').hide();
+        $('.urgence-high').show();
+        updateFilterButtons(this);
+    });
+
+    $('#filterRecent').on('click', function() {
+        $('.validation-card').hide();
+        $('.validation-card').slice(0, 5).show();
+        updateFilterButtons(this);
+    });
+
+    $('#showAll').on('click', function() {
+        $('.validation-card').show();
+        updateFilterButtons(this);
+    });
+
+    function updateFilterButtons(activeBtn) {
+        $('.btn-group .btn').removeClass('active');
+        $(activeBtn).addClass('active');
+    }
+
+    function updateBatchActions() {
+        const selectedCount = $('.validation-checkbox:checked').length;
+        $('#selectedCount').text(selectedCount);
+        
+        if (selectedCount > 0) {
+            $('#batchActions').show();
+        } else {
+            $('#batchActions').hide();
+        }
+    }
+
+    // Animation des cartes
+    $('.validation-card').each(function(index) {
+        $(this).css('opacity', '0').css('transform', 'translateY(20px)');
+        $(this).delay(index * 50).animate({
+            opacity: 1
+        }, 300, function() {
+            $(this).css('transform', 'translateY(0)');
+        });
+    });
+});
+
+function approuverEvenement(validationId) {
+    const modal = new bootstrap.Modal(document.getElementById('approuverModal'));
+    const form = document.getElementById('approuverForm');
+    form.action = `/evenements/validation/${validationId}/approuver/`;
+    modal.show();
+}
+
+function refuserEvenement(validationId) {
+    const modal = new bootstrap.Modal(document.getElementById('refuserModal'));
+    const form = document.getElementById('refuserForm');
+    form.action = `/evenements/validation/${validationId}/refuser/`;
+    modal.show();
+}
+
+function approuverSelection() {
+    const selected = $('.validation-checkbox:checked');
+    if (selected.length === 0) {
+        alert('Aucun événement sélectionné');
+        return;
+    }
+    
+    const ids = selected.map(function() { return this.value; }).get();
+    const form = $('<form method="post" action="{% url "evenements:validation_masse" %}"></form>');
+    form.append('{% csrf_token %}');
+    form.append($('<input type="hidden" name="action" value="approuver">'));
+    form.append($('<input type="hidden" name="evenements" value="' + ids.join(',') + '">'));
+    form.append($('<input type="hidden" name="commentaire" value="Approbation en masse">'));
+    
+    $('body').append(form);
+    form.submit();
+}
+
+function refuserSelection() {
+    const selected = $('.validation-checkbox:checked');
+    if (selected.length === 0) {
+        alert('Aucun événement sélectionné');
+        return;
+    }
+    
+    const commentaire = prompt('Raison du refus (obligatoire) :');
+    if (!commentaire) return;
+    
+    const ids = selected.map(function() { return this.value; }).get();
+    const form = $('<form method="post" action="{% url "evenements:validation_masse" %}"></form>');
+    form.append('{% csrf_token %}');
+    form.append($('<input type="hidden" name="action" value="refuser">'));
+    form.append($('<input type="hidden" name="evenements" value="' + ids.join(',') + '">'));
+    form.append($('<input type="hidden" name="commentaire" value="' + commentaire + '">'));
+    
+    $('body').append(form);
+    form.submit();
+}
+
+function approuverToutUrgent() {
+    if (confirm('Approuver automatiquement tous les événements urgents ?')) {
+        $('.urgence-high .validation-checkbox').prop('checked', true);
+        approuverSelection();
+    }
+}
+</script>
+{% endblock %}

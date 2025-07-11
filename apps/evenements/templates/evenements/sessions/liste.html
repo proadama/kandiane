@@ -1,0 +1,608 @@
+{% extends 'evenements/base_evenement.html' %}
+{% load static %}
+
+{% block title %}Sessions - {{ evenement.titre }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .event-header {
+        background: linear-gradient(135deg, #007bff, #6610f2);
+        color: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    .session-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .session-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+    }
+    .session-card.obligatoire {
+        border-left: 4px solid #dc3545;
+    }
+    .session-card.optionnelle {
+        border-left: 4px solid #28a745;
+    }
+    .session-timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    .session-timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: linear-gradient(180deg, #007bff, #28a745);
+    }
+    .session-item {
+        position: relative;
+        margin-bottom: 1.5rem;
+    }
+    .session-item::before {
+        content: '';
+        position: absolute;
+        left: -23px;
+        top: 20px;
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: #007bff;
+        border: 3px solid white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .session-item.current::before {
+        background: #ffc107;
+        animation: pulse 2s infinite;
+    }
+    .session-item.completed::before {
+        background: #28a745;
+    }
+    .session-time {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 0.5rem;
+        text-align: center;
+        min-width: 120px;
+    }
+    .session-time .hour {
+        font-size: 1.1rem;
+        font-weight: bold;
+        display: block;
+    }
+    .session-time .date {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+    .session-stats {
+        background: #e3f2fd;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .add-session-card {
+        border: 2px dashed #dee2e6;
+        border-radius: 10px;
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    .add-session-card:hover {
+        border-color: #007bff;
+        background: #f8f9ff;
+    }
+    .session-actions {
+        position: sticky;
+        top: 20px;
+    }
+    .session-duration {
+        font-size: 0.8rem;
+        background: #e9ecef;
+        border-radius: 12px;
+        padding: 0.2rem 0.5rem;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.1); opacity: 0.7; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    .session-preview {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 2rem;
+        border: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- En-tête événement -->
+    <div class="event-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2><i class="fas fa-layer-group"></i> Sessions de l'événement</h2>
+                <h3 class="mb-2">{{ evenement.titre }}</h3>
+                <p class="mb-1">
+                    <i class="fas fa-calendar"></i> 
+                    {{ evenement.date_debut|date:"d/m/Y à H:i" }}
+                    {% if evenement.date_fin %}
+                        - {{ evenement.date_fin|date:"d/m/Y à H:i" }}
+                    {% endif %}
+                </p>
+                <p class="mb-0">
+                    <i class="fas fa-map-marker-alt"></i> {{ evenement.lieu }}
+                </p>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="{% url 'evenements:detail' evenement.pk %}" class="btn btn-light">
+                    <i class="fas fa-arrow-left"></i> Retour à l'événement
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Statistiques des sessions -->
+            {% if sessions %}
+            <div class="session-stats">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="h4 text-primary mb-0">{{ sessions.count }}</div>
+                        <small class="text-muted">Sessions totales</small>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="h4 text-danger mb-0">
+                            {{ sessions|length }}
+                            {% comment %}{{ sessions.filter|filter:"est_obligatoire=True"|length }}{% endcomment %}
+                        </div>
+                        <small class="text-muted">Obligatoires</small>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="h4 text-success mb-0">
+                            {% comment %}{{ sessions.filter|filter:"est_obligatoire=False"|length }}{% endcomment %}
+                            0
+                        </div>
+                        <small class="text-muted">Optionnelles</small>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="h4 text-info mb-0">
+                            {% if evenement.duree_heures %}{{ evenement.duree_heures|floatformat:1 }}h{% else %}--{% endif %}
+                        </div>
+                        <small class="text-muted">Durée totale</small>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Aperçu de l'événement parent -->
+            <div class="session-preview">
+                <h5><i class="fas fa-info-circle"></i> Informations de l'événement parent</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Capacité :</strong> {{ evenement.capacite_max }} personnes</p>
+                        <p><strong>Type :</strong> 
+                            <span class="badge" style="background-color: {{ evenement.type_evenement.couleur_affichage }}">
+                                {{ evenement.type_evenement.libelle }}
+                            </span>
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Organisateur :</strong> {{ evenement.organisateur.get_full_name }}</p>
+                        <p><strong>Inscriptions :</strong> 
+                            {% if evenement.inscriptions_ouvertes %}
+                                <span class="text-success">Ouvertes</span>
+                            {% else %}
+                                <span class="text-danger">Fermées</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Liste des sessions -->
+            {% if sessions %}
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4><i class="fas fa-list"></i> Planning des sessions</h4>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="viewTimeline">
+                            <i class="fas fa-stream"></i> Timeline
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm active" id="viewCards">
+                            <i class="fas fa-th-large"></i> Cartes
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Vue Timeline -->
+                <div id="timelineView" class="session-timeline" style="display: none;">
+                    {% for session in sessions %}
+                    <div class="session-item {% if session.date_debut_session <= 'now'|date and session.date_fin_session >= 'now'|date %}current{% elif session.date_fin_session < 'now'|date %}completed{% endif %}">
+                        <div class="session-card {% if session.est_obligatoire %}obligatoire{% else %}optionnelle{% endif %}">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-2">
+                                        <div class="session-time">
+                                            <span class="hour">{{ session.date_debut_session|date:"H:i" }}</span>
+                                            <span class="date">{{ session.date_debut_session|date:"d/m" }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <h6 class="mb-1">
+                                            Session {{ session.ordre_session }} : {{ session.titre_session }}
+                                            {% if session.est_obligatoire %}
+                                                <span class="badge bg-danger badge-sm">Obligatoire</span>
+                                            {% else %}
+                                                <span class="badge bg-success badge-sm">Optionnelle</span>
+                                            {% endif %}
+                                        </h6>
+                                        {% if session.description_session %}
+                                            <p class="text-muted mb-1">{{ session.description_session|truncatewords:15 }}</p>
+                                        {% endif %}
+                                        {% if session.intervenant %}
+                                            <small class="text-info">
+                                                <i class="fas fa-user-tie"></i> {{ session.intervenant }}
+                                            </small>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-2 text-end">
+                                        {% if session.date_fin_session %}
+                                            <span class="session-duration">
+                                                {{ session.date_debut_session|time_until:session.date_fin_session }}
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Vue Cartes -->
+                <div id="cardsView">
+                    {% for session in sessions %}
+                    <div class="session-card {% if session.est_obligatoire %}obligatoire{% else %}optionnelle{% endif %}">
+                        <div class="card-body">
+                            <div class="row">
+                                <!-- Informations temporelles -->
+                                <div class="col-md-3">
+                                    <div class="session-time">
+                                        <span class="hour">{{ session.date_debut_session|date:"H:i" }}</span>
+                                        <span class="date">{{ session.date_debut_session|date:"d/m/Y" }}</span>
+                                        {% if session.date_fin_session %}
+                                            <hr class="my-1">
+                                            <span class="hour">{{ session.date_fin_session|date:"H:i" }}</span>
+                                            <span class="date">{{ session.date_fin_session|date:"d/m/Y" }}</span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    {% if session.capacite_session %}
+                                    <div class="text-center mt-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-users"></i> {{ session.capacite_session }} places
+                                        </small>
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Contenu de la session -->
+                                <div class="col-md-6">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h5 class="card-title mb-0">
+                                            Session {{ session.ordre_session }} : {{ session.titre_session }}
+                                        </h5>
+                                        {% if session.est_obligatoire %}
+                                            <span class="badge bg-danger">Obligatoire</span>
+                                        {% else %}
+                                            <span class="badge bg-success">Optionnelle</span>
+                                        {% endif %}
+                                    </div>
+
+                                    {% if session.description_session %}
+                                        <p class="card-text">{{ session.description_session }}</p>
+                                    {% endif %}
+
+                                    {% if session.intervenant %}
+                                        <p class="mb-1">
+                                            <i class="fas fa-user-tie text-primary"></i>
+                                            <strong>Intervenant :</strong> {{ session.intervenant }}
+                                        </p>
+                                    {% endif %}
+
+                                    <!-- Durée calculée -->
+                                    {% if session.date_fin_session %}
+                                        <small class="text-muted">
+                                            <i class="fas fa-clock"></i> 
+                                            Durée : {{ session.date_debut_session|time_until:session.date_fin_session }}
+                                        </small>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Actions -->
+                                <div class="col-md-3">
+                                    <div class="d-grid gap-2">
+                                        <a href="{% url 'evenements:session_detail' session.pk %}" 
+                                           class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-eye"></i> Détails
+                                        </a>
+                                        
+                                        {% if user.is_staff or evenement.organisateur == user %}
+                                            <a href="{% url 'evenements:session_modifier' session.pk %}" 
+                                               class="btn btn-outline-secondary btn-sm">
+                                                <i class="fas fa-edit"></i> Modifier
+                                            </a>
+                                            
+                                            <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                    onclick="supprimerSession({{ session.pk }})">
+                                                <i class="fas fa-trash"></i> Supprimer
+                                            </button>
+                                        {% endif %}
+                                    </div>
+
+                                    <!-- Statut de la session -->
+                                    <div class="mt-2 text-center">
+                                        {% if session.date_fin_session < 'now'|date %}
+                                            <span class="badge bg-secondary">Terminée</span>
+                                        {% elif session.date_debut_session <= 'now'|date and session.date_fin_session >= 'now'|date %}
+                                            <span class="badge bg-warning">En cours</span>
+                                        {% else %}
+                                            <span class="badge bg-info">À venir</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+            {% endif %}
+
+            <!-- Bouton d'ajout de session -->
+            {% if user.is_staff or evenement.organisateur == user %}
+            <div class="add-session-card" onclick="location.href='{% url "evenements:session_creer" evenement.pk %}'">
+                <i class="fas fa-plus-circle text-primary" style="font-size: 3rem;"></i>
+                <h5 class="mt-3 text-primary">Ajouter une session</h5>
+                <p class="text-muted">Créez une nouvelle session pour cet événement</p>
+            </div>
+            {% endif %}
+
+            <!-- Message si aucune session -->
+            {% if not sessions %}
+            <div class="text-center py-5">
+                <i class="fas fa-layer-group text-muted" style="font-size: 4rem; opacity: 0.5;"></i>
+                <h4 class="mt-3">Aucune session définie</h4>
+                <p class="text-muted">Cet événement n'a pas encore de sessions planifiées.</p>
+                
+                {% if user.is_staff or evenement.organisateur == user %}
+                    <a href="{% url 'evenements:session_creer' evenement.pk %}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Créer la première session
+                    </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar Actions -->
+        <div class="col-md-4">
+            <div class="session-actions">
+                <!-- Actions rapides -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-bolt"></i> Actions rapides</h6>
+                    </div>
+                    <div class="card-body">
+                        {% if user.is_staff or evenement.organisateur == user %}
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'evenements:session_creer' evenement.pk %}" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Nouvelle session
+                            </a>
+                            
+                            {% if sessions %}
+                            <button class="btn btn-outline-secondary" onclick="reorganiserSessions()">
+                                <i class="fas fa-sort"></i> Réorganiser l'ordre
+                            </button>
+                            
+                            <button class="btn btn-outline-info" onclick="dupliquerSessions()">
+                                <i class="fas fa-copy"></i> Dupliquer le planning
+                            </button>
+                            
+                            <button class="btn btn-outline-success" onclick="exporterPlanning()">
+                                <i class="fas fa-download"></i> Exporter planning
+                            </button>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        <hr>
+                        
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'evenements:modifier' evenement.pk %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-edit"></i> Modifier l'événement
+                            </a>
+                            
+                            <a href="{% url 'evenements:liste' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-calendar"></i> Tous les événements
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Informations planning -->
+                {% if sessions %}
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-info-circle"></i> Informations planning</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="small">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Première session :</span>
+                                <span class="text-primary">{{ sessions.first.date_debut_session|date:"d/m H:i" }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Dernière session :</span>
+                                <span class="text-primary">{{ sessions.last.date_fin_session|date:"d/m H:i"|default:"--" }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Sessions obligatoires :</span>
+                                <span class="text-danger">{{ sessions|length }}{% comment %}{{ sessions.filter|filter:"est_obligatoire=True"|length }}{% endcomment %}</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Avec intervenant :</span>
+                                <span class="text-info">{{ sessions|length }}{% comment %}{{ sessions.exclude|filter:"intervenant=''" }}{% endcomment %}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Aide -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="fas fa-question-circle"></i> Aide</h6>
+                    </div>
+                    <div class="card-body">
+                        <small class="text-muted">
+                            <strong>Sessions obligatoires :</strong><br>
+                            Tous les participants doivent y assister<br><br>
+                            
+                            <strong>Sessions optionnelles :</strong><br>
+                            Participation au choix des membres<br><br>
+                            
+                            <strong>Ordre des sessions :</strong><br>
+                            Définit l'ordre d'affichage et de déroulement
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de suppression -->
+<div class="modal fade" id="suppressionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle text-danger"></i> Supprimer la session
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Êtes-vous sûr de vouloir supprimer cette session ?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Cette action est irréversible et peut affecter les inscriptions existantes.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Annuler
+                </button>
+                <form method="post" id="suppressionForm" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Supprimer
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Basculer entre les vues
+    $('#viewTimeline').on('click', function() {
+        $('#cardsView').hide();
+        $('#timelineView').show();
+        $('.btn-group .btn').removeClass('active');
+        $(this).addClass('active');
+    });
+
+    $('#viewCards').on('click', function() {
+        $('#timelineView').hide();
+        $('#cardsView').show();
+        $('.btn-group .btn').removeClass('active');
+        $(this).addClass('active');
+    });
+
+    // Animation des cartes
+    $('.session-card').each(function(index) {
+        $(this).css('opacity', '0').css('transform', 'translateY(20px)');
+        $(this).delay(index * 100).animate({
+            opacity: 1
+        }, 400, function() {
+            $(this).css('transform', 'translateY(0)');
+        });
+    });
+
+    // Survol de la carte d'ajout
+    $('.add-session-card').on('mouseenter', function() {
+        $(this).find('i').addClass('fa-bounce');
+    }).on('mouseleave', function() {
+        $(this).find('i').removeClass('fa-bounce');
+    });
+});
+
+function supprimerSession(sessionId) {
+    const modal = new bootstrap.Modal(document.getElementById('suppressionModal'));
+    const form = document.getElementById('suppressionForm');
+    form.action = `/evenements/sessions/${sessionId}/supprimer/`;
+    modal.show();
+}
+
+function reorganiserSessions() {
+    // Implémenter la réorganisation par drag & drop
+    alert('Fonctionnalité de réorganisation en développement.\nVous pouvez modifier l\'ordre en éditant chaque session individuellement.');
+}
+
+function dupliquerSessions() {
+    if (confirm('Dupliquer toutes les sessions de cet événement ?')) {
+        // Logique de duplication
+        alert('Fonctionnalité de duplication en développement.');
+    }
+}
+
+function exporterPlanning() {
+    // Export en PDF ou iCal
+    window.print();
+}
+
+// Gestion du temps réel pour les sessions en cours
+setInterval(function() {
+    $('.session-item.current .session-card').css('border-left-color', '#ffc107');
+}, 2000);
+
+// Mise à jour des statuts selon l'heure
+function updateSessionStatus() {
+    const now = new Date();
+    
+    $('.session-card').each(function() {
+        // Logique de mise à jour des statuts selon l'heure actuelle
+        // À implémenter selon vos besoins
+    });
+}
+
+// Mettre à jour toutes les minutes
+setInterval(updateSessionStatus, 60000);
+updateSessionStatus();
+</script>
+{% endblock %}
