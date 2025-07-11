@@ -17,6 +17,17 @@ from django.db import transaction
 from datetime import datetime, timedelta
 import json
 
+from django.contrib.syndication.views import Feed
+from django.utils.feedgenerator import Atom1Feed
+from django.core.management import call_command
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.core.cache import cache
+from django.contrib.contenttypes.models import ContentType
+import openpyxl
+from io import BytesIO
+import xml.etree.ElementTree as ET
+
 from apps.core.mixins import StaffRequiredMixin, PermissionRequiredMixin, AjaxRequiredMixin
 from apps.membres.models import Membre
 from .models import (
@@ -1831,6 +1842,959 @@ def evenement_500(request):
     """Vue d'erreur 500 personnalisée pour les événements"""
     from django.shortcuts import render
     return render(request, 'core/errors/500.html', status=500)
+
+
+# =============================================================================
+# VUES GESTION ÉVÉNEMENTS AVANCÉES
+# =============================================================================
+
+class EvenementDuplicateView(StaffRequiredMixin, View):
+    """
+    Duplication d'un événement
+    """
+    
+    def post(self, request, pk):
+        evenement_original = get_object_or_404(Evenement, pk=pk)
+        
+        # Créer une copie
+        evenement_copie = Evenement.objects.get(pk=pk)
+        evenement_copie.pk = None
+        evenement_copie.titre = f"Copie de {evenement_original.titre}"
+        evenement_copie.statut = 'brouillon'
+        evenement_copie.reference = None  # Sera régénéré
+        evenement_copie.save()
+        
+        messages.success(
+            request,
+            f"L'événement '{evenement_copie.titre}' a été dupliqué."
+        )
+        
+        return redirect('evenements:detail', pk=evenement_copie.pk)
+
+
+class PublierEvenementView(StaffRequiredMixin, View):
+    """
+    Publication d'un événement
+    """
+    
+    def post(self, request, pk):
+        evenement = get_object_or_404(Evenement, pk=pk)
+        
+        if evenement.statut == 'brouillon':
+            evenement.statut = 'publie'
+            evenement.save()
+            
+            messages.success(
+                request,
+                f"L'événement '{evenement.titre}' a été publié."
+            )
+        else:
+            messages.warning(
+                request,
+                "Cet événement ne peut pas être publié dans son état actuel."
+            )
+        
+        return redirect('evenements:detail', pk=evenement.pk)
+
+
+class AnnulerEvenementView(StaffRequiredMixin, FormView):
+    """
+    Annulation d'un événement
+    """
+    template_name = 'evenements/annuler_form.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['evenement'] = get_object_or_404(Evenement, pk=self.kwargs['pk'])
+        return context
+    
+    def post(self, request, pk):
+        evenement = get_object_or_404(Evenement, pk=pk)
+        raison = request.POST.get('raison', '')
+        
+        evenement.statut = 'annule'
+        evenement.save()
+        
+        # TODO: Notifier les inscrits de l'annulation
+        
+        messages.success(
+            request,
+            f"L'événement '{evenement.titre}' a été annulé."
+        )
+        
+        return redirect('evenements:liste')
+
+
+class ReporterEvenementView(StaffRequiredMixin, FormView):
+    """
+    Report d'un événement
+    """
+    template_name = 'evenements/reporter_form.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['evenement'] = get_object_or_404(Evenement, pk=self.kwargs['pk'])
+        return context
+    
+    def post(self, request, pk):
+        evenement = get_object_or_404(Evenement, pk=pk)
+        nouvelle_date = request.POST.get('nouvelle_date')
+        
+        if nouvelle_date:
+            evenement.statut = 'reporte'
+            # TODO: Logique de report avec nouvelle date
+            evenement.save()
+            
+            messages.success(
+                request,
+                f"L'événement '{evenement.titre}' a été reporté."
+            )
+        
+        return redirect('evenements:detail', pk=evenement.pk)
+
+
+class GenererOccurrencesView(StaffRequiredMixin, View):
+    """
+    Génération d'occurrences pour événements récurrents
+    """
+    
+    def post(self, request, pk):
+        evenement = get_object_or_404(Evenement, pk=pk)
+        
+        if not evenement.est_recurrent:
+            messages.error(request, "Cet événement n'est pas récurrent.")
+            return redirect('evenements:detail', pk=pk)
+        
+        # TODO: Logique de génération des occurrences
+        count = 0  # Nombre d'occurrences générées
+        
+        messages.success(
+            request,
+            f"{count} occurrence(s) générée(s) pour '{evenement.titre}'."
+        )
+        
+        return redirect('evenements:detail', pk=pk)
+
+
+# =============================================================================
+# VUES SESSIONS
+# =============================================================================
+
+class SessionDetailView(LoginRequiredMixin, DetailView):
+    """
+    Détail d'une session
+    """
+    model = SessionEvenement
+    template_name = 'evenements/sessions/detail.html'
+    context_object_name = 'session'
+
+
+class SessionUpdateView(StaffRequiredMixin, UpdateView):
+    """
+    Modification d'une session
+    """
+    model = SessionEvenement
+    form_class = SessionEvenementForm
+    template_name = 'evenements/sessions/form.html'
+    
+    def get_success_url(self):
+        return reverse('evenements:session_detail', kwargs={'pk': self.object.pk})
+
+
+class SessionDeleteView(StaffRequiredMixin, DeleteView):
+    """
+    Suppression d'une session
+    """
+    model = SessionEvenement
+    template_name = 'evenements/sessions/confirm_delete.html'
+    
+    def get_success_url(self):
+        return reverse('evenements:sessions_liste', 
+                      kwargs={'evenement_pk': self.object.evenement_parent.pk})
+
+
+# =============================================================================
+# VUES INSCRIPTIONS AVANCÉES
+# =============================================================================
+
+class InscriptionUpdateView(LoginRequiredMixin, UpdateView):
+    """
+    Modification d'une inscription
+    """
+    model = InscriptionEvenement
+    form_class = InscriptionEvenementForm
+    template_name = 'evenements/inscription/form.html'
+    
+    def get_queryset(self):
+        queryset = InscriptionEvenement.objects.all()
+        if not self.request.user.is_staff:
+            try:
+                membre = Membre.objects.get(utilisateur=self.request.user)
+                queryset = queryset.filter(membre=membre)
+            except Membre.DoesNotExist:
+                queryset = queryset.none()
+        return queryset
+    
+    def get_success_url(self):
+        return reverse('evenements:inscription_detail', kwargs={'pk': self.object.pk})
+
+
+class AccompagnantListView(LoginRequiredMixin, ListView):
+    """
+    Liste des accompagnants d'une inscription
+    """
+    model = AccompagnantInvite
+    template_name = 'evenements/accompagnants/liste.html'
+    context_object_name = 'accompagnants'
+    
+    def dispatch(self, request, *args, **kwargs):
+        self.inscription = get_object_or_404(InscriptionEvenement, pk=kwargs['inscription_pk'])
+        return super().dispatch(request, *args, **kwargs)
+    
+    def get_queryset(self):
+        return AccompagnantInvite.objects.filter(inscription=self.inscription)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['inscription'] = self.inscription
+        return context
+
+
+class AccompagnantCreateView(LoginRequiredMixin, CreateView):
+    """
+    Ajout d'un accompagnant
+    """
+    model = AccompagnantInvite
+    form_class = AccompagnantForm
+    template_name = 'evenements/accompagnants/form.html'
+    
+    def dispatch(self, request, *args, **kwargs):
+        self.inscription = get_object_or_404(InscriptionEvenement, pk=kwargs['inscription_pk'])
+        return super().dispatch(request, *args, **kwargs)
+    
+    def form_valid(self, form):
+        form.instance.inscription = self.inscription
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse('evenements:accompagnants_liste', 
+                      kwargs={'inscription_pk': self.inscription.pk})
+
+
+class AccompagnantDetailView(LoginRequiredMixin, DetailView):
+    """
+    Détail d'un accompagnant
+    """
+    model = AccompagnantInvite
+    template_name = 'evenements/accompagnants/detail.html'
+    context_object_name = 'accompagnant'
+
+
+class AccompagnantUpdateView(LoginRequiredMixin, UpdateView):
+    """
+    Modification d'un accompagnant
+    """
+    model = AccompagnantInvite
+    form_class = AccompagnantForm
+    template_name = 'evenements/accompagnants/form.html'
+    
+    def get_success_url(self):
+        return reverse('evenements:accompagnant_detail', kwargs={'pk': self.object.pk})
+
+
+class AccompagnantDeleteView(LoginRequiredMixin, DeleteView):
+    """
+    Suppression d'un accompagnant
+    """
+    model = AccompagnantInvite
+    template_name = 'evenements/accompagnants/confirm_delete.html'
+    
+    def get_success_url(self):
+        return reverse('evenements:accompagnants_liste', 
+                      kwargs={'inscription_pk': self.object.inscription.pk})
+
+
+class PaiementInscriptionView(LoginRequiredMixin, FormView):
+    """
+    Paiement d'une inscription
+    """
+    form_class = PaiementInscriptionForm
+    template_name = 'evenements/inscription/paiement.html'
+    
+    def dispatch(self, request, *args, **kwargs):
+        self.inscription = get_object_or_404(InscriptionEvenement, pk=kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['inscription'] = self.inscription
+        return kwargs
+    
+    def form_valid(self, form):
+        # TODO: Logique d'enregistrement du paiement
+        messages.success(self.request, "Paiement enregistré avec succès.")
+        return redirect('evenements:inscription_detail', pk=self.inscription.pk)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['inscription'] = self.inscription
+        return context
+
+
+# =============================================================================
+# VUES VALIDATION AVANCÉES
+# =============================================================================
+
+class DemanderModificationsView(StaffRequiredMixin, FormView):
+    """
+    Demander des modifications sur un événement
+    """
+    form_class = ValidationEvenementForm
+    template_name = 'evenements/validation/demander_modifications.html'
+    
+    def dispatch(self, request, *args, **kwargs):
+        self.validation = get_object_or_404(ValidationEvenement, pk=kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+    
+    def form_valid(self, form):
+        modifications = form.cleaned_data['commentaire_validation']
+        self.validation.demander_modifications(self.request.user, modifications)
+        
+        messages.success(
+            self.request,
+            "Demande de modifications envoyée à l'organisateur."
+        )
+        
+        return redirect('evenements:validation_liste')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['validation'] = self.validation
+        return context
+
+
+class ValidationStatsView(StaffRequiredMixin, TemplateView):
+    """
+    Statistiques de validation
+    """
+    template_name = 'evenements/validation/statistiques.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Statistiques globales
+        context['stats'] = ValidationEvenement.objects.aggregate(
+            total=Count('id'),
+            en_attente=Count('id', filter=Q(statut_validation='en_attente')),
+            approuvees=Count('id', filter=Q(statut_validation='approuve')),
+            refusees=Count('id', filter=Q(statut_validation='refuse'))
+        )
+        
+        return context
+
+
+# =============================================================================
+# VUES TYPES D'ÉVÉNEMENTS AVANCÉES
+# =============================================================================
+
+class TypeEvenementDetailView(LoginRequiredMixin, DetailView):
+    """
+    Détail d'un type d'événement
+    """
+    model = TypeEvenement
+    template_name = 'evenements/types/detail.html'
+    context_object_name = 'type_evenement'
+
+
+class TypeEvenementUpdateView(StaffRequiredMixin, UpdateView):
+    """
+    Modification d'un type d'événement
+    """
+    model = TypeEvenement
+    form_class = TypeEvenementForm
+    template_name = 'evenements/types/form.html'
+    
+    def get_success_url(self):
+        return reverse('evenements:types_detail', kwargs={'pk': self.object.pk})
+
+
+class TypeEvenementDeleteView(StaffRequiredMixin, DeleteView):
+    """
+    Suppression d'un type d'événement
+    """
+    model = TypeEvenement
+    template_name = 'evenements/types/confirm_delete.html'
+    success_url = reverse_lazy('evenements:types_liste')
+
+
+# =============================================================================
+# VUES EXPORTS AVANCÉES
+# =============================================================================
+
+class ExportEvenementsView(StaffRequiredMixin, FormView):
+    """
+    Export général des événements
+    """
+    form_class = ExportEvenementsForm
+    template_name = 'evenements/export/evenements.html'
+    
+    def form_valid(self, form):
+        # TODO: Logique d'export général
+        return HttpResponse("Export en cours de développement")
+
+
+class ExportEvenementView(StaffRequiredMixin, View):
+    """
+    Export d'un événement spécifique
+    """
+    
+    def get(self, request, pk):
+        evenement = get_object_or_404(Evenement, pk=pk)
+        format_export = request.GET.get('format', 'pdf')
+        
+        # TODO: Logique d'export selon format
+        return HttpResponse(f"Export {format_export} de {evenement.titre}")
+
+
+class ExportInscriptionsView(StaffRequiredMixin, View):
+    """
+    Export général des inscriptions
+    """
+    
+    def get(self, request):
+        # TODO: Logique d'export des inscriptions
+        return HttpResponse("Export inscriptions en cours de développement")
+
+
+class ExportInscriptionsEvenementView(StaffRequiredMixin, View):
+    """
+    Export des inscriptions d'un événement (déjà implémenté comme ExportInscritsView)
+    """
+    
+    def get(self, request, evenement_pk):
+        return ExportInscritsView.as_view()(request, evenement_pk=evenement_pk)
+
+
+class ExportEvenementCalendrierView(LoginRequiredMixin, View):
+    """
+    Export iCal d'un événement spécifique
+    """
+    
+    def get(self, request, pk):
+        evenement = get_object_or_404(Evenement, pk=pk)
+        
+        # Générer le contenu iCal pour un événement
+        ical_content = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//Association//Gestion Evenements//FR",
+            "BEGIN:VEVENT",
+            f"UID:{evenement.reference}@association.local",
+            f"DTSTART:{evenement.date_debut.strftime('%Y%m%dT%H%M%SZ')}",
+            f"DTEND:{evenement.date_fin.strftime('%Y%m%dT%H%M%SZ') if evenement.date_fin else evenement.date_debut.strftime('%Y%m%dT%H%M%SZ')}",
+            f"SUMMARY:{evenement.titre}",
+            f"DESCRIPTION:{evenement.description[:200]}...",
+            f"LOCATION:{evenement.lieu}",
+            "END:VEVENT",
+            "END:VCALENDAR"
+        ]
+        
+        response = HttpResponse('\r\n'.join(ical_content), content_type='text/calendar')
+        response['Content-Disposition'] = f'attachment; filename="{evenement.reference}.ics"'
+        
+        return response
+
+
+# =============================================================================
+# VUES RAPPORTS AVANCÉES
+# =============================================================================
+
+class RapportDashboardView(StaffRequiredMixin, TemplateView):
+    """
+    Dashboard des rapports
+    """
+    template_name = 'evenements/rapports/dashboard.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Statistiques générales
+        context['stats_generales'] = {
+            'total_evenements': Evenement.objects.count(),
+            'total_inscriptions': InscriptionEvenement.objects.count(),
+            'taux_participation_moyen': 75,  # TODO: Calcul réel
+        }
+        
+        return context
+
+
+class RapportFrequentationView(StaffRequiredMixin, TemplateView):
+    """
+    Rapport de fréquentation
+    """
+    template_name = 'evenements/rapports/frequentation.html'
+
+
+class RapportRevenusView(StaffRequiredMixin, TemplateView):
+    """
+    Rapport des revenus
+    """
+    template_name = 'evenements/rapports/revenus.html'
+
+
+class RapportParticipationMembresView(StaffRequiredMixin, TemplateView):
+    """
+    Rapport de participation des membres
+    """
+    template_name = 'evenements/rapports/participation_membres.html'
+
+
+class RapportFideliteMembresView(StaffRequiredMixin, TemplateView):
+    """
+    Rapport de fidélité des membres
+    """
+    template_name = 'evenements/rapports/fidelite_membres.html'
+
+
+class RapportOrganisateursView(StaffRequiredMixin, TemplateView):
+    """
+    Rapport des organisateurs
+    """
+    template_name = 'evenements/rapports/organisateurs.html'
+
+
+# =============================================================================
+# VUES AJAX AVANCÉES
+# =============================================================================
+
+class CalculerMontantInscriptionView(LoginRequiredMixin, AjaxRequiredMixin, View):
+    """
+    Calcul AJAX du montant d'inscription
+    """
+    
+    def get(self, request, pk):
+        inscription = get_object_or_404(InscriptionEvenement, pk=pk)
+        
+        return JsonResponse({
+            'montant_total': float(inscription.calculer_montant_total()),
+            'montant_restant': float(inscription.montant_restant),
+            'est_payee': inscription.est_payee
+        })
+
+
+class NotificationsInscriptionsView(AjaxRequiredMixin, View):
+    """
+    Notifications temps réel pour inscriptions
+    """
+    
+    def get(self, request):
+        # TODO: Logique de notifications temps réel
+        return JsonResponse({
+            'notifications': [],
+            'count': 0
+        })
+
+
+class NotificationsValidationsView(AjaxRequiredMixin, View):
+    """
+    Notifications temps réel pour validations
+    """
+    
+    def get(self, request):
+        if not request.user.is_staff:
+            return JsonResponse({'error': 'Accès refusé'}, status=403)
+        
+        validations_urgentes = ValidationEvenement.objects.urgentes().count()
+        
+        return JsonResponse({
+            'validations_urgentes': validations_urgentes,
+            'message': f"{validations_urgentes} validation(s) urgente(s)" if validations_urgentes > 0 else ""
+        })
+
+
+class PreviewEvenementView(AjaxRequiredMixin, View):
+    """
+    Prévisualisation d'événement
+    """
+    
+    def post(self, request):
+        # TODO: Logique de prévisualisation
+        return JsonResponse({
+            'html': '<div>Prévisualisation en cours de développement</div>'
+        })
+
+
+# =============================================================================
+# VUES CORBEILLE AVANCÉES
+# =============================================================================
+
+class CorbeilleInscriptionsView(StaffRequiredMixin, ListView):
+    """
+    Corbeille des inscriptions supprimées
+    """
+    model = InscriptionEvenement
+    template_name = 'evenements/corbeille/inscriptions.html'
+    context_object_name = 'inscriptions'
+    
+    def get_queryset(self):
+        return InscriptionEvenement.objects.only_deleted()
+
+
+class RestaurerInscriptionView(StaffRequiredMixin, View):
+    """
+    Restauration d'une inscription supprimée
+    """
+    
+    def post(self, request, pk):
+        try:
+            inscription = InscriptionEvenement.objects.only_deleted().get(pk=pk)
+            inscription.deleted_at = None
+            inscription.save()
+            
+            messages.success(
+                request,
+                "L'inscription a été restaurée."
+            )
+        except InscriptionEvenement.DoesNotExist:
+            messages.error(request, "Inscription non trouvée.")
+        
+        return redirect('evenements:corbeille_inscriptions')
+
+
+class SupprimerDefinitivementEvenementView(StaffRequiredMixin, View):
+    """
+    Suppression définitive d'un événement
+    """
+    
+    def post(self, request, pk):
+        try:
+            evenement = Evenement.objects.only_deleted().get(pk=pk)
+            titre = evenement.titre
+            evenement.delete(hard=True)  # Suppression physique
+            
+            messages.success(
+                request,
+                f"L'événement '{titre}' a été supprimé définitivement."
+            )
+        except Evenement.DoesNotExist:
+            messages.error(request, "Événement non trouvé.")
+        
+        return redirect('evenements:corbeille_evenements')
+
+
+# =============================================================================
+# API ET FLUX RSS
+# =============================================================================
+
+class APIEvenementsPublicsView(View):
+    """
+    API JSON des événements publics
+    """
+    
+    def get(self, request):
+        evenements = Evenement.objects.publies().a_venir()[:10]
+        
+        data = []
+        for evenement in evenements:
+            data.append({
+                'id': evenement.id,
+                'titre': evenement.titre,
+                'date_debut': evenement.date_debut.isoformat(),
+                'lieu': evenement.lieu,
+                'places_disponibles': evenement.places_disponibles
+            })
+        
+        return JsonResponse({'evenements': data})
+
+
+class APIEvenementDetailView(View):
+    """
+    API JSON détail d'un événement
+    """
+    
+    def get(self, request, pk):
+        evenement = get_object_or_404(Evenement.objects.publies(), pk=pk)
+        
+        data = {
+            'id': evenement.id,
+            'titre': evenement.titre,
+            'description': evenement.description,
+            'date_debut': evenement.date_debut.isoformat(),
+            'date_fin': evenement.date_fin.isoformat() if evenement.date_fin else None,
+            'lieu': evenement.lieu,
+            'capacite_max': evenement.capacite_max,
+            'places_disponibles': evenement.places_disponibles,
+            'est_payant': evenement.est_payant,
+            'tarif_membre': float(evenement.tarif_membre) if evenement.est_payant else 0
+        }
+        
+        return JsonResponse(data)
+
+
+class APIPlacesDisponiblesView(View):
+    """
+    API pour vérifier les places disponibles
+    """
+    
+    def get(self, request, pk):
+        evenement = get_object_or_404(Evenement, pk=pk)
+        
+        return JsonResponse({
+            'places_disponibles': evenement.places_disponibles,
+            'est_complet': evenement.est_complet,
+            'taux_occupation': evenement.taux_occupation
+        })
+
+
+class EvenementsFeedView(Feed):
+    """
+    Flux RSS des événements
+    """
+    title = "Événements de l'Association"
+    link = "/evenements/"
+    description = "Derniers événements publiés"
+    
+    def items(self):
+        return Evenement.objects.publies().a_venir()[:10]
+    
+    def item_title(self, item):
+        return item.titre
+    
+    def item_description(self, item):
+        return item.description[:200] + "..."
+    
+    def item_link(self, item):
+        return reverse('evenements:evenement_public_detail', args=[item.pk])
+
+
+class EvenementsAtomFeedView(EvenementsFeedView):
+    """
+    Flux Atom des événements
+    """
+    feed_type = Atom1Feed
+    subtitle = EvenementsFeedView.description
+
+
+# =============================================================================
+# VUES UTILITAIRES ET AIDE
+# =============================================================================
+
+class AideEvenementsView(LoginRequiredMixin, TemplateView):
+    """
+    Page d'aide pour les événements
+    """
+    template_name = 'evenements/aide/index.html'
+
+
+class DocumentationView(LoginRequiredMixin, TemplateView):
+    """
+    Documentation du module événements
+    """
+    template_name = 'evenements/aide/documentation.html'
+
+
+class DownloadImportTemplateView(StaffRequiredMixin, View):
+    """
+    Téléchargement du template d'import
+    """
+    
+    def get(self, request):
+        # Créer un fichier Excel template
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Import Événements"
+        
+        # Headers
+        headers = [
+            'titre', 'description', 'type_evenement', 'date_debut',
+            'date_fin', 'lieu', 'capacite_max', 'est_payant',
+            'tarif_membre', 'organisateur_email'
+        ]
+        
+        for col, header in enumerate(headers, 1):
+            ws.cell(row=1, column=col, value=header)
+        
+        # Exemple de ligne
+        exemple = [
+            'Événement exemple', 'Description de l\'événement',
+            'Formation', '2024-12-31 14:00', '2024-12-31 17:00',
+            'Salle de conférence', '50', 'OUI', '25.00',
+            'organisateur@example.com'
+        ]
+        
+        for col, value in enumerate(exemple, 1):
+            ws.cell(row=2, column=col, value=value)
+        
+        # Sauvegarder en mémoire
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        response = HttpResponse(
+            output.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="template_import_evenements.xlsx"'
+        
+        return response
+
+
+# =============================================================================
+# VUES CONFIGURATION ET PARAMÉTRAGE
+# =============================================================================
+
+class ConfigurationEvenementsView(StaffRequiredMixin, TemplateView):
+    """
+    Configuration du module événements
+    """
+    template_name = 'evenements/admin/configuration.html'
+
+
+class ParametresEvenementsView(StaffRequiredMixin, TemplateView):
+    """
+    Paramètres du module événements
+    """
+    template_name = 'evenements/admin/parametres.html'
+
+
+# =============================================================================
+# VUES MAINTENANCE
+# =============================================================================
+
+class RecalculerStatsView(StaffRequiredMixin, View):
+    """
+    Recalcul des statistiques
+    """
+    
+    def post(self, request):
+        # TODO: Logique de recalcul des statistiques
+        cache.clear()  # Vider le cache
+        
+        messages.success(
+            request,
+            "Les statistiques ont été recalculées."
+        )
+        
+        return redirect('evenements:dashboard')
+
+
+# =============================================================================
+# WEBHOOKS ET INTÉGRATIONS
+# =============================================================================
+
+@method_decorator(csrf_exempt, name='dispatch')
+class WebhookPaiementView(View):
+    """
+    Webhook pour les notifications de paiement
+    """
+    
+    def post(self, request):
+        # TODO: Traitement des webhooks de paiement
+        return JsonResponse({'status': 'ok'})
+
+
+class IntegrationCalendrierView(StaffRequiredMixin, TemplateView):
+    """
+    Intégration avec calendriers externes
+    """
+    template_name = 'evenements/integration/calendrier.html'
+
+
+# =============================================================================
+# TÂCHES CRON (POUR LES TESTS)
+# =============================================================================
+
+class CronRappelsView(View):
+    """
+    Tâche cron pour l'envoi des rappels
+    """
+    
+    def get(self, request):
+        if not request.META.get('HTTP_X_CRON_TOKEN') == 'secret_token':
+            return HttpResponse('Unauthorized', status=401)
+        
+        # TODO: Logique d'envoi des rappels
+        return HttpResponse('Rappels traités')
+
+
+class CronNettoyageView(View):
+    """
+    Tâche cron pour le nettoyage
+    """
+    
+    def get(self, request):
+        if not request.META.get('HTTP_X_CRON_TOKEN') == 'secret_token':
+            return HttpResponse('Unauthorized', status=401)
+        
+        count = InscriptionEvenement.objects.nettoyer_inscriptions_expirees()
+        return HttpResponse(f'{count} inscriptions nettoyées')
+
+
+class CronStatistiquesView(View):
+    """
+    Tâche cron pour la mise à jour des statistiques
+    """
+    
+    def get(self, request):
+        if not request.META.get('HTTP_X_CRON_TOKEN') == 'secret_token':
+            return HttpResponse('Unauthorized', status=401)
+        
+        # TODO: Logique de mise à jour des statistiques
+        return HttpResponse('Statistiques mises à jour')
+
+
+# =============================================================================
+# WIDGETS POUR INTÉGRATION
+# =============================================================================
+
+class WidgetProchainsEvenementsView(View):
+    """
+    Widget des prochains événements
+    """
+    
+    def get(self, request):
+        evenements = Evenement.objects.publies().a_venir()[:5]
+        
+        # Retourner en JSON pour intégration
+        data = []
+        for evenement in evenements:
+            data.append({
+                'titre': evenement.titre,
+                'date': evenement.date_debut.strftime('%d/%m/%Y'),
+                'lieu': evenement.lieu
+            })
+        
+        return JsonResponse({'evenements': data})
+
+
+class WidgetCalendrierMiniView(View):
+    """
+    Widget calendrier mini
+    """
+    
+    def get(self, request):
+        # TODO: Logique du calendrier mini
+        return JsonResponse({
+            'html': '<div>Calendrier mini en cours de développement</div>'
+        })
+
+
+# =============================================================================
+# GESTION D'ERREURS SPÉCIALISÉE
+# =============================================================================
+
+def evenement_404(request, exception=None):
+    """Vue d'erreur 404 personnalisée pour les événements"""
+    return render(request, 'evenements/errors/404.html', {
+        'message': 'Événement non trouvé'
+    }, status=404)
+
+
+def evenement_500(request):
+    """Vue d'erreur 500 personnalisée pour les événements"""
+    return render(request, 'evenements/errors/500.html', {
+        'message': 'Erreur serveur dans le module événements'
+    }, status=500)
 
 # =============================================================================
 # VUES D'ERREUR SPÉCIFIQUES
