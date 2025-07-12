@@ -10,7 +10,7 @@ from apps.accounts.models import CustomUser
 from apps.membres.models import Membre, TypeMembre
 from apps.cotisations.models import ModePaiement
 from apps.core.models import Statut
-from ..models import (
+from apps.evenements.models import (
     TypeEvenement, Evenement, InscriptionEvenement, 
     AccompagnantInvite, ValidationEvenement, EvenementRecurrence,
     SessionEvenement

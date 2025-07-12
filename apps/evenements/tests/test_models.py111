@@ -1,0 +1,98 @@
+# apps/evenements/tests/test_models.py
+from decimal import Decimal
+from django.test import TestCase
+from django.utils import timezone
+from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
+import datetime
+
+from apps.membres.models import Membre, TypeMembre
+from apps.core.models import Statut
+from apps.evenements.models import (
+    TypeEvenement, Evenement, InscriptionEvenement
+)
+
+User = get_user_model()
+
+
+class TypeEvenementModelTest(TestCase):
+    """Tests pour le modèle TypeEvenement."""
+    
+    def setUp(self):
+        self.type_evenement = TypeEvenement.objects.create(
+            libelle="Formation Test",
+            description="Formation de test",
+            couleur_affichage="#007bff"
+        )
+    
+    def test_creation_type_evenement(self):
+        """Teste la création d'un type d'événement."""
+        self.assertEqual(TypeEvenement.objects.count(), 1)
+        self.assertEqual(self.type_evenement.libelle, "Formation Test")
+        self.assertEqual(self.type_evenement.couleur_affichage, "#007bff")
+    
+    def test_str_representation(self):
+        """Teste la représentation string."""
+        self.assertEqual(str(self.type_evenement), "Formation Test")
+
+
+class EvenementModelTest(TestCase):
+    """Tests pour le modèle Evenement."""
+    
+    def setUp(self):
+        # Créer un utilisateur organisateur
+        self.user = User.objects.create_user(
+            username='organisateur@test.com',
+            email='organisateur@test.com',
+            password='testpass123'
+        )
+        
+        # Créer un type d'événement
+        self.type_evenement = TypeEvenement.objects.create(
+            libelle="Formation",
+            description="Formation technique"
+        )
+        
+        # Créer un membre organisateur
+        self.membre = Membre.objects.create(
+            nom="Organisateur",
+            prenom="Test",
+            email="organisateur@test.com",
+            utilisateur=self.user
+        )
+        
+        # Créer un statut
+        self.statut = Statut.objects.create(
+            nom="Publié",
+            description="Événement publié"
+        )
+        
+        # Créer un événement
+        self.evenement = Evenement.objects.create(
+            titre="Formation Django",
+            description="Formation complète Django",
+            date_debut=timezone.now() + datetime.timedelta(days=7),
+            date_fin=timezone.now() + datetime.timedelta(days=7, hours=6),
+            lieu="Salle de formation",
+            capacite_max=20,
+            type_evenement=self.type_evenement,
+            organisateur=self.user,
+            statut_validation=self.statut
+        )
+    
+    def test_creation_evenement(self):
+        """Teste la création d'un événement."""
+        self.assertEqual(Evenement.objects.count(), 1)
+        self.assertEqual(self.evenement.titre, "Formation Django")
+        self.assertEqual(self.evenement.capacite_max, 20)
+        self.assertEqual(self.evenement.organisateur, self.user)
+    
+    def test_reference_generation(self):
+        """Teste la génération automatique d'une référence."""
+        self.assertTrue(self.evenement.reference)
+        self.assertTrue(self.evenement.reference.startswith('EVT'))
+    
+    def test_places_disponibles(self):
+        """Teste le calcul des places disponibles."""
+        self.assertEqual(self.evenement.places_disponibles, 20)
+        self.assertFalse(self.evenement.est_complet)

@@ -5,11 +5,11 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
 
-from ..models import (
+from apps.evenements.models import (
     TypeEvenement, Evenement, InscriptionEvenement,
     AccompagnantInvite, ValidationEvenement, EvenementRecurrence
 )
-from .factories import (
+from apps.evenements.tests.factories import (
     TypeEvenementFactory, EvenementFactory, MembreFactory,
     InscriptionEvenementFactory, AccompagnantInviteFactory,
     EvenementCompletFactory, CustomUserFactory
