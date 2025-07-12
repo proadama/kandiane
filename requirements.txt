@@ -17,3 +17,4 @@ apscheduler==3.11.0
 django-apscheduler==0.7.0
 tzlocal==5.3.1
 pytest==7.4.3
+pytest-django

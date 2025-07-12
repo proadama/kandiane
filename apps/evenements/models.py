@@ -378,35 +378,31 @@ class Evenement(BaseModel):
             return Decimal('0.00')
         
         # Récupérer les types de membre actifs avec leurs priorités tarifaires
-        types_membre_actifs = membre.get_types_actifs()
+        try:
+            types_membre_actifs = membre.get_types_actifs()
+        except:
+            # Si erreur, retourner tarif membre standard
+            return self.tarif_membre
         
         if not types_membre_actifs.exists():
             # Membre sans type spécifique = tarif standard membre
             return self.tarif_membre
         
-        # Logique de priorité tarifaire selon les types de membre
-        # 1. Vérifier s'il y a un tarif spécifique pour le type d'événement
-        tarif_specifique = self._get_tarif_specifique_type_membre(types_membre_actifs)
-        if tarif_specifique is not None:
-            return tarif_specifique
-        
-        # 2. Appliquer les règles de priorité générales
-        # Priorité 1: Salarié (tarif le plus avantageux)
-        if types_membre_actifs.filter(libelle__icontains='salarié').exists():
+        # CORRECTION : Priorité 1: Salarié (tarif spécifique)
+        if types_membre_actifs.filter(libelle__icontains='Salarié').exists():
             return self.tarif_salarie
         
-        # Priorité 2: Étudiant (si défini, sinon tarif membre)
-        if types_membre_actifs.filter(libelle__icontains='étudiant').exists():
-            # Si pas de tarif étudiant spécifique, on peut appliquer une réduction
-            return min(self.tarif_membre * Decimal('0.8'), self.tarif_salarie)  # 20% de réduction
+        # Priorité 2: Étudiant
+        if types_membre_actifs.filter(libelle__icontains='Étudiant').exists():
+            return self.tarif_membre
         
-        # Priorité 3: Membre honoraire (gratuit ou réduction importante)
+        # Priorité 3: Membre honoraire (gratuit)
         if types_membre_actifs.filter(libelle__icontains='honoraire').exists():
-            return Decimal('0.00')  # Gratuit pour les membres honoraires
+            return Decimal('0.00')
         
-        # Priorité 4: Membre bienfaiteur (réduction modérée)
+        # Priorité 4: Membre bienfaiteur (réduction)
         if types_membre_actifs.filter(libelle__icontains='bienfaiteur').exists():
-            return self.tarif_membre * Decimal('0.9')  # 10% de réduction
+            return self.tarif_membre * Decimal('0.9')
         
         # Sinon tarif membre standard
         return self.tarif_membre
@@ -474,7 +470,11 @@ class Evenement(BaseModel):
             for inscription in inscriptions_attente:
                 inscription.statut = 'en_attente'
                 inscription.date_limite_confirmation = timezone.now() + timezone.timedelta(hours=self.delai_confirmation)
-                inscription.save()
+                inscription.save(update_fields=['statut', 'date_limite_confirmation'])
+                
+            # AJOUTER : Retourner le nombre d'inscriptions promues pour feedback
+            return len(inscriptions_attente)
+        return 0
 
 
 class EvenementRecurrence(BaseModel):

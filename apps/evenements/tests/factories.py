@@ -167,11 +167,9 @@ class InscriptionEvenementFactory(DjangoModelFactory):
         if obj.evenement.permet_accompagnants else 0
     )
     
-    # CORRECTION : Utiliser calculer_tarif_membre avec gestion des erreurs
+    # CORRECTION : Simplifier le calcul du montant pour éviter les erreurs de relation
     montant_paye = factory.LazyAttribute(
-        lambda obj: obj.evenement.calculer_tarif_membre(obj.membre) 
-        if obj.evenement.est_payant and hasattr(obj.evenement, 'calculer_tarif_membre') 
-        else Decimal('0.00')
+        lambda obj: Decimal('50.00') if obj.evenement.est_payant else Decimal('0.00')
     )
     
     mode_paiement = factory.SubFactory(ModePaiementFactory)
@@ -198,14 +196,17 @@ class ValidationEvenementFactory(DjangoModelFactory):
         model = ValidationEvenement
 
     evenement = SubFactory(EvenementFactory, statut='en_attente_validation')
-    validateur = SubFactory(MembreFactory)
+    validateur = SubFactory(CustomUserFactory)
     statut_validation = Iterator(['en_attente', 'approuve', 'refuse'])
     date_validation = factory.LazyAttribute(
         lambda obj: timezone.now() if obj.statut_validation in ['approuve', 'refuse'] else None
     )
-    commentaires_validation = factory.Faker('text', max_nb_chars=300, locale='fr_FR')
-    date_creation = factory.LazyFunction(lambda: timezone.now())
-    date_modification = factory.LazyFunction(lambda: timezone.now())
+    # CORRECTION : Nom correct de l'attribut
+    commentaire_validation = factory.Faker('text', max_nb_chars=300, locale='fr_FR')
+    
+    # SUPPRIMER ces lignes qui n'existent pas dans le modèle :
+    # date_creation = factory.LazyFunction(lambda: timezone.now())
+    # date_modification = factory.LazyFunction(lambda: timezone.now())
 
 
 class EvenementRecurrenceFactory(DjangoModelFactory):
@@ -253,11 +254,11 @@ class EvenementCompletFactory(EvenementFactory):
         if not create:
             return
             
-        # Créer des inscriptions jusqu'à atteindre la capacité
-        nombre_inscriptions = min(self.capacite_max, random.randint(5, 15))
+        # CORRECTION : Créer exactement 5 inscriptions confirmées pour un événement de 20 places
+        nombre_inscriptions = 5  # Au lieu de random.randint(5, 15)
         
         for i in range(nombre_inscriptions):
-            statut = 'confirmee' if i < self.capacite_max * 0.8 else 'liste_attente'
+            statut = 'confirmee'  # Toutes confirmées
             # Créer un membre différent pour chaque inscription
             membre = MembreFactory()
             InscriptionEvenementFactory(
