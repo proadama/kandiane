@@ -16,7 +16,6 @@ from apps.evenements.models import (
     SessionEvenement
 )
 
-
 class CustomUserFactory(DjangoModelFactory):
     """Factory pour les utilisateurs"""
     class Meta:
@@ -125,14 +124,16 @@ class EvenementFactory(DjangoModelFactory):
     )
     
     est_payant = factory.Faker('boolean', chance_of_getting_true=60)
+    
+    # CORRECTION DÉCIMALES : Utiliser Decimal avec exactement 2 décimales
     tarif_membre = factory.LazyAttribute(
-        lambda obj: Decimal(str(random.randint(0, 100))) if obj.est_payant else Decimal('0.00')
+        lambda obj: Decimal(f"{random.randint(0, 100)}.{random.randint(0, 99):02d}") if obj.est_payant else Decimal('0.00')
     )
     tarif_salarie = factory.LazyAttribute(
-        lambda obj: obj.tarif_membre * Decimal('1.5') if obj.est_payant else Decimal('0.00')
+        lambda obj: Decimal(f"{random.randint(10, 150)}.{random.randint(0, 99):02d}") if obj.est_payant else Decimal('0.00')
     )
     tarif_invite = factory.LazyAttribute(
-        lambda obj: obj.tarif_membre * Decimal('2.0') if obj.est_payant else Decimal('0.00')
+        lambda obj: Decimal(f"{random.randint(15, 200)}.{random.randint(0, 99):02d}") if obj.est_payant else Decimal('0.00')
     )
     
     permet_accompagnants = factory.LazyAttribute(lambda obj: obj.type_evenement.permet_accompagnants)
@@ -143,7 +144,10 @@ class EvenementFactory(DjangoModelFactory):
     delai_confirmation = factory.Faker('random_int', min=24, max=72)
     
     type_evenement = SubFactory(TypeEvenementFactory)
-    organisateur = SubFactory(CustomUserFactory)
+    
+    # CORRECTION FINALE : Créer un utilisateur qui EST un membre
+    organisateur = factory.LazyFunction(lambda: MembreFactory().utilisateur)
+    
     statut = 'publie'
 
 
@@ -163,9 +167,11 @@ class InscriptionEvenementFactory(DjangoModelFactory):
         if obj.evenement.permet_accompagnants else 0
     )
     
+    # CORRECTION : Utiliser calculer_tarif_membre avec gestion des erreurs
     montant_paye = factory.LazyAttribute(
         lambda obj: obj.evenement.calculer_tarif_membre(obj.membre) 
-        if obj.evenement.est_payant else Decimal('0.00')
+        if obj.evenement.est_payant and hasattr(obj.evenement, 'calculer_tarif_membre') 
+        else Decimal('0.00')
     )
     
     mode_paiement = factory.SubFactory(ModePaiementFactory)
@@ -187,13 +193,19 @@ class AccompagnantInviteFactory(DjangoModelFactory):
 
 
 class ValidationEvenementFactory(DjangoModelFactory):
-    """Factory pour les validations"""
+    """Factory pour les validations d'événements"""
     class Meta:
         model = ValidationEvenement
 
     evenement = SubFactory(EvenementFactory, statut='en_attente_validation')
+    validateur = SubFactory(MembreFactory)
     statut_validation = Iterator(['en_attente', 'approuve', 'refuse'])
-    commentaire_validation = factory.Faker('text', max_nb_chars=300, locale='fr_FR')
+    date_validation = factory.LazyAttribute(
+        lambda obj: timezone.now() if obj.statut_validation in ['approuve', 'refuse'] else None
+    )
+    commentaires_validation = factory.Faker('text', max_nb_chars=300, locale='fr_FR')
+    date_creation = factory.LazyFunction(lambda: timezone.now())
+    date_modification = factory.LazyFunction(lambda: timezone.now())
 
 
 class EvenementRecurrenceFactory(DjangoModelFactory):
@@ -246,8 +258,11 @@ class EvenementCompletFactory(EvenementFactory):
         
         for i in range(nombre_inscriptions):
             statut = 'confirmee' if i < self.capacite_max * 0.8 else 'liste_attente'
+            # Créer un membre différent pour chaque inscription
+            membre = MembreFactory()
             InscriptionEvenementFactory(
                 evenement=self,
+                membre=membre,
                 statut=statut
             )
 

@@ -1,5 +1,6 @@
 # config/settings/development.py
 from .base import *
+import sys
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-development-key')
@@ -59,3 +60,40 @@ LOGGING = {
         },
     },
 }
+
+if 'test' in sys.argv or 'pytest' in sys.modules:
+    # Désactiver Celery lors des tests
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+    CELERY_BROKER_URL = 'memory://'
+    CELERY_RESULT_BACKEND = 'cache+memory://'
+    
+    # Désactiver les tâches planifiées
+    CELERY_BEAT_SCHEDULE = {}
+    
+    # Base de données en mémoire pour les tests (plus rapide)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
+    }
+    
+    # Logging minimal pour les tests
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'handlers': {
+            'console': {
+                'class': 'logging.StreamHandler',
+                'level': 'ERROR',
+            },
+        },
+        'loggers': {
+            'apps.evenements': {
+                'handlers': ['console'],
+                'level': 'ERROR',
+                'propagate': False,
+            },
+        },
+    }

@@ -4,6 +4,7 @@ from datetime import timedelta
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
+from apps.evenements.tests.factories import ValidationEvenementFactory
 
 from apps.evenements.models import (
     TypeEvenement, Evenement, InscriptionEvenement,
