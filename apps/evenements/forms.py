@@ -181,8 +181,8 @@ class EvenementForm(forms.ModelForm):
 
     def clean_date_debut(self):
         date_debut = self.cleaned_data.get('date_debut')
-        if date_debut:
-            validate_date_evenement(date_debut)
+        if date_debut and date_debut <= timezone.now():
+            raise ValidationError("La date de début doit être dans le futur.")
         return date_debut
 
     def clean_capacite_max(self):
@@ -193,7 +193,14 @@ class EvenementForm(forms.ModelForm):
 
     def clean_organisateur(self):
         organisateur = self.cleaned_data.get('organisateur') or self.user
-        validate_organisateur_membre(organisateur)
+        if organisateur:
+            # Vérifier que l'organisateur est un membre actif
+            try:
+                membre = organisateur.membre
+                if membre.deleted_at is not None:
+                    raise ValidationError("L'organisateur doit être un membre actif.")
+            except:
+                raise ValidationError("L'organisateur doit être un membre de l'association.")
         return organisateur
 
     def clean(self):
@@ -211,7 +218,10 @@ class EvenementForm(forms.ModelForm):
             })
         
         if date_debut and (date_ouverture or date_fermeture):
-            validate_dates_inscriptions(date_ouverture, date_fermeture, date_debut)
+            try:
+                validate_dates_inscriptions(date_ouverture, date_fermeture, date_debut)
+            except ValidationError as e:
+                raise e
         
         # Validation des tarifs
         est_payant = cleaned_data.get('est_payant')
@@ -219,28 +229,40 @@ class EvenementForm(forms.ModelForm):
         tarif_salarie = cleaned_data.get('tarif_salarie', Decimal('0'))
         tarif_invite = cleaned_data.get('tarif_invite', Decimal('0'))
         
-        validate_tarifs_coherents(est_payant, tarif_membre, tarif_salarie, tarif_invite)
+        try:
+            validate_tarifs_coherents(est_payant, tarif_membre, tarif_salarie, tarif_invite)
+        except ValidationError as e:
+            raise e
         
-        # Validation des accompagnants
+        # Validation des accompagnants - CORRECTION
         permet_accompagnants = cleaned_data.get('permet_accompagnants')
         nombre_max_accompagnants = cleaned_data.get('nombre_max_accompagnants', 0)
         type_evenement = cleaned_data.get('type_evenement')
         
-        validate_accompagnants_coherents(
-            permet_accompagnants, nombre_max_accompagnants, type_evenement
-        )
+        # CORRECTION : Vérifier la cohérence avec le type d'événement
+        if type_evenement and permet_accompagnants and not type_evenement.permet_accompagnants:
+            raise ValidationError({
+                '__all__': "Ce type d'événement n'autorise pas les accompagnants."
+            })
+        
+        try:
+            validate_accompagnants_coherents(
+                permet_accompagnants, nombre_max_accompagnants, type_evenement
+            )
+        except ValidationError as e:
+            raise e
         
         return cleaned_data
 
     def save(self, commit=True):
         evenement = super().save(commit=False)
         
-        # Définir l'organisateur
-        if not evenement.organisateur:
+        # Définir l'organisateur - CORRECTION
+        if not evenement.organisateur_id:  # Utiliser organisateur_id au lieu de organisateur
             evenement.organisateur = self.user
         
         # Statut selon le type d'événement
-        if evenement.type_evenement.necessite_validation:
+        if evenement.type_evenement and evenement.type_evenement.necessite_validation:
             evenement.statut = 'en_attente_validation'
         else:
             evenement.statut = 'publie'
@@ -249,7 +271,7 @@ class EvenementForm(forms.ModelForm):
             evenement.save()
             
             # Créer la validation si nécessaire
-            if evenement.type_evenement.necessite_validation:
+            if evenement.type_evenement and evenement.type_evenement.necessite_validation:
                 ValidationEvenement.objects.get_or_create(
                     evenement=evenement,
                     defaults={'statut_validation': 'en_attente'}
@@ -367,9 +389,17 @@ class InscriptionEvenementForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         
-        if self.evenement and self.membre:
+        # CORRECTION : Vérifier que les objets existent avant de les utiliser
+        if hasattr(self, 'evenement') and hasattr(self, 'membre') and self.evenement and self.membre:
             nombre_accompagnants = cleaned_data.get('nombre_accompagnants', 0)
-            validate_inscription_possible(self.evenement, self.membre, nombre_accompagnants)
+            
+            # Validation simple sans utiliser les relations Django
+            if nombre_accompagnants > 0 and not self.evenement.permet_accompagnants:
+                self.add_error('nombre_accompagnants', "Cet événement n'autorise pas les accompagnants.")
+            
+            if nombre_accompagnants > self.evenement.nombre_max_accompagnants:
+                self.add_error('nombre_accompagnants', 
+                    f"Maximum {self.evenement.nombre_max_accompagnants} accompagnants autorisés.")
         
         return cleaned_data
 
@@ -658,6 +688,20 @@ class EvenementRecurrenceForm(forms.ModelForm):
         label='Jours de la semaine'
     )
     
+    # AJOUTER le champ evenement_parent
+    evenement_parent = forms.ModelChoiceField(
+        queryset=Evenement.objects.all(),
+        required=False,
+        widget=forms.HiddenInput()
+    )
+    
+    jours_semaine_selection = forms.MultipleChoiceField(
+        choices=JOURS_SEMAINE_CHOICES,
+        widget=forms.CheckboxSelectMultiple(),
+        required=False,
+        label='Jours de la semaine'
+    )
+    
     class Meta:
         model = EvenementRecurrence
         fields = [
@@ -697,8 +741,16 @@ class EvenementRecurrenceForm(forms.ModelForm):
         
         return cleaned_data
 
+    def __init__(self, *args, **kwargs):
+        self.evenement_parent = kwargs.pop('evenement_parent', None)
+        super().__init__(*args, **kwargs)
+
     def save(self, commit=True):
         recurrence = super().save(commit=False)
+        
+        # Associer l'événement parent si fourni
+        if self.evenement_parent:
+            recurrence.evenement_parent = self.evenement_parent
         
         # Sauvegarder les jours de la semaine
         jours_semaine = self.cleaned_data.get('jours_semaine', [])
