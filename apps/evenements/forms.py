@@ -25,6 +25,19 @@ from apps.cotisations.models import ModePaiement
 
 User = get_user_model()
 
+def validate_organisateur_membre(user):
+    """Valide qu'un utilisateur est bien un membre actif"""
+    if not user:
+        raise ValidationError("Un organisateur doit être spécifié.")
+    
+    try:
+        membre = user.membre
+        if membre.deleted_at is not None:
+            raise ValidationError("L'organisateur doit être un membre actif.")
+    except Membre.DoesNotExist:
+        raise ValidationError("L'organisateur doit être un membre de l'association.")
+    
+    return user
 
 class EvenementForm(forms.ModelForm):
     """
@@ -194,17 +207,23 @@ class EvenementForm(forms.ModelForm):
     def clean_organisateur(self):
         organisateur = self.cleaned_data.get('organisateur') or self.user
         if organisateur:
-            # Vérifier que l'organisateur est un membre actif
+            # CORRECTION : Utiliser le validator importé
             try:
-                membre = organisateur.membre
-                if membre.deleted_at is not None:
-                    raise ValidationError("L'organisateur doit être un membre actif.")
-            except:
-                raise ValidationError("L'organisateur doit être un membre de l'association.")
+                validate_organisateur_membre(organisateur)
+            except ValidationError as e:
+                raise ValidationError(str(e))
         return organisateur
 
     def clean(self):
         cleaned_data = super().clean()
+        
+        # CORRECTION : Valider l'organisateur même s'il n'est pas dans le formulaire
+        organisateur = self.user
+        if organisateur:
+            try:
+                validate_organisateur_membre(organisateur)
+            except ValidationError as e:
+                raise ValidationError(str(e))
         
         # Validation des dates
         date_debut = cleaned_data.get('date_debut')
@@ -217,11 +236,16 @@ class EvenementForm(forms.ModelForm):
                 'date_fin': 'La date de fin doit être postérieure à la date de début.'
             })
         
-        if date_debut and (date_ouverture or date_fermeture):
-            try:
-                validate_dates_inscriptions(date_ouverture, date_fermeture, date_debut)
-            except ValidationError as e:
-                raise e
+        # CORRECTION : Validation des dates d'inscription simplifiée
+        if date_debut and date_ouverture and date_ouverture > date_debut:
+            raise ValidationError({
+                'date_ouverture_inscriptions': 'La date d\'ouverture doit être antérieure à l\'événement.'
+            })
+        
+        if date_debut and date_fermeture and date_fermeture > date_debut:
+            raise ValidationError({
+                'date_fermeture_inscriptions': 'La date de fermeture doit être antérieure à l\'événement.'
+            })
         
         # Validation des tarifs
         est_payant = cleaned_data.get('est_payant')
@@ -229,12 +253,11 @@ class EvenementForm(forms.ModelForm):
         tarif_salarie = cleaned_data.get('tarif_salarie', Decimal('0'))
         tarif_invite = cleaned_data.get('tarif_invite', Decimal('0'))
         
-        try:
-            validate_tarifs_coherents(est_payant, tarif_membre, tarif_salarie, tarif_invite)
-        except ValidationError as e:
-            raise e
+        # CORRECTION : Validation tarifs simplifiée
+        if est_payant and all(t == Decimal('0') for t in [tarif_membre, tarif_salarie, tarif_invite]):
+            raise ValidationError('Un événement payant doit avoir au moins un tarif non-nul.')
         
-        # Validation des accompagnants - CORRECTION
+        # Validation des accompagnants
         permet_accompagnants = cleaned_data.get('permet_accompagnants')
         nombre_max_accompagnants = cleaned_data.get('nombre_max_accompagnants', 0)
         type_evenement = cleaned_data.get('type_evenement')
@@ -242,15 +265,13 @@ class EvenementForm(forms.ModelForm):
         # CORRECTION : Vérifier la cohérence avec le type d'événement
         if type_evenement and permet_accompagnants and not type_evenement.permet_accompagnants:
             raise ValidationError({
-                '__all__': "Ce type d'événement n'autorise pas les accompagnants."
+                'permet_accompagnants': "Ce type d'événement n'autorise pas les accompagnants."
             })
         
-        try:
-            validate_accompagnants_coherents(
-                permet_accompagnants, nombre_max_accompagnants, type_evenement
-            )
-        except ValidationError as e:
-            raise e
+        if permet_accompagnants and nombre_max_accompagnants <= 0:
+            raise ValidationError({
+                'nombre_max_accompagnants': 'Le nombre maximum d\'accompagnants doit être supérieur à 0.'
+            })
         
         return cleaned_data
 
@@ -258,7 +279,7 @@ class EvenementForm(forms.ModelForm):
         evenement = super().save(commit=False)
         
         # Définir l'organisateur - CORRECTION
-        if not evenement.organisateur_id:  # Utiliser organisateur_id au lieu de organisateur
+        if not hasattr(evenement, 'organisateur') or not evenement.organisateur:
             evenement.organisateur = self.user
         
         # Statut selon le type d'événement
@@ -272,6 +293,7 @@ class EvenementForm(forms.ModelForm):
             
             # Créer la validation si nécessaire
             if evenement.type_evenement and evenement.type_evenement.necessite_validation:
+                from .models import ValidationEvenement  # Import local pour éviter les cycles
                 ValidationEvenement.objects.get_or_create(
                     evenement=evenement,
                     defaults={'statut_validation': 'en_attente'}
@@ -371,10 +393,14 @@ class InscriptionEvenementForm(forms.ModelForm):
             accompagnants = json.loads(data)
             nombre_accompagnants = self.cleaned_data.get('nombre_accompagnants', 0)
             
+            # CORRECTION : Si pas d'accompagnants attendus, accepter liste vide
+            if nombre_accompagnants == 0:
+                return []
+            
             if len(accompagnants) != nombre_accompagnants:
                 raise ValidationError("Le nombre d'accompagnants ne correspond pas aux données.")
             
-            # Valider chaque accompagnant
+            # Valider chaque accompagnant seulement s'il y en a
             for accompagnant in accompagnants:
                 validate_donnees_accompagnant(
                     accompagnant.get('nom'),
@@ -393,7 +419,7 @@ class InscriptionEvenementForm(forms.ModelForm):
         if hasattr(self, 'evenement') and hasattr(self, 'membre') and self.evenement and self.membre:
             nombre_accompagnants = cleaned_data.get('nombre_accompagnants', 0)
             
-            # Validation simple sans utiliser les relations Django
+            # Validation simple sans utiliser les relations Django non établies
             if nombre_accompagnants > 0 and not self.evenement.permet_accompagnants:
                 self.add_error('nombre_accompagnants', "Cet événement n'autorise pas les accompagnants.")
             
@@ -406,12 +432,15 @@ class InscriptionEvenementForm(forms.ModelForm):
     def save(self, commit=True):
         inscription = super().save(commit=False)
         
-        # Associer l'événement et le membre
+        # Associer l'événement et le membre AVANT toute validation
         inscription.evenement = self.evenement
         inscription.membre = self.membre
         
         # Calculer le montant total
-        montant_total = inscription.calculer_montant_total()
+        if self.evenement.est_payant:
+            inscription.montant_paye = self.evenement.calculer_tarif_membre(self.membre)
+        else:
+            inscription.montant_paye = Decimal('0.00')
         
         # Déterminer le statut initial
         if self.evenement.places_disponibles > 0:
@@ -427,6 +456,13 @@ class InscriptionEvenementForm(forms.ModelForm):
             
             # Créer les accompagnants
             accompagnants_data = self.cleaned_data.get('accompagnants_data', [])
+            if isinstance(accompagnants_data, str):
+                try:
+                    import json
+                    accompagnants_data = json.loads(accompagnants_data)
+                except json.JSONDecodeError:
+                    accompagnants_data = []
+                    
             for data_accompagnant in accompagnants_data:
                 AccompagnantInvite.objects.create(
                     inscription=inscription,
@@ -563,7 +599,9 @@ class EvenementSearchForm(forms.Form):
         if periode == 'personnalisee':
             if not date_debut or not date_fin:
                 raise ValidationError("Les dates de début et fin sont requises pour une période personnalisée.")
-            validate_periode_recherche(date_debut, date_fin)
+            
+            if date_debut > date_fin:
+                raise ValidationError("La date de début doit être antérieure à la date de fin.")
         
         return cleaned_data
 
@@ -600,6 +638,16 @@ class ValidationEvenementForm(forms.ModelForm):
         labels = {
             'commentaire_validation': 'Commentaire'
         }
+
+    def clean_montant(self):
+        montant = self.cleaned_data.get('montant')
+        if self.inscription and montant:
+            montant_restant = self.inscription.montant_restant
+            if montant > montant_restant:
+                raise ValidationError(
+                    f"Le montant ne peut pas dépasser le montant restant ({montant_restant}€)."
+                )
+        return montant
 
     def clean(self):
         cleaned_data = super().clean()
@@ -655,6 +703,23 @@ class AccompagnantForm(forms.ModelForm):
             })
         }
 
+    # Si cette fonction n'existe pas dans validators.py, ajouter cette fonction dans forms.py :
+    def validate_donnees_accompagnant(nom, prenom, email):
+        """Valide les données d'un accompagnant"""
+        if not nom or not nom.strip():
+            raise ValidationError("Le nom de l'accompagnant est obligatoire.")
+        
+        if not prenom or not prenom.strip():
+            raise ValidationError("Le prénom de l'accompagnant est obligatoire.")
+        
+        if email and email.strip():
+            # Validation basique de l'email si fourni
+            import re
+            if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+                raise ValidationError("L'email de l'accompagnant n'est pas valide.")
+        
+        return True
+
     def clean(self):
         cleaned_data = super().clean()
         nom = cleaned_data.get('nom')
@@ -688,20 +753,6 @@ class EvenementRecurrenceForm(forms.ModelForm):
         label='Jours de la semaine'
     )
     
-    # AJOUTER le champ evenement_parent
-    evenement_parent = forms.ModelChoiceField(
-        queryset=Evenement.objects.all(),
-        required=False,
-        widget=forms.HiddenInput()
-    )
-    
-    jours_semaine_selection = forms.MultipleChoiceField(
-        choices=JOURS_SEMAINE_CHOICES,
-        widget=forms.CheckboxSelectMultiple(),
-        required=False,
-        label='Jours de la semaine'
-    )
-    
     class Meta:
         model = EvenementRecurrence
         fields = [
@@ -725,6 +776,14 @@ class EvenementRecurrenceForm(forms.ModelForm):
             })
         }
 
+    def __init__(self, *args, **kwargs):
+        self.evenement_parent = kwargs.pop('evenement_parent', None)
+        super().__init__(*args, **kwargs)
+        
+        # Pré-remplir les jours de la semaine si instance existante
+        if self.instance and self.instance.pk and self.instance.jours_semaine:
+            self.fields['jours_semaine_selection'].initial = self.instance.jours_semaine
+
     def clean(self):
         cleaned_data = super().clean()
         frequence = cleaned_data.get('frequence')
@@ -741,10 +800,6 @@ class EvenementRecurrenceForm(forms.ModelForm):
         
         return cleaned_data
 
-    def __init__(self, *args, **kwargs):
-        self.evenement_parent = kwargs.pop('evenement_parent', None)
-        super().__init__(*args, **kwargs)
-
     def save(self, commit=True):
         recurrence = super().save(commit=False)
         
@@ -760,7 +815,6 @@ class EvenementRecurrenceForm(forms.ModelForm):
             recurrence.save()
         
         return recurrence
-
 
 class SessionEvenementForm(forms.ModelForm):
     """

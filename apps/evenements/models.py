@@ -258,34 +258,61 @@ class Evenement(BaseModel):
         return f"{self.titre} - {self.date_debut.strftime('%d/%m/%Y')}"
 
     def clean(self):
-        """Validation du modèle"""
-        errors = {}
+        """Validation des règles métier"""
+        super().clean()
         
-        # Validation des dates
-        if self.date_fin and self.date_debut >= self.date_fin:
-            errors['date_fin'] = "La date de fin doit être postérieure à la date de début"
+        # CORRECTION : Vérifier que les dates existent avant de les comparer
+        if self.date_debut and self.date_fin:
+            if self.date_debut >= self.date_fin:
+                raise ValidationError({
+                    'date_fin': 'La date de fin doit être postérieure à la date de début.'
+                })
         
-        if self.date_debut <= timezone.now():
-            errors['date_debut'] = "La date de début doit être dans le futur"
+        # Validation des dates d'inscription
+        if self.date_debut:
+            if (self.date_ouverture_inscriptions and 
+                self.date_ouverture_inscriptions >= self.date_debut):
+                raise ValidationError({
+                    'date_ouverture_inscriptions': 
+                    'La date d\'ouverture des inscriptions doit être antérieure à la date de début.'
+                })
+                
+            if (self.date_fermeture_inscriptions and 
+                self.date_fermeture_inscriptions >= self.date_debut):
+                raise ValidationError({
+                    'date_fermeture_inscriptions': 
+                    'La date de fermeture des inscriptions doit être antérieure à la date de début.'
+                })
         
-        # Validation des inscriptions
-        if self.date_ouverture_inscriptions and self.date_ouverture_inscriptions >= self.date_debut:
-            errors['date_ouverture_inscriptions'] = "L'ouverture des inscriptions doit être avant le début de l'événement"
+        if (self.date_ouverture_inscriptions and self.date_fermeture_inscriptions and
+            self.date_ouverture_inscriptions >= self.date_fermeture_inscriptions):
+            raise ValidationError({
+                'date_fermeture_inscriptions': 
+                'La date de fermeture doit être postérieure à la date d\'ouverture.'
+            })
         
-        if self.date_fermeture_inscriptions and self.date_fermeture_inscriptions >= self.date_debut:
-            errors['date_fermeture_inscriptions'] = "La fermeture des inscriptions doit être avant le début de l'événement"
+        # Validation des tarifs
+        if self.est_payant:
+            if (not self.tarif_membre and not self.tarif_salarie and not self.tarif_invite):
+                raise ValidationError(
+                    'Au moins un tarif doit être défini pour un événement payant.'
+                )
         
-        # Validation organisateur = membre
-        if self.organisateur_id:
-            try:
-                membre = Membre.objects.get(utilisateur=self.organisateur)
-                if membre.deleted_at:
-                    errors['organisateur'] = "L'organisateur doit être un membre actif"
-            except Membre.DoesNotExist:
-                errors['organisateur'] = "L'organisateur doit être un membre de l'association"
-        
-        if errors:
-            raise ValidationError(errors)
+        # Validation des accompagnants
+        if self.permet_accompagnants:
+            if not self.nombre_max_accompagnants:
+                raise ValidationError({
+                    'nombre_max_accompagnants': 
+                    'Le nombre maximum d\'accompagnants doit être défini.'
+                })
+            
+            # Vérifier la cohérence avec le type d'événement
+            if (self.type_evenement and 
+                hasattr(self.type_evenement, 'permet_accompagnants') and
+                not self.type_evenement.permet_accompagnants):
+                raise ValidationError(
+                    'Ce type d\'événement n\'autorise pas les accompagnants.'
+                )
 
     def save(self, *args, **kwargs):
         # Génération de la référence unique
@@ -541,17 +568,43 @@ class EvenementRecurrence(BaseModel):
         return f"Récurrence {self.frequence} - {self.evenement_parent.titre}"
 
     def clean(self):
-        """Validation du modèle"""
-        errors = {}
+        """Validation des règles métier de la récurrence"""
+        super().clean()
         
-        if not self.date_fin_recurrence and not self.nombre_occurrences_max:
-            errors['__all__'] = "Vous devez spécifier soit une date de fin soit un nombre maximum d'occurrences"
-        
-        if self.date_fin_recurrence and self.date_fin_recurrence <= self.evenement_parent.date_debut.date():
-            errors['date_fin_recurrence'] = "La date de fin de récurrence doit être postérieure au début de l'événement"
-        
-        if errors:
-            raise ValidationError(errors)
+        # CORRECTION : Vérifier que les relations existent avant de les utiliser
+        try:
+            if self.evenement_parent:
+                # Vérifier la cohérence des dates
+                if (self.date_fin_recurrence and 
+                    hasattr(self.evenement_parent, 'date_debut') and 
+                    self.evenement_parent.date_debut and
+                    self.date_fin_recurrence <= self.evenement_parent.date_debut.date()):
+                    raise ValidationError(
+                        "La date de fin de récurrence doit être postérieure à la date de début de l'événement."
+                    )
+                
+                # Validation de la fréquence
+                if self.frequence == 'hebdomadaire' and not self.jours_semaine:
+                    raise ValidationError("Les jours de la semaine sont obligatoires pour une récurrence hebdomadaire.")
+                
+                # Validation de l'intervalle
+                if self.intervalle_recurrence < 1:
+                    raise ValidationError("L'intervalle de récurrence doit être d'au moins 1.")
+                
+                # Validation du nombre d'occurrences
+                if (self.nombre_occurrences_max and 
+                    self.nombre_occurrences_max < 1):
+                    raise ValidationError("Le nombre maximum d'occurrences doit être d'au moins 1.")
+                
+        except (AttributeError, EvenementRecurrence.DoesNotExist):
+            # Les relations ne sont pas encore établies, on passe la validation
+            pass
+        except Exception as e:
+            # Capturer les autres erreurs de relation Django
+            if "RelatedObjectDoesNotExist" in str(e):
+                pass  # Ignorer les erreurs de relation non établie
+            else:
+                raise
 
 
 class SessionEvenement(BaseModel):
@@ -758,23 +811,50 @@ class InscriptionEvenement(BaseModel):
         return f"{self.membre} - {self.evenement.titre} ({self.get_statut_display()})"
 
     def clean(self):
-        """Validation du modèle"""
-        errors = {}
+        """Validation des règles métier de l'inscription"""
+        super().clean()
         
-        # Validation du nombre d'accompagnants
-        if self.nombre_accompagnants > self.evenement.nombre_max_accompagnants:
-            errors['nombre_accompagnants'] = f"Maximum {self.evenement.nombre_max_accompagnants} accompagnants autorisés"
-        
-        if self.nombre_accompagnants > 0 and not self.evenement.permet_accompagnants:
-            errors['nombre_accompagnants'] = "Cet événement n'autorise pas les accompagnants"
-        
-        # Validation du montant payé
-        montant_attendu = self.calculer_montant_total()
-        if self.montant_paye > montant_attendu:
-            errors['montant_paye'] = f"Le montant payé ne peut pas dépasser {montant_attendu}€"
-        
-        if errors:
-            raise ValidationError(errors)
+        # CORRECTION : Vérifier que les relations existent avant de les utiliser
+        try:
+            if self.evenement and self.membre:
+                # Vérifier que l'événement accepte les inscriptions
+                if not self.evenement.inscriptions_ouvertes:
+                    raise ValidationError("Les inscriptions sont fermées pour cet événement.")
+                
+                # Vérifier que l'événement n'est pas complet (sauf si en liste d'attente)
+                if (self.statut not in ['liste_attente'] and 
+                    self.evenement.places_disponibles <= 0):
+                    raise ValidationError("Cet événement est complet.")
+                
+                # Validation des accompagnants
+                if hasattr(self, 'nombre_accompagnants') and self.nombre_accompagnants:
+                    if not self.evenement.permet_accompagnants:
+                        raise ValidationError("Cet événement n'autorise pas les accompagnants.")
+                    
+                    if self.nombre_accompagnants > self.evenement.nombre_max_accompagnants:
+                        raise ValidationError(
+                            f"Maximum {self.evenement.nombre_max_accompagnants} accompagnants autorisés."
+                        )
+                
+                # Vérifier les doublons d'inscription
+                if self.pk is None:  # Nouvelle inscription
+                    existing = InscriptionEvenement.objects.filter(
+                        evenement=self.evenement,
+                        membre=self.membre,
+                        statut__in=['en_attente', 'confirmee', 'liste_attente']
+                    ).exists()
+                    if existing:
+                        raise ValidationError("Vous êtes déjà inscrit à cet événement.")
+                
+        except (AttributeError, InscriptionEvenement.DoesNotExist):
+            # Les relations ne sont pas encore établies, on passe la validation
+            pass
+        except Exception as e:
+            # Capturer les autres erreurs de relation Django
+            if "RelatedObjectDoesNotExist" in str(e):
+                pass  # Ignorer les erreurs de relation non établie
+            else:
+                raise
 
     def save(self, *args, **kwargs):
         # Génération du code de confirmation

@@ -15,33 +15,6 @@ from .factories import (
 )
 
 
-def get_valid_evenement_data(type_evenement, user, **overrides):
-    """Fonction utilitaire pour générer des données d'événement valides"""
-    date_debut = timezone.now() + timedelta(days=30)
-    date_fin = date_debut + timedelta(hours=2)
-    
-    data = {
-        'titre': 'Test Formation',
-        'description': 'Description test',
-        'type_evenement': type_evenement.id,
-        'date_debut': date_debut.strftime('%Y-%m-%dT%H:%M'),
-        'date_fin': date_fin.strftime('%Y-%m-%dT%H:%M'),
-        'lieu': 'Paris',
-        'adresse_complete': 'Adresse complète test',
-        'capacite_max': 50,
-        'inscriptions_ouvertes': True,
-        'est_payant': True,
-        'tarif_membre': '25.00',
-        'tarif_salarie': '35.00',
-        'tarif_invite': '40.00',
-        'permet_accompagnants': True,
-        'nombre_max_accompagnants': 2,
-        'delai_confirmation': 48
-    }
-    data.update(overrides)
-    return data
-
-
 @pytest.mark.django_db
 @pytest.mark.unit
 class TestEvenementForm:
@@ -49,12 +22,30 @@ class TestEvenementForm:
 
     def test_form_valid_data(self):
         """Test formulaire avec données valides"""
-        # CORRECTION : Créer explicitement un type qui autorise les accompagnants
-        type_evenement = TypeEvenementFactory(permet_accompagnants=True)
+        type_evenement = TypeEvenementFactory()
         user = CustomUserFactory()
         MembreFactory(utilisateur=user)  # Organisateur doit être membre
         
-        form_data = get_valid_evenement_data(type_evenement, user)
+        date_debut = timezone.now() + timedelta(days=30)
+        date_fin = date_debut + timedelta(hours=2)
+        
+        form_data = {
+            'titre': 'Test Formation',
+            'description': 'Description test',
+            'type_evenement': type_evenement.id,
+            'date_debut': date_debut.strftime('%Y-%m-%dT%H:%M'),
+            'date_fin': date_fin.strftime('%Y-%m-%dT%H:%M'),
+            'lieu': 'Paris',
+            'capacite_max': 50,
+            'inscriptions_ouvertes': True,
+            'est_payant': True,
+            'tarif_membre': '25.00',
+            'tarif_salarie': '35.00',
+            'tarif_invite': '40.00',
+            'permet_accompagnants': True,
+            'nombre_max_accompagnants': 2,
+            'delai_confirmation': 48
+        }
         
         form = EvenementForm(data=form_data, user=user)
         assert form.is_valid(), form.errors
@@ -67,12 +58,22 @@ class TestEvenementForm:
         
         date_passee = timezone.now() - timedelta(days=1)
         
-        form_data = get_valid_evenement_data(
-            type_evenement, 
-            user,
-            date_debut=date_passee.strftime('%Y-%m-%dT%H:%M'),
-            date_fin=(date_passee + timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M')
-        )
+        form_data = {
+            'titre': 'Test Formation',
+            'description': 'Description test',  # AJOUTER
+            'date_debut': date_passee.strftime('%Y-%m-%dT%H:%M'),
+            'date_fin': (date_passee + timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M'),  # AJOUTER
+            'type_evenement': type_evenement.id,
+            'lieu': 'Paris',  # AJOUTER
+            'capacite_max': 50,
+            'tarif_membre': '25.00',  # AJOUTER
+            'tarif_salarie': '35.00',  # AJOUTER
+            'tarif_invite': '40.00',  # AJOUTER
+            'nombre_max_accompagnants': 2,  # AJOUTER
+            'delai_confirmation': 48,  # AJOUTER
+            'est_payant': True,  # AJOUTER
+            'permet_accompagnants': True,  # AJOUTER
+        }
         
         form = EvenementForm(data=form_data, user=user)
         assert not form.is_valid()
@@ -87,12 +88,13 @@ class TestEvenementForm:
         date_debut = timezone.now() + timedelta(days=30)
         date_fin = date_debut - timedelta(hours=1)  # Avant le début
         
-        form_data = get_valid_evenement_data(
-            type_evenement,
-            user,
-            date_debut=date_debut.strftime('%Y-%m-%dT%H:%M'),
-            date_fin=date_fin.strftime('%Y-%m-%dT%H:%M')
-        )
+        form_data = {
+            'titre': 'Test Formation',
+            'date_debut': date_debut.strftime('%Y-%m-%dT%H:%M'),
+            'date_fin': date_fin.strftime('%Y-%m-%dT%H:%M'),
+            'type_evenement': type_evenement.id,
+            'capacite_max': 50,
+        }
         
         form = EvenementForm(data=form_data, user=user)
         assert not form.is_valid()
@@ -100,19 +102,32 @@ class TestEvenementForm:
 
     def test_form_organisateur_non_membre(self):
         """Test validation organisateur non membre"""
-        type_evenement = TypeEvenementFactory(permet_accompagnants=True)
+        type_evenement = TypeEvenementFactory()
         user = CustomUserFactory()  # Pas de membre associé
         
-        # CORRECTION : S'assurer qu'aucun membre n'existe pour cet utilisateur
-        if hasattr(user, 'membre'):
-            user.membre.delete()
+        date_debut = timezone.now() + timedelta(days=30)
         
-        form_data = get_valid_evenement_data(type_evenement, user)
+        form_data = {
+            'titre': 'Test Formation',
+            'description': 'Description test',  # AJOUTER
+            'date_debut': date_debut.strftime('%Y-%m-%dT%H:%M'),
+            'date_fin': (date_debut + timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M'),  # AJOUTER
+            'type_evenement': type_evenement.id,
+            'lieu': 'Paris',  # AJOUTER
+            'capacite_max': 50,
+            'tarif_membre': '25.00',  # AJOUTER
+            'tarif_salarie': '35.00',  # AJOUTER
+            'tarif_invite': '40.00',  # AJOUTER
+            'nombre_max_accompagnants': 2,  # AJOUTER
+            'delai_confirmation': 48,  # AJOUTER
+            'est_payant': True,  # AJOUTER
+            'permet_accompagnants': True,  # AJOUTER
+        }
         
         form = EvenementForm(data=form_data, user=user)
-        
-        # Le formulaire doit être invalide
-        assert not form.is_valid(), "Le formulaire devrait être invalide pour un organisateur non-membre"
+        assert not form.is_valid()
+        # CORRECTION : L'erreur sera dans la validation clean(), pas sur le champ organisateur directement
+        assert not form.is_valid()
 
     def test_form_tarifs_incoherents(self):
         """Test validation tarifs incohérents"""
@@ -120,14 +135,18 @@ class TestEvenementForm:
         user = CustomUserFactory()
         MembreFactory(utilisateur=user)
         
-        form_data = get_valid_evenement_data(
-            type_evenement,
-            user,
-            est_payant=True,
-            tarif_membre='0.00',
-            tarif_salarie='0.00',
-            tarif_invite='0.00'  # Tous à zéro pour événement payant
-        )
+        date_debut = timezone.now() + timedelta(days=30)
+        
+        form_data = {
+            'titre': 'Test Formation',
+            'date_debut': date_debut.strftime('%Y-%m-%dT%H:%M'),
+            'type_evenement': type_evenement.id,
+            'capacite_max': 50,
+            'est_payant': True,
+            'tarif_membre': '0.00',
+            'tarif_salarie': '0.00',
+            'tarif_invite': '0.00',  # Tous à zéro pour événement payant
+        }
         
         form = EvenementForm(data=form_data, user=user)
         assert not form.is_valid()
@@ -138,26 +157,44 @@ class TestEvenementForm:
         user = CustomUserFactory()
         MembreFactory(utilisateur=user)
         
-        form_data = get_valid_evenement_data(
-            type_evenement,
-            user,
-            permet_accompagnants=True,  # Contradictoire avec le type
-            nombre_max_accompagnants=2
-        )
+        form_data = get_valid_evenement_data(type_evenement, user)
+        form_data.update({
+            'permet_accompagnants': True,  # Contradictoire avec le type
+            'nombre_max_accompagnants': 2,
+        })
         
         form = EvenementForm(data=form_data, user=user)
         assert not form.is_valid()
+        assert 'permet_accompagnants' in form.errors
 
     def test_form_save_avec_validation(self):
         """Test sauvegarde avec type nécessitant validation"""
         type_avec_validation = TypeEvenementFactory(
             necessite_validation=True,
-            permet_accompagnants=True
+            permet_accompagnants=True  # AJOUTER pour éviter conflit
         )
         user = CustomUserFactory()
         MembreFactory(utilisateur=user)
         
-        form_data = get_valid_evenement_data(type_avec_validation, user)
+        date_debut = timezone.now() + timedelta(days=30)
+        
+        form_data = {
+            'titre': 'Test Formation',
+            'description': 'Description test',
+            'date_debut': date_debut.strftime('%Y-%m-%dT%H:%M'),
+            'date_fin': (date_debut + timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M'),
+            'type_evenement': type_avec_validation.id,
+            'lieu': 'Paris',
+            'capacite_max': 50,
+            'inscriptions_ouvertes': True,  # AJOUTER
+            'tarif_membre': '25.00',
+            'tarif_salarie': '35.00',
+            'tarif_invite': '40.00',
+            'nombre_max_accompagnants': 2,
+            'delai_confirmation': 48,
+            'est_payant': True,
+            'permet_accompagnants': True,
+        }
         
         form = EvenementForm(data=form_data, user=user)
         assert form.is_valid(), f"Erreurs du formulaire: {form.errors}"
@@ -169,12 +206,30 @@ class TestEvenementForm:
         """Test sauvegarde avec type sans validation"""
         type_sans_validation = TypeEvenementFactory(
             necessite_validation=False,
-            permet_accompagnants=True
+            permet_accompagnants=True  # AJOUTER pour éviter conflit
         )
         user = CustomUserFactory()
         MembreFactory(utilisateur=user)
         
-        form_data = get_valid_evenement_data(type_sans_validation, user)
+        date_debut = timezone.now() + timedelta(days=30)
+        
+        form_data = {
+            'titre': 'Test Formation',
+            'description': 'Description test',
+            'date_debut': date_debut.strftime('%Y-%m-%dT%H:%M'),
+            'date_fin': (date_debut + timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M'),
+            'type_evenement': type_sans_validation.id,
+            'lieu': 'Paris',
+            'capacite_max': 50,
+            'inscriptions_ouvertes': True,  # AJOUTER
+            'tarif_membre': '25.00',
+            'tarif_salarie': '35.00',
+            'tarif_invite': '40.00',
+            'nombre_max_accompagnants': 2,
+            'delai_confirmation': 48,
+            'est_payant': True,
+            'permet_accompagnants': True,
+        }
         
         form = EvenementForm(data=form_data, user=user)
         assert form.is_valid(), f"Erreurs du formulaire: {form.errors}"
@@ -190,18 +245,10 @@ class TestInscriptionEvenementForm:
 
     def test_form_inscription_valide(self):
         """Test inscription valide"""
-        # CORRECTION : Créer explicitement un type qui autorise les accompagnants
-        type_evenement = TypeEvenementFactory(permet_accompagnants=True)
-        
         evenement = EvenementFactory(
-            type_evenement=type_evenement,  # Utiliser le type créé
             permet_accompagnants=True,
             nombre_max_accompagnants=2,
-            est_payant=True,
-            # CORRECTION : Ajouter des tarifs valides pour un événement payant
-            tarif_membre=Decimal('25.00'),
-            tarif_salarie=Decimal('35.00'),
-            tarif_invite=Decimal('40.00')
+            est_payant=True
         )
         membre = MembreFactory()
         mode_paiement = ModePaiementFactory()
@@ -220,8 +267,7 @@ class TestInscriptionEvenementForm:
             evenement=evenement,
             membre=membre
         )
-        # Le formulaire doit être valide
-        assert form.is_valid(), f"Erreurs: {form.errors}"
+        assert form.is_valid(), form.errors
 
     def test_form_trop_accompagnants(self):
         """Test trop d'accompagnants"""
@@ -241,10 +287,8 @@ class TestInscriptionEvenementForm:
             evenement=evenement,
             membre=membre
         )
-        # Vérifier seulement la validation du champ au niveau du formulaire
-        form.full_clean()
-        # L'erreur peut être au niveau du champ ou du modèle
-        assert not form.is_valid() or 'nombre_accompagnants' in form.errors
+        assert not form.is_valid()
+        assert 'nombre_accompagnants' in form.errors
 
     def test_form_accompagnants_non_autorises(self):
         """Test accompagnants non autorisés"""
@@ -261,9 +305,8 @@ class TestInscriptionEvenementForm:
             evenement=evenement,
             membre=membre
         )
-        # Vérifier la validation au niveau du formulaire
-        form.full_clean()
-        assert not form.is_valid() or 'nombre_accompagnants' in form.errors
+        assert not form.is_valid()
+        assert 'nombre_accompagnants' in form.errors
 
     def test_form_donnees_accompagnants_invalides(self):
         """Test données accompagnants invalides"""
@@ -307,11 +350,7 @@ class TestInscriptionEvenementForm:
 
     def test_form_save_liste_attente(self):
         """Test sauvegarde en liste d'attente"""
-        # CORRECTION : Créer un événement gratuit pour éviter les problèmes de paiement
-        evenement = EvenementFactory(
-            capacite_max=1,
-            est_payant=False  # Événement gratuit
-        )
+        evenement = EvenementFactory(capacite_max=1)
         # Remplir l'événement
         InscriptionEvenementFactory(evenement=evenement, statut='confirmee')
         
@@ -320,7 +359,6 @@ class TestInscriptionEvenementForm:
         form_data = {
             'nombre_accompagnants': 0,
             'accepter_conditions': True,
-            'accompagnants_data': '[]'  # Liste vide mais valide
         }
         
         form = InscriptionEvenementForm(
@@ -328,20 +366,16 @@ class TestInscriptionEvenementForm:
             evenement=evenement,
             membre=membre
         )
-        if form.is_valid():
-            inscription = form.save()
-            assert inscription.statut == 'liste_attente'
-        else:
-            # Si erreur de validation du modèle, on passe le test
-            assert 'evenement' in str(form.errors) or form.is_valid()
+        assert form.is_valid()
+        
+        inscription = form.save()
+        assert inscription.statut == 'liste_attente'
 
     def test_form_save_avec_accompagnants(self):
         """Test sauvegarde avec accompagnants"""
-        # CORRECTION : Créer un événement gratuit pour éviter les problèmes de paiement
         evenement = EvenementFactory(
             permet_accompagnants=True,
-            nombre_max_accompagnants=2,
-            est_payant=False  # Événement gratuit
+            nombre_max_accompagnants=2
         )
         membre = MembreFactory()
         
@@ -356,14 +390,12 @@ class TestInscriptionEvenementForm:
             evenement=evenement,
             membre=membre
         )
-        if form.is_valid():
-            inscription = form.save()
-            assert inscription.accompagnants.count() == 2
-            assert inscription.accompagnants.filter(nom='Dupont').exists()
-            assert inscription.accompagnants.filter(nom='Martin').exists()
-        else:
-            # Si erreur de validation du modèle, on passe le test
-            assert 'evenement' in str(form.errors) or form.is_valid()
+        assert form.is_valid()
+        
+        inscription = form.save()
+        assert inscription.accompagnants.count() == 2
+        assert inscription.accompagnants.filter(nom='Dupont').exists()
+        assert inscription.accompagnants.filter(nom='Martin').exists()
 
 
 @pytest.mark.django_db
@@ -586,21 +618,17 @@ class TestEvenementRecurrenceForm:
         evenement = EvenementFactory(est_recurrent=True)
         
         form_data = {
+            'evenement_parent': evenement.id,
             'frequence': 'mensuelle',
             'intervalle_recurrence': 2,
             'date_fin_recurrence': (timezone.now().date() + timedelta(days=365)).strftime('%Y-%m-%d')
         }
         
-        # Créer le formulaire avec l'événement parent
+        # CORRECTION : Passer l'événement parent au constructeur
         form = EvenementRecurrenceForm(data=form_data, evenement_parent=evenement)
-        # Ne pas tester la validation du modèle, seulement celle du formulaire
-        form.full_clean()
         if not form.is_valid():
-            # Ignorer les erreurs de modèle liées aux relations
-            if 'evenement_parent' not in str(form.errors):
-                assert False, f"Erreurs du formulaire: {form.errors}"
-        else:
-            assert form.is_valid()
+            print(f"Erreurs du formulaire: {form.errors}")
+        assert form.is_valid()
 
     def test_form_hebdomadaire_sans_jours(self):
         """Test récurrence hebdomadaire sans jours"""
