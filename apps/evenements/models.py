@@ -571,6 +571,13 @@ class EvenementRecurrence(BaseModel):
         """Validation des règles métier de la récurrence"""
         super().clean()
         
+        # CORRECTION : Ajouter la validation des contraintes de fin AVANT le try-except
+        # Une récurrence doit avoir soit une date de fin soit un nombre maximum d'occurrences
+        if not self.date_fin_recurrence and not self.nombre_occurrences_max:
+            raise ValidationError(
+                "Une récurrence doit avoir soit une date de fin soit un nombre maximum d'occurrences."
+            )
+        
         # CORRECTION : Vérifier que les relations existent avant de les utiliser
         try:
             if self.evenement_parent:

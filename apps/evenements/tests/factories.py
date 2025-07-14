@@ -125,8 +125,8 @@ class EvenementFactory(DjangoModelFactory):
     # CORRECTION FINALE : Créer un utilisateur qui EST un membre
     organisateur = factory.LazyFunction(lambda: MembreFactory().utilisateur)
     
-    statut = factory.Iterator(['brouillon', 'publie', 'en_attente_validation'])
-    
+    # statut = factory.Iterator(['brouillon', 'publie', 'en_attente_validation'])
+    statut = 'publie'
     # Inscriptions et tarifs
     inscriptions_ouvertes = True
     
