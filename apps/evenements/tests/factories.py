@@ -16,6 +16,8 @@ from apps.evenements.models import (
     SessionEvenement
 )
 
+
+    
 class CustomUserFactory(DjangoModelFactory):
     """Factory pour les utilisateurs"""
     class Meta:
@@ -39,6 +41,48 @@ class StatutFactory(DjangoModelFactory):
     nom = Iterator(['Actif', 'Inactif', 'En attente', 'Validé', 'Refusé'])
     description = factory.LazyAttribute(lambda obj: f'Statut {obj.nom}')
 
+class MembreAvecUserStaffFactory(DjangoModelFactory):
+    """Factory pour créer un membre avec utilisateur staff"""
+    class Meta:
+        model = Membre
+
+    nom = factory.Faker('last_name', locale='fr_FR')
+    prenom = factory.Faker('first_name', locale='fr_FR')
+    email = factory.LazyAttribute(lambda obj: f'{obj.prenom.lower()}.{obj.nom.lower()}@test.com')
+    telephone = factory.Faker('phone_number', locale='fr_FR')
+    adresse = factory.Faker('address', locale='fr_FR')
+    date_adhesion = factory.LazyFunction(
+        lambda: timezone.now().date() - timedelta(days=random.randint(1, 365))
+    )
+    date_naissance = factory.LazyFunction(
+        lambda: timezone.now().date() - timedelta(days=random.randint(6570, 25550))
+    )
+    
+    # CORRECTION : Créer un utilisateur staff
+    utilisateur = SubFactory(CustomUserFactory, is_staff=True)
+    statut = SubFactory(StatutFactory, nom='Actif')
+
+
+class MembreAvecUserFactory(DjangoModelFactory):
+    """Factory pour créer un membre avec utilisateur simple (non-staff)"""
+    class Meta:
+        model = Membre
+
+    nom = factory.Faker('last_name', locale='fr_FR')
+    prenom = factory.Faker('first_name', locale='fr_FR')
+    email = factory.LazyAttribute(lambda obj: f'{obj.prenom.lower()}.{obj.nom.lower()}@test.com')
+    telephone = factory.Faker('phone_number', locale='fr_FR')
+    adresse = factory.Faker('address', locale='fr_FR')
+    date_adhesion = factory.LazyFunction(
+        lambda: timezone.now().date() - timedelta(days=random.randint(1, 365))
+    )
+    date_naissance = factory.LazyFunction(
+        lambda: timezone.now().date() - timedelta(days=random.randint(6570, 25550))
+    )
+    
+    # Utilisateur simple (non-staff)
+    utilisateur = SubFactory(CustomUserFactory, is_staff=False)
+    statut = SubFactory(StatutFactory, nom='Actif')
 
 class TypeMembreFactory(DjangoModelFactory):
     """Factory pour les types de membres"""
@@ -106,13 +150,14 @@ class EvenementFactory(DjangoModelFactory):
 
     titre = factory.Faker('sentence', nb_words=3, locale='fr_FR')
     description = factory.Faker('text', max_nb_chars=500, locale='fr_FR')
-    
+    lieu = factory.Faker('address', locale='fr_FR')
+
     # CORRECTION : Créer un type qui autorise les accompagnants par défaut
     type_evenement = SubFactory(TypeEvenementFactory, permet_accompagnants=True)
     
     # Dates futures
     date_debut = factory.LazyFunction(
-        lambda: timezone.now() + timedelta(days=random.randint(7, 90))
+        lambda: timezone.now() + timedelta(days=random.randint(1, 30))
     )
     date_fin = factory.LazyAttribute(
         lambda obj: obj.date_debut + timedelta(hours=random.randint(1, 8))

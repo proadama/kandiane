@@ -1,5 +1,6 @@
-Structure du projet Django depuis : C:\Users\frada\OneDrive\INFORMATIQUE\Web\SourceCode\project-web
+Structure du projet Django depuis : C:\workspace\kandiane\project-web
 
+├── .coverage
 ├── .env
 ├── .gitignore
 ├── .pytest_cache
@@ -149,6 +150,7 @@ Structure du projet Django depuis : C:\Users\frada\OneDrive\INFORMATIQUE\Web\Sou
 │   │   ├── validators.py
 │   │   ├── views copy
 │   │   └── views.py
+│   ├── cotisations_backup_20250524
 │   │   ├── Baremes.md
 │   │   ├── README.md
 │   │   ├── __init__.py
@@ -237,6 +239,8 @@ Structure du projet Django depuis : C:\Users\frada\OneDrive\INFORMATIQUE\Web\Sou
 │   │   ├── signals.py
 │   │   ├── tasks.py
 │   │   ├── templates
+│   │   │   ├── core
+│   │   │   │   └── base.html
 │   │   │   ├── emails
 │   │   │   │   └── evenements
 │   │   │   │       ├── confirmation_inscription.html
@@ -258,6 +262,9 @@ Structure du projet Django depuis : C:\Users\frada\OneDrive\INFORMATIQUE\Web\Sou
 │   │   │   └── evenements
 │   │   │       ├── base_evenement.html
 │   │   │       ├── calendrier.html
+│   │   │       ├── corbeille
+│   │   │       │   └── evenements.html
+│   │   │       ├── dashboard.backup
 │   │   │       ├── dashboard.html
 │   │   │       ├── detail.html
 │   │   │       ├── errors
@@ -272,11 +279,14 @@ Structure du projet Django depuis : C:\Users\frada\OneDrive\INFORMATIQUE\Web\Sou
 │   │   │       │   ├── form.html
 │   │   │       │   └── mes_inscriptions.html
 │   │   │       ├── liste.html
-│   │   │       ├── public
+│   │   │       ├── publics
 │   │   │       │   ├── calendrier.html
+│   │   │       │   ├── detail.backup
 │   │   │       │   ├── detail.html
 │   │   │       │   └── liste.html
 │   │   │       ├── rapports
+│   │   │       │   ├── dashboard.html
+│   │   │       │   ├── evenements copy.html
 │   │   │       │   └── evenements.html
 │   │   │       ├── recherche.html
 │   │   │       ├── sessions
@@ -289,9 +299,13 @@ Structure du projet Django depuis : C:\Users\frada\OneDrive\INFORMATIQUE\Web\Sou
 │   │   │           ├── detail.html
 │   │   │           ├── liste.html
 │   │   │           └── masse.html
+│   │   ├── templatetags
+│   │   │   ├── __init__.py
+│   │   │   └── evenements_extras.py
 │   │   ├── tests
 │   │   │   ├── README_WORKFLOW_TESTS.md
 │   │   │   ├── __init__.py
+│   │   │   ├── conftest.py.old
 │   │   │   ├── factories.py
 │   │   │   ├── test_forms.py
 │   │   │   ├── test_integration_cotisations.py
@@ -302,9 +316,9 @@ Structure du projet Django depuis : C:\Users\frada\OneDrive\INFORMATIQUE\Web\Sou
 │   │   │   ├── test_integration_validation.py
 │   │   │   ├── test_managers.py
 │   │   │   ├── test_models.py
-│   │   │   ├── test_models.py111
 │   │   │   ├── test_runner_workflow.py
 │   │   │   ├── test_validators.py
+│   │   │   ├── test_views.backup
 │   │   │   └── test_views.py
 │   │   ├── tests.py
 │   │   ├── urls.backup
@@ -440,8 +454,54 @@ Structure du projet Django depuis : C:\Users\frada\OneDrive\INFORMATIQUE\Web\Sou
 │   └── wsgi.py
 ├── create_structure.py
 ├── db.sqlite3
+├── db.sqlite3.old
 ├── debug.log
 ├── generate_project_structure.py
+├── htmlcov
+│   ├── .gitignore
+│   ├── class_index.html
+│   ├── coverage_html_cb_497bf287.js
+│   ├── favicon_32_cb_58284776.png
+│   ├── function_index.html
+│   ├── index.html
+│   ├── keybd_closed_cb_ce680311.png
+│   ├── status.json
+│   ├── style_cb_db813965.css
+│   ├── z_2f0e27fc54973a6f___init___py.html
+│   ├── z_2f0e27fc54973a6f_evenements_extras_py.html
+│   ├── z_33e9025e685b400e___init___py.html
+│   ├── z_33e9025e685b400e_admin_py.html
+│   ├── z_33e9025e685b400e_apps_py.html
+│   ├── z_33e9025e685b400e_financial_reports_py.html
+│   ├── z_33e9025e685b400e_forms_py.html
+│   ├── z_33e9025e685b400e_managers_py.html
+│   ├── z_33e9025e685b400e_models_py.html
+│   ├── z_33e9025e685b400e_monitoring_py.html
+│   ├── z_33e9025e685b400e_signals_py.html
+│   ├── z_33e9025e685b400e_tests_py.html
+│   ├── z_33e9025e685b400e_urls_py.html
+│   ├── z_33e9025e685b400e_utils_py.html
+│   ├── z_33e9025e685b400e_validators_py.html
+│   ├── z_33e9025e685b400e_views_py.html
+│   ├── z_8037a8daa02e7d27_0001_initial_py.html
+│   ├── z_8037a8daa02e7d27___init___py.html
+│   ├── z_bb34cf5ec8804bd1___init___py.html
+│   ├── z_bb34cf5ec8804bd1_factories_py.html
+│   ├── z_bb34cf5ec8804bd1_test_forms_py.html
+│   ├── z_bb34cf5ec8804bd1_test_integration_cotisations_py.html
+│   ├── z_bb34cf5ec8804bd1_test_integration_dashboard_py.html
+│   ├── z_bb34cf5ec8804bd1_test_integration_inscription_py.html
+│   ├── z_bb34cf5ec8804bd1_test_integration_membres_py.html
+│   ├── z_bb34cf5ec8804bd1_test_integration_notifications_py.html
+│   ├── z_bb34cf5ec8804bd1_test_integration_validation_py.html
+│   ├── z_bb34cf5ec8804bd1_test_managers_py.html
+│   ├── z_bb34cf5ec8804bd1_test_models_py.html
+│   ├── z_bb34cf5ec8804bd1_test_runner_workflow_py.html
+│   ├── z_bb34cf5ec8804bd1_test_validators_py.html
+│   ├── z_bb34cf5ec8804bd1_test_views_py.html
+│   ├── z_fda93debc5c42443___init___py.html
+│   ├── z_fda93debc5c42443_cotisation_service_py.html
+│   └── z_fda93debc5c42443_services_py.html
 ├── manage.py
 ├── media
 │   ├── avatars

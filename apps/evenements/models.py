@@ -12,6 +12,10 @@ from apps.membres.models import Membre
 from apps.accounts.models import CustomUser
 from apps.cotisations.models import ModePaiement
 
+from .managers import (
+    TypeEvenementManager, EvenementManager, InscriptionEvenementManager,
+    ValidationEvenementManager, SessionEvenementManager, AccompagnantInviteManager
+)
 
 class TypeEvenement(BaseModel):
     """
@@ -60,6 +64,8 @@ class TypeEvenement(BaseModel):
         default=0,
         verbose_name="Ordre d'affichage"
     )
+
+    objects = TypeEvenementManager()
 
     class Meta:
         db_table = 'types_evenements'
@@ -241,6 +247,8 @@ class Evenement(BaseModel):
         null=True,
         verbose_name="Image de l'événement"
     )
+    
+    objects = EvenementManager()
 
     class Meta:
         db_table = 'evenements'
@@ -661,6 +669,8 @@ class SessionEvenement(BaseModel):
         verbose_name="Intervenant"
     )
 
+    objects = SessionEvenementManager()
+
     class Meta:
         db_table = 'sessions_evenements'
         verbose_name = "Session d'événement"
@@ -801,6 +811,8 @@ class InscriptionEvenement(BaseModel):
         blank=True,
         verbose_name="Sessions sélectionnées"
     )
+
+    objects = InscriptionEvenementManager()
 
     class Meta:
         db_table = 'inscriptions_evenements'
@@ -1015,6 +1027,8 @@ class AccompagnantInvite(BaseModel):
         verbose_name="Restrictions alimentaires"
     )
 
+    objects = AccompagnantInviteManager()
+    
     class Meta:
         db_table = 'accompagnants_invites'
         verbose_name = "Accompagnant/Invité"
@@ -1097,6 +1111,8 @@ class ValidationEvenement(BaseModel):
         blank=True,
         verbose_name="Modifications demandées"
     )
+
+    objects = ValidationEvenementManager()
 
     class Meta:
         db_table = 'validations_evenements'

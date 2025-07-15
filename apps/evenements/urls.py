@@ -33,6 +33,11 @@ evenements_patterns = [
     path('sessions/<int:pk>/', views.SessionDetailView.as_view(), name='session_detail'),
     path('sessions/<int:pk>/modifier/', views.SessionUpdateView.as_view(), name='session_modifier'),
     path('sessions/<int:pk>/supprimer/', views.SessionDeleteView.as_view(), name='session_supprimer'),
+    
+    # Exports spécifiques aux événements
+    path('<int:pk>/export/inscrits/csv/', views.ExportInscritsView.as_view(), {'format': 'csv'}, name='export_inscrits_csv'),
+    path('<int:pk>/export/inscrits/excel/', views.ExportInscritsView.as_view(), {'format': 'excel'}, name='export_inscrits_excel'),
+    path('<int:pk>/export/badges/', views.ExportBadgesView.as_view(), name='export_badges'),
 ]
 
 # URLs pour les inscriptions
@@ -40,6 +45,7 @@ inscriptions_patterns = [
     # Inscription à un événement
     path('evenements/<int:evenement_pk>/inscription/', views.InscriptionCreateView.as_view(), name='inscription_creer'),
     path('<int:pk>/', views.InscriptionDetailView.as_view(), name='detail'),
+    path('<int:pk>/detail/', views.InscriptionDetailView.as_view(), name='inscription_detail'),
     path('<int:pk>/confirmer/', views.ConfirmerInscriptionView.as_view(), name='confirmer'),
     path('<int:pk>/annuler/', views.AnnulerInscriptionView.as_view(), name='annuler'),
     path('<int:pk>/modifier/', views.InscriptionUpdateView.as_view(), name='modifier'),
@@ -50,6 +56,7 @@ inscriptions_patterns = [
     # Gestion des accompagnants
     path('<int:inscription_pk>/accompagnants/', views.AccompagnantListView.as_view(), name='accompagnants_liste'),
     path('<int:inscription_pk>/accompagnants/ajouter/', views.AccompagnantCreateView.as_view(), name='accompagnant_ajouter'),
+    path('<int:inscription_pk>/accompagnants/nouveau/', views.AccompagnantCreateView.as_view(), name='accompagnants_creer'),
     path('accompagnants/<int:pk>/', views.AccompagnantDetailView.as_view(), name='accompagnant_detail'),
     path('accompagnants/<int:pk>/modifier/', views.AccompagnantUpdateView.as_view(), name='accompagnant_modifier'),
     path('accompagnants/<int:pk>/supprimer/', views.AccompagnantDeleteView.as_view(), name='accompagnant_supprimer'),
@@ -92,16 +99,20 @@ export_patterns = [
     # Export événements
     path('evenements/', views.ExportEvenementsView.as_view(), name='evenements'),
     path('evenements/<int:pk>/', views.ExportEvenementView.as_view(), name='evenement'),
+    path('rapport-evenements/', views.RapportEvenementsView.as_view(), name='rapport_evenements'),
     
     # Export inscriptions
     path('inscriptions/', views.ExportInscriptionsView.as_view(), name='inscriptions'),
     path('evenements/<int:evenement_pk>/inscriptions/', views.ExportInscriptionsEvenementView.as_view(), name='inscriptions_evenement'),
+    path('evenements/<int:evenement_pk>/inscrits/', views.ExportInscritsView.as_view(), name='export_inscrits'),
     
     # Export badges/étiquettes
     path('evenements/<int:evenement_pk>/badges/', views.ExportBadgesView.as_view(), name='badges'),
     
     # Export calendrier
+    path('calendrier/', views.ExportCalendrierView.as_view(), name='calendrier'),
     path('calendrier.ics', views.ExportCalendrierView.as_view(), name='calendrier_ics'),
+    path('export_calendrier/', views.ExportCalendrierView.as_view(), name='export_calendrier'),
     path('evenements/<int:pk>/calendrier.ics', views.ExportEvenementCalendrierView.as_view(), name='evenement_ics'),
 ]
 
@@ -109,33 +120,47 @@ export_patterns = [
 rapports_patterns = [
     # Dashboard général
     path('', views.RapportDashboardView.as_view(), name='dashboard'),
+    path('dashboard/', views.RapportDashboardView.as_view(), name='rapport_dashboard'),
     
     # Rapports événements
     path('evenements/', views.RapportEvenementsView.as_view(), name='evenements'),
     path('evenements/frequentation/', views.RapportFrequentationView.as_view(), name='frequentation'),
+    path('frequentation/', views.RapportFrequentationView.as_view(), name='rapport_frequentation'),
     path('evenements/revenus/', views.RapportRevenusView.as_view(), name='revenus'),
+    path('revenus/', views.RapportRevenusView.as_view(), name='rapport_revenus'),
     
     # Rapports membres
     path('membres/participation/', views.RapportParticipationMembresView.as_view(), name='participation_membres'),
+    path('participation-membres/', views.RapportParticipationMembresView.as_view(), name='rapport_participation_membres'),
     path('membres/fidélité/', views.RapportFideliteMembresView.as_view(), name='fidelite_membres'),
+    path('fidelite-membres/', views.RapportFideliteMembresView.as_view(), name='rapport_fidelite_membres'),
     
     # Rapports organisateurs
     path('organisateurs/', views.RapportOrganisateursView.as_view(), name='organisateurs'),
+    path('rapport-organisateurs/', views.RapportOrganisateursView.as_view(), name='rapport_organisateurs'),
 ]
 
 # URLs AJAX pour les fonctionnalités dynamiques
 ajax_patterns = [
     # Vérification disponibilité
     path('evenements/<int:pk>/places-disponibles/', views.CheckPlacesDisponiblesView.as_view(), name='places_disponibles'),
+    # path('places-disponibles/<int:pk>/', views.CheckPlacesDisponiblesView.as_view(), name='ajax_places_disponibles'),
+    path('ajax/places-disponibles/<int:pk>/', views.CheckPlacesDisponiblesView.as_view(), name='places_disponibles'),
     path('evenements/<int:pk>/peut-inscrire/', views.CheckPeutInscrireView.as_view(), name='peut_inscrire'),
     
     # Calculs dynamiques
     path('evenements/<int:pk>/calculer-tarif/', views.CalculerTarifView.as_view(), name='calculer_tarif'),
+    # path('calculer-tarif/', views.CalculerTarifView.as_view(), name='ajax_calculer_tarif'),
+    path('ajax/calculer-tarif/<int:pk>/', views.CalculerTarifView.as_view(), name='calculer_tarif'),
     path('inscriptions/<int:pk>/calculer-montant/', views.CalculerMontantInscriptionView.as_view(), name='calculer_montant'),
     
     # Auto-complétion
     path('recherche/organisateurs/', views.AutocompleteOrganisateursView.as_view(), name='autocomplete_organisateurs'),
+    # path('autocomplete/organisateurs/', views.AutocompleteOrganisateursView.as_view(), name='ajax_autocomplete_organisateurs'),
+    path('ajax/autocomplete/organisateurs/', views.AutocompleteOrganisateursView.as_view(), name='autocomplete_organisateurs'),
     path('recherche/lieux/', views.AutocompleteLieuxView.as_view(), name='autocomplete_lieux'),
+    # path('autocomplete/lieux/', views.AutocompleteLieuxView.as_view(), name='ajax_autocomplete_lieux'),
+    path('ajax/autocomplete/lieux/', views.AutocompleteLieuxView.as_view(), name='autocomplete_lieux'),
     
     # Notifications temps réel
     path('notifications/inscriptions/', views.NotificationsInscriptionsView.as_view(), name='notifications_inscriptions'),
@@ -153,11 +178,13 @@ corbeille_patterns = [
     path('evenements/', views.CorbeilleEvenementsView.as_view(), name='evenements'),
     path('inscriptions/', views.CorbeilleInscriptionsView.as_view(), name='inscriptions'),
     path('evenements/<int:pk>/restaurer/', views.RestaurerEvenementView.as_view(), name='restaurer_evenement'),
+    path('<int:pk>/restaurer/', views.RestaurerEvenementView.as_view(), name='restaurer_evenement'),
     path('inscriptions/<int:pk>/restaurer/', views.RestaurerInscriptionView.as_view(), name='restaurer_inscription'),
     path('evenements/<int:pk>/supprimer-definitivement/', views.SupprimerDefinitivementEvenementView.as_view(), name='supprimer_definitivement_evenement'),
+    path('corbeille-evenements/', views.CorbeilleEvenementsView.as_view(), name='corbeille_evenements'),  # AJOUTER
 ]
 
-# URLs pour l'API publique (optionnel)
+# URLs pour l'API publique
 api_patterns = [
     # API événements publics
     path('evenements/', views.APIEvenementsPublicsView.as_view(), name='evenements_publics'),
@@ -167,6 +194,21 @@ api_patterns = [
     # Flux RSS/Atom
     path('rss/', views.EvenementsFeedView(), name='rss'),
     path('atom/', views.EvenementsAtomFeedView(), name='atom'),
+]
+
+# URLs pour les vues publiques (sans authentification)
+public_patterns = [
+    # Événements publics
+    path('evenements/', views.EvenementsPublicsView.as_view(), name='evenements_publics'),
+    path('evenements/<int:pk>/', views.EvenementPublicDetailView.as_view(), name='evenement_public_detail'),
+    path('calendrier/', views.CalendrierPublicView.as_view(), name='calendrier_public'),
+    
+    # Confirmation d'inscription publique
+    path('confirmation/<str:code>/', views.ConfirmationPubliqueView.as_view(), name='confirmation_publique'),
+    
+    # Widget d'intégration
+    path('widget/prochains-evenements/', views.WidgetProchainsEvenementsView.as_view(), name='widget_prochains'),
+    path('widget/calendrier-mini/', views.WidgetCalendrierMiniView.as_view(), name='widget_calendrier'),
 ]
 
 # URLs principales avec inclusion des sous-patterns
@@ -184,6 +226,46 @@ urlpatterns = [
     path('ajax/', include(ajax_patterns)),
     path('corbeille/', include(corbeille_patterns)),
     path('api/', include(api_patterns)),
+    path('public/', include(public_patterns)),
+    
+    # URLs directes pour compatibilité avec les tests
+    path('validation/', views.ValidationListView.as_view(), name='validation_liste'),
+    path('validation/<int:pk>/', views.ValidationDetailView.as_view(), name='validation_detail'),
+    path('validation/<int:pk>/approuver/', views.ApprouverEvenementView.as_view(), name='approuver'),
+    path('validation/<int:pk>/refuser/', views.RefuserEvenementView.as_view(), name='refuser'),
+    
+    # URLs alternatives pour les vues publiques
+    path('publics/', views.EvenementsPublicsView.as_view(), name='evenements_publics'),
+    path('publics/<int:pk>/', views.EvenementPublicDetailView.as_view(), name='evenement_public_detail'),
+    path('publics/calendrier/', views.CalendrierPublicView.as_view(), name='calendrier_public'),
+    
+    # Sessions alternatives
+    path('<int:evenement_pk>/sessions/', views.SessionListView.as_view(), name='sessions_liste'),
+    path('<int:evenement_pk>/sessions/nouvelle/', views.SessionCreateView.as_view(), name='sessions_creer'),
+    path('sessions/<int:pk>/', views.SessionDetailView.as_view(), name='sessions_detail'),
+    path('sessions/<int:pk>/modifier/', views.SessionUpdateView.as_view(), name='sessions_modifier'),
+    path('sessions/<int:pk>/supprimer/', views.SessionDeleteView.as_view(), name='sessions_supprimer'),
+    
+    # Accompagnants alternatives
+    path('inscriptions/<int:inscription_pk>/accompagnants/', views.AccompagnantListView.as_view(), name='accompagnants_liste'),
+    path('inscriptions/<int:inscription_pk>/accompagnants/nouveau/', views.AccompagnantCreateView.as_view(), name='accompagnants_creer'),
+    path('accompagnants/<int:pk>/', views.AccompagnantDetailView.as_view(), name='accompagnants_detail'),
+    path('accompagnants/<int:pk>/modifier/', views.AccompagnantUpdateView.as_view(), name='accompagnants_modifier'),
+    path('accompagnants/<int:pk>/supprimer/', views.AccompagnantDeleteView.as_view(), name='accompagnants_supprimer'),
+    
+    # Types d'événements alternatives
+    path('types/', views.TypeEvenementListView.as_view(), name='types_liste'),
+    path('types/nouveau/', views.TypeEvenementCreateView.as_view(), name='types_creer'),
+    path('types/<int:pk>/', views.TypeEvenementDetailView.as_view(), name='types_detail'),
+    path('types/<int:pk>/modifier/', views.TypeEvenementUpdateView.as_view(), name='types_modifier'),
+    path('types/<int:pk>/supprimer/', views.TypeEvenementDeleteView.as_view(), name='types_supprimer'),
+    
+    # Actions avancées
+    path('<int:pk>/dupliquer/', views.EvenementDuplicateView.as_view(), name='dupliquer'),
+    path('<int:pk>/publier/', views.PublierEvenementView.as_view(), name='publier'),
+    path('<int:pk>/annuler/', views.AnnulerEvenementView.as_view(), name='annuler'),
+    path('<int:pk>/reporter/', views.ReporterEvenementView.as_view(), name='reporter'),
+    path('<int:pk>/generer-occurrences/', views.GenererOccurrencesView.as_view(), name='generer_occurrences'),
     
     # URLs spéciales
     path('aide/', views.AideEvenementsView.as_view(), name='aide'),
@@ -209,26 +291,6 @@ urlpatterns = [
     path('cron/rappels/', views.CronRappelsView.as_view(), name='cron_rappels'),
     path('cron/nettoyage/', views.CronNettoyageView.as_view(), name='cron_nettoyage'),
     path('cron/statistiques/', views.CronStatistiquesView.as_view(), name='cron_statistiques'),
-]
-
-# URLs pour les vues publiques (sans authentification)
-public_patterns = [
-    # Événements publics
-    path('public/evenements/', views.EvenementsPublicsView.as_view(), name='evenements_publics'),
-    path('public/evenements/<int:pk>/', views.EvenementPublicDetailView.as_view(), name='evenement_public_detail'),
-    path('public/calendrier/', views.CalendrierPublicView.as_view(), name='calendrier_public'),
-    
-    # Confirmation d'inscription publique
-    path('public/confirmation/<str:code>/', views.ConfirmationPubliqueView.as_view(), name='confirmation_publique'),
-    
-    # Widget d'intégration
-    path('widget/prochains-evenements/', views.WidgetProchainsEvenementsView.as_view(), name='widget_prochains'),
-    path('widget/calendrier-mini/', views.WidgetCalendrierMiniView.as_view(), name='widget_calendrier'),
-]
-
-# Ajouter les patterns publics
-urlpatterns += [
-    path('public/', include(public_patterns)),
 ]
 
 # Gestion des erreurs spécifiques à l'application

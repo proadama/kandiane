@@ -1,0 +1,55 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Corbeille - Événements{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h1><i class="fas fa-trash"></i> Corbeille des Événements</h1>
+            
+            {% if object_list %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Titre</th>
+                                <th>Type</th>
+                                <th>Date</th>
+                                <th>Supprimé le</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for evenement in object_list %}
+                            <tr>
+                                <td>{{ evenement.titre }}</td>
+                                <td>{{ evenement.type_evenement.libelle }}</td>
+                                <td>{{ evenement.date_debut|date:"d/m/Y H:i" }}</td>
+                                <td>{{ evenement.deleted_at|date:"d/m/Y H:i" }}</td>
+                                <td>
+                                    <a href="{% url 'evenements:corbeille:restaurer_evenement' evenement.pk %}" 
+                                       class="btn btn-sm btn-success">
+                                        <i class="fas fa-undo"></i> Restaurer
+                                    </a>
+                                    <a href="{% url 'evenements:corbeille:supprimer_definitivement_evenement' evenement.pk %}" 
+                                       class="btn btn-sm btn-danger"
+                                       onclick="return confirm('Supprimer définitivement cet événement ?')">
+                                        <i class="fas fa-times"></i> Supprimer définitivement
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> La corbeille est vide.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

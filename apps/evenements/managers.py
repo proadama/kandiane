@@ -13,8 +13,8 @@ class TypeEvenementManager(BaseManager):
     """
     
     def actifs(self):
-        """Retourne les types d'événements actifs (non supprimés)"""
-        return self.get_queryset()
+        """Retourne les types d'événements actifs"""
+        return self.get_queryset().filter(actif=True)
     
     def necessitant_validation(self):
         """Retourne les types d'événements nécessitant une validation"""
@@ -27,6 +27,13 @@ class TypeEvenementManager(BaseManager):
     def par_ordre_affichage(self):
         """Retourne les types triés par ordre d'affichage"""
         return self.get_queryset().order_by('ordre_affichage', 'libelle')
+    
+    def avec_statistiques(self):
+        """Retourne les types avec le nombre d'événements associés"""
+        return self.get_queryset().annotate(
+            nb_evenements=Count('evenement'),
+            nb_evenements_actifs=Count('evenement', filter=Q(evenement__statut='publie'))
+        )
 
 
 class EvenementQuerySet(models.QuerySet):
@@ -65,8 +72,8 @@ class EvenementQuerySet(models.QuerySet):
         """Événements en cours"""
         now = timezone.now()
         return self.filter(
-            date_debut__lte=now,
-            Q(date_fin__gte=now) | Q(date_fin__isnull=True)
+            Q(date_debut__lte=now) &
+            (Q(date_fin__gte=now) | Q(date_fin__isnull=True))
         )
     
     def passes(self):
@@ -227,20 +234,49 @@ class EvenementManager(BaseManager):
         return EvenementQuerySet(self.model, using=self._db).filter(deleted_at__isnull=True)
     
     def publies(self):
-        """Événements publiés seulement"""
-        return self.get_queryset().publies()
+        """Retourne les événements publiés"""
+        return self.get_queryset().filter(statut='publie')
     
     def a_venir(self):
-        """Événements futurs"""
-        return self.get_queryset().a_venir()
+        """Retourne les événements à venir"""
+        return self.get_queryset().filter(date_debut__gte=timezone.now())
     
     def en_cours(self):
         """Événements en cours"""
         return self.get_queryset().en_cours()
     
     def passes(self):
-        """Événements passés"""
-        return self.get_queryset().passes()
+        """Retourne les événements passés"""
+        return self.get_queryset().filter(date_fin__lt=timezone.now())
+    
+    def aujourd_hui(self):
+        """Retourne les événements d'aujourd'hui"""
+        aujourdhui = timezone.now().date()
+        return self.get_queryset().filter(
+            date_debut__date__lte=aujourdhui,
+            date_fin__date__gte=aujourdhui
+        )
+    
+    def cette_semaine(self):
+        """Retourne les événements de cette semaine"""
+        debut_semaine = timezone.now().date()
+        fin_semaine = debut_semaine + timedelta(days=7)
+        return self.get_queryset().filter(
+            date_debut__date__range=(debut_semaine, fin_semaine)
+        )
+    
+    def ce_mois(self):
+        """Retourne les événements de ce mois"""
+        maintenant = timezone.now()
+        debut_mois = maintenant.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if maintenant.month == 12:
+            fin_mois = debut_mois.replace(year=maintenant.year + 1, month=1) - timedelta(seconds=1)
+        else:
+            fin_mois = debut_mois.replace(month=maintenant.month + 1) - timedelta(seconds=1)
+        
+        return self.get_queryset().filter(
+            date_debut__range=(debut_mois, fin_mois)
+        )
     
     def inscriptions_ouvertes(self):
         """Événements avec inscriptions ouvertes"""
@@ -254,17 +290,34 @@ class EvenementManager(BaseManager):
         """Événements complets"""
         return self.get_queryset().complets()
     
-    def par_organisateur(self, organisateur):
-        """Événements d'un organisateur"""
-        return self.get_queryset().par_organisateur(organisateur)
+    def par_organisateur(self, utilisateur):
+        """Retourne les événements organisés par un utilisateur"""
+        return self.get_queryset().filter(organisateur=utilisateur)
+    
+    def populaires(self, limite=10):
+        """Retourne les événements les plus populaires"""
+        return self.avec_statistiques().order_by('-nb_inscriptions_confirmees')[:limite]
     
     def recherche(self, query):
-        """Recherche textuelle"""
-        return self.get_queryset().recherche(query)
+        """Recherche dans les événements"""
+        if not query:
+            return self.get_queryset()
+        
+        return self.get_queryset().filter(
+            Q(titre__icontains=query) |
+            Q(description__icontains=query) |
+            Q(lieu__icontains=query) |
+            Q(type_evenement__libelle__icontains=query)
+        )
     
     def avec_statistiques(self):
-        """Événements avec statistiques d'inscriptions"""
-        return self.get_queryset().avec_statistiques()
+        """Retourne les événements avec leurs statistiques d'inscription"""
+        return self.get_queryset().annotate(
+            nb_inscriptions=Count('inscriptions'),
+            nb_inscriptions_confirmees=Count('inscriptions', filter=Q(inscriptions__statut='confirmee')),
+            nb_places_prises=Sum('inscriptions__nombre_accompagnants', filter=Q(inscriptions__statut='confirmee')),
+            taux_occupation=Sum('inscriptions__nombre_accompagnants', filter=Q(inscriptions__statut='confirmee')) * 100.0 / F('capacite_max')
+        )
     
     def necessitant_validation(self):
         """Événements nécessitant une validation"""
@@ -274,17 +327,9 @@ class EvenementManager(BaseManager):
         )
     
     def prochains_pour_membre(self, membre, limite=5):
-        """Prochains événements auxquels un membre peut s'inscrire"""
-        from .models import InscriptionEvenement
-        
-        # Événements où le membre n'est pas déjà inscrit
-        evenements_inscrits = InscriptionEvenement.objects.filter(
-            membre=membre,
-            statut__in=['en_attente', 'confirmee', 'liste_attente']
-        ).values_list('evenement_id', flat=True)
-        
-        return self.get_queryset().publies().a_venir().inscriptions_ouvertes().exclude(
-            id__in=evenements_inscrits
+        """Retourne les prochains événements recommandés pour un membre"""
+        return self.publies().a_venir().exclude(
+            inscriptions__membre=membre
         ).order_by('date_debut')[:limite]
     
     def statistiques_periode(self, date_debut=None, date_fin=None):
@@ -434,16 +479,28 @@ class InscriptionEvenementManager(BaseManager):
         return InscriptionEvenementQuerySet(self.model, using=self._db).filter(deleted_at__isnull=True)
     
     def confirmees(self):
-        """Inscriptions confirmées"""
-        return self.get_queryset().confirmees()
+        """Retourne les inscriptions confirmées"""
+        return self.get_queryset().filter(statut='confirmee')
     
-    def en_attente_confirmation(self):
-        """Inscriptions en attente de confirmation"""
-        return self.get_queryset().en_attente()
+    def en_attente(self):
+        """Retourne les inscriptions en attente de confirmation"""
+        return self.get_queryset().filter(statut='en_attente')
+    
+    def annulees(self):
+        """Retourne les inscriptions annulées"""
+        return self.get_queryset().filter(statut='annulee')
     
     def liste_attente(self):
-        """Inscriptions en liste d'attente"""
-        return self.get_queryset().liste_attente()
+        """Retourne les inscriptions en liste d'attente"""
+        return self.get_queryset().filter(statut='liste_attente')
+    
+    def presentees(self):
+        """Retourne les inscriptions où la personne était présente"""
+        return self.get_queryset().filter(statut='presente')
+    
+    def en_attente_confirmation(self):
+        """Retourne les inscriptions en attente de confirmation email"""
+        return self.get_queryset().filter(statut='en_attente_confirmation')
     
     def actives(self):
         """Inscriptions actives"""
@@ -454,12 +511,19 @@ class InscriptionEvenementManager(BaseManager):
         return self.get_queryset().valides()
     
     def par_evenement(self, evenement):
-        """Inscriptions pour un événement"""
-        return self.get_queryset().par_evenement(evenement)
+        """Retourne les inscriptions pour un événement spécifique"""
+        return self.get_queryset().filter(evenement=evenement)
     
     def par_membre(self, membre):
-        """Inscriptions d'un membre"""
-        return self.get_queryset().par_membre(membre)
+        """Retourne les inscriptions d'un membre spécifique"""
+        return self.get_queryset().filter(membre=membre)
+    
+    def avec_paiement_en_attente(self):
+        """Retourne les inscriptions avec paiement en attente"""
+        return self.get_queryset().filter(
+            statut__in=['confirmee', 'en_attente'],
+            montant_du__gt=0
+        )
     
     def en_retard_confirmation(self):
         """Inscriptions en retard de confirmation"""
@@ -478,17 +542,20 @@ class InscriptionEvenementManager(BaseManager):
         return self.get_queryset().avec_details_paiement()
     
     def statistiques_membre(self, membre):
-        """Statistiques d'inscription pour un membre"""
-        queryset = self.get_queryset().par_membre(membre)
-        
-        return queryset.aggregate(
-            total_inscriptions=Count('id'),
-            inscriptions_confirmees=Count('id', filter=Q(statut='confirmee')),
-            inscriptions_annulees=Count('id', filter=Q(statut='annulee')),
-            inscriptions_presentes=Count('id', filter=Q(statut='presente')),
-            total_accompagnants=Sum('nombre_accompagnants'),
-            montant_total_paye=Sum('montant_paye')
-        )
+        """Retourne les statistiques d'inscription d'un membre"""
+        inscriptions = self.par_membre(membre)
+        return {
+            'total_inscriptions': inscriptions.count(),
+            'inscriptions_confirmees': inscriptions.confirmees().count(),
+            'inscriptions_presentees': inscriptions.presentees().count(),
+            'montant_total_paye': inscriptions.aggregate(
+                total=Sum('montant_paye')
+            )['total'] or 0,
+            'prochaines_inscriptions': inscriptions.filter(
+                evenement__date_debut__gte=timezone.now(),
+                statut__in=['confirmee', 'en_attente']
+            ).count()
+        }
     
     def statistiques_evenement(self, evenement):
         """Statistiques d'inscription pour un événement"""
@@ -537,8 +604,8 @@ class AccompagnantInviteManager(BaseManager):
         return self.get_queryset().filter(est_accompagnant=False)
     
     def confirmes(self):
-        """Accompagnants/invités confirmés"""
-        return self.get_queryset().filter(statut='confirme')
+        """Retourne les accompagnants confirmés"""
+        return self.get_queryset().filter(confirme=True)
     
     def en_attente(self):
         """En attente de réponse"""
@@ -553,7 +620,7 @@ class AccompagnantInviteManager(BaseManager):
         return self.get_queryset().filter(statut='present')
     
     def par_inscription(self, inscription):
-        """Accompagnants pour une inscription"""
+        """Retourne les accompagnants d'une inscription"""
         return self.get_queryset().filter(inscription=inscription)
     
     def par_evenement(self, evenement):
@@ -572,26 +639,27 @@ class ValidationEvenementManager(BaseManager):
     
     def en_attente(self):
         """Validations en attente"""
+        # CORRECTION : Utiliser statut_validation au lieu de statut
         return self.get_queryset().filter(statut_validation='en_attente')
     
     def approuvees(self):
-        """Validations approuvées"""
-        return self.get_queryset().filter(statut_validation='approuve')
+        """Retourne les validations approuvées"""
+        return self.get_queryset().filter(statut='approuvee')
     
     def refusees(self):
-        """Validations refusées"""
-        return self.get_queryset().filter(statut_validation='refuse')
+        """Retourne les validations refusées"""
+        return self.get_queryset().filter(statut='refusee')
     
-    def par_validateur(self, validateur):
-        """Validations par un validateur"""
-        return self.get_queryset().filter(validateur=validateur)
-    
-    def urgentes(self, jours=7):
-        """Validations urgentes (événements dans X jours)"""
-        limite = timezone.now() + timedelta(days=jours)
+    def urgentes(self, jours=3):
+        """Retourne les validations urgentes (événement proche)"""
+        limite_date = timezone.now() + timedelta(days=jours)
         return self.en_attente().filter(
-            evenement__date_debut__lte=limite
+            evenement__date_debut__lte=limite_date
         )
+    
+    def par_validateur(self, utilisateur):
+        """Retourne les validations effectuées par un validateur"""
+        return self.get_queryset().filter(validateur=utilisateur)
     
     def statistiques_validateur(self, validateur):
         """Statistiques de validation pour un validateur"""
@@ -611,8 +679,8 @@ class SessionEvenementManager(BaseManager):
     """
     
     def par_evenement(self, evenement):
-        """Sessions pour un événement"""
-        return self.get_queryset().filter(evenement_parent=evenement)
+        """Retourne les sessions d'un événement"""
+        return self.get_queryset().filter(evenement=evenement).order_by('ordre_session')
     
     def obligatoires(self):
         """Sessions obligatoires"""
@@ -629,6 +697,10 @@ class SessionEvenementManager(BaseManager):
     def chronologique(self):
         """Sessions triées par ordre chronologique"""
         return self.get_queryset().order_by('date_debut_session')
+    
+    def actives(self):
+        """Retourne les sessions actives"""
+        return self.get_queryset().filter(active=True)
 
 
 class EvenementRecurrenceManager(BaseManager):

@@ -1,0 +1,433 @@
+{% extends "evenements/base_evenement.html" %}
+{% load static %}
+
+{% block page_title %}Tableau de bord{% endblock page_title %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+.stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 15px;
+    color: white;
+    transition: transform 0.3s ease;
+}
+.stat-card:hover {
+    transform: translateY(-5px);
+}
+.stat-card .card-body {
+    padding: 1.5rem;
+}
+.stat-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    line-height: 1;
+}
+.stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+.quick-action-card {
+    border: 2px dashed #dee2e6;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+.quick-action-card:hover {
+    border-color: #007bff;
+    background-color: #f8f9fa;
+}
+.event-timeline {
+    position: relative;
+    padding-left: 30px;
+}
+.event-timeline::before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #dee2e6;
+}
+.timeline-item {
+    position: relative;
+    margin-bottom: 1rem;
+}
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -22px;
+    top: 8px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #007bff;
+    border: 3px solid white;
+    box-shadow: 0 0 0 3px #dee2e6;
+}
+</style>
+{% endblock extra_css %}
+
+{% block evenement_content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-calendar-alt text-primary me-2"></i>
+                    Tableau de bord des événements
+                </h1>
+                <p class="text-muted">Vue d'ensemble de vos événements et inscriptions</p>
+            </div>
+            <div>
+                {% if user.is_staff %}
+                <a href="{% url 'evenements:creer' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>Nouvel événement
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if user.is_staff %}
+<!-- Statistiques générales pour le staff -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <div class="stat-value">{{ total_evenements|default:0 }}</div>
+                <div class="stat-label">Événements total</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <div class="stat-value">{{ evenements_publies|default:0 }}</div>
+                <div class="stat-label">Événements publiés</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <div class="stat-value">{{ evenements_a_valider|default:0 }}</div>
+                <div class="stat-label">À valider</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <div class="stat-value">{{ inscriptions_en_attente|default:0 }}</div>
+                <div class="stat-label">Inscriptions en attente</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Actions rapides pour le staff -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h4 class="mb-3">Actions rapides</h4>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card quick-action-card h-100" onclick="location.href='{% url 'evenements:creer' %}'">
+            <div class="card-body text-center">
+                <i class="fas fa-plus fa-2x text-primary mb-2"></i>
+                <h6>Créer un événement</h6>
+                <small class="text-muted">Organiser un nouvel événement</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card quick-action-card h-100" onclick="location.href='{% url 'evenements:validation:liste' %}'">
+            <div class="card-body text-center">
+                <i class="fas fa-check fa-2x text-warning mb-2"></i>
+                <h6>Valider des événements</h6>
+                <small class="text-muted">{{ evenements_a_valider|default:0 }} en attente</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card quick-action-card h-100" onclick="location.href='{% url 'evenements:rapports:dashboard' %}'">
+            <div class="card-body text-center">
+                <i class="fas fa-chart-bar fa-2x text-info mb-2"></i>
+                <h6>Voir les rapports</h6>
+                <small class="text-muted">Statistiques détaillées</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card quick-action-card h-100" onclick="location.href='{% url 'evenements:types:liste' %}'">
+            <div class="card-body text-center">
+                <i class="fas fa-tags fa-2x text-success mb-2"></i>
+                <h6>Gérer les types</h6>
+                <small class="text-muted">Types d'événements</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <!-- Colonne principale -->
+    <div class="col-lg-8">
+        {% if user.is_staff %}
+        <!-- Prochains événements -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-calendar-plus me-2"></i>Prochains événements
+                </h5>
+                <a href="{% url 'evenements:liste' %}" class="btn btn-sm btn-outline-primary">Voir tous</a>
+            </div>
+            <div class="card-body">
+                {% if prochains_evenements %}
+                    <div class="event-timeline">
+                        {% for evenement in prochains_evenements %}
+                        <div class="timeline-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">
+                                        <a href="{% url 'evenements:detail' evenement.pk %}" class="text-decoration-none">
+                                            {{ evenement.titre }}
+                                        </a>
+                                    </h6>
+                                    <small class="text-muted d-block">
+                                        <i class="fas fa-clock me-1"></i>{{ evenement.date_debut|date:"d/m/Y H:i" }}
+                                    </small>
+                                    <small class="text-muted d-block">
+                                        <i class="fas fa-map-marker-alt me-1"></i>{{ evenement.lieu }}
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-{{ evenement.statut|yesno:'success,warning,danger' }}">
+                                        {{ evenement.get_statut_display }}
+                                    </span>
+                                    <div class="small text-muted mt-1">
+                                        <i class="fas fa-users me-1"></i>
+                                        {{ evenement.inscriptions.count }}/{{ evenement.capacite_max }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Aucun événement à venir</p>
+                        <a href="{% url 'evenements:creer' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-1"></i>Créer le premier événement
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Mes prochaines inscriptions (pour les membres) -->
+        {% if mes_prochaines_inscriptions %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-ticket-alt me-2"></i>Mes prochaines participations
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for inscription in mes_prochaines_inscriptions %}
+                <div class="d-flex justify-content-between align-items-center mb-3 p-3 border rounded">
+                    <div>
+                        <h6 class="mb-1">
+                            <a href="{% url 'evenements:detail' inscription.evenement.pk %}" class="text-decoration-none">
+                                {{ inscription.evenement.titre }}
+                            </a>
+                        </h6>
+                        <small class="text-muted d-block">
+                            <i class="fas fa-clock me-1"></i>{{ inscription.evenement.date_debut|date:"d/m/Y H:i" }}
+                        </small>
+                        <small class="text-muted">
+                            <i class="fas fa-map-marker-alt me-1"></i>{{ inscription.evenement.lieu }}
+                        </small>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-{{ inscription.statut|yesno:'success,warning,info' }}">
+                            {{ inscription.get_statut_display }}
+                        </span>
+                        {% if inscription.statut == 'en_attente' %}
+                        <div class="mt-2">
+                            <a href="{% url 'evenements:inscription_detail' inscription.pk %}" 
+                               class="btn btn-sm btn-primary">Confirmer</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+                <div class="text-center">
+                    <a href="{% url 'evenements:mes_inscriptions' %}" class="btn btn-outline-primary">
+                        Voir toutes mes inscriptions
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Événements recommandés -->
+        {% if evenements_recommandes %}
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-star me-2"></i>Événements recommandés
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for evenement in evenements_recommandes %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card border-0 shadow-sm h-100">
+                            {% if evenement.image %}
+                            <img src="{{ evenement.image.url }}" class="card-img-top" style="height: 150px; object-fit: cover;">
+                            {% endif %}
+                            <div class="card-body">
+                                <h6 class="card-title">{{ evenement.titre }}</h6>
+                                <p class="card-text small">{{ evenement.description|truncatewords:15 }}</p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>{{ evenement.date_debut|date:"d/m" }}
+                                    </small>
+                                    <a href="{% url 'evenements:detail' evenement.pk %}" class="btn btn-sm btn-primary">
+                                        Voir détails
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        {% if user.is_staff %}
+        <!-- Validations urgentes -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h6 class="mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Validations urgentes
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if validations_urgentes %}
+                    {% for validation in validations_urgentes %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="flex-grow-1">
+                            <small class="fw-bold">{{ validation.evenement.titre|truncatechars:25 }}</small>
+                            <br>
+                            <small class="text-muted">{{ validation.evenement.date_debut|date:"d/m H:i" }}</small>
+                        </div>
+                        <a href="{% url 'evenements:validation:detail' validation.pk %}" 
+                           class="btn btn-sm btn-warning">Valider</a>
+                    </div>
+                    {% endfor %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'evenements:validation:liste' %}" class="btn btn-sm btn-outline-warning">
+                            Voir toutes
+                        </a>
+                    </div>
+                {% else %}
+                    <p class="text-center text-muted mb-0">
+                        <i class="fas fa-check-circle fa-2x d-block mb-2"></i>
+                        Aucune validation urgente
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Mes événements (pour organisateurs) -->
+        {% if mes_evenements %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-user-tie me-2"></i>Mes événements organisés
+                </h6>
+            </div>
+            <div class="card-body">
+                {% for evenement in mes_evenements %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="flex-grow-1">
+                        <small class="fw-bold">{{ evenement.titre|truncatechars:20 }}</small>
+                        <br>
+                        <small class="text-muted">{{ evenement.date_debut|date:"d/m H:i" }}</small>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-primary">{{ evenement.inscriptions.count }}</span>
+                        <br>
+                        <a href="{% url 'evenements:detail' evenement.pk %}" class="btn btn-sm btn-outline-primary mt-1">
+                            Gérer
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <!-- Statistiques personnelles -->
+        {% if historique_participations %}
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>Mes statistiques
+                </h6>
+            </div>
+            <div class="card-body text-center">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="stat-value text-primary">{{ historique_participations }}</div>
+                        <div class="stat-label small">Participations</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-value text-success">{{ mes_prochaines_inscriptions.count|default:0 }}</div>
+                        <div class="stat-label small">À venir</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock evenement_content %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Animation des cartes statistiques
+    const statCards = document.querySelectorAll('.stat-card');
+    statCards.forEach((card, index) => {
+        setTimeout(() => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'all 0.5s ease';
+            setTimeout(() => {
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, 100);
+        }, index * 100);
+    });
+
+    // Mise à jour automatique des statistiques (optionnel)
+    setInterval(function() {
+        // Ici on pourrait ajouter une requête AJAX pour mettre à jour les stats
+        // en temps réel si nécessaire
+    }, 30000); // 30 secondes
+});
+</script>
+{% endblock extra_js %}

@@ -9,7 +9,7 @@ Ce guide détaille comment l'application événements s'intègre avec les autres
 ### **Modules Connectés**
 ```
                     ┌─────────────────┐
-                    │   ÉVÉNEMENTS   │
+                    │   ÉVÉNEMENTS    │
                     │   (Principal)   │
                     └─────────────────┘
                             │
