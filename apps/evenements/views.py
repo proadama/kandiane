@@ -73,11 +73,14 @@ class DashboardEvenementView(LoginRequiredMixin, TemplateView):
                         membre=membre, statut='presente'
                     ).count(),
                 })
-            except:
+            except Exception:
+                # Si pas de membre, on continue sans erreur
                 pass
         
         # Données administratives pour staff uniquement
         if user.is_staff:
+            date_debut = timezone.now().replace(day=1) - timedelta(days=365)
+            
             context.update({
                 'total_evenements': Evenement.objects.count(),
                 'evenements_publies': Evenement.objects.filter(statut='publie').count(),
@@ -90,9 +93,54 @@ class DashboardEvenementView(LoginRequiredMixin, TemplateView):
                 'prochains_evenements': Evenement.objects.filter(
                     date_debut__gte=timezone.now()
                 ).order_by('date_debut')[:5],
+                'graphiques_data': self._preparer_donnees_graphiques(date_debut),
             })
         
         return context
+    
+    def _preparer_donnees_graphiques(self, date_debut):
+        """Préparer les données pour les graphiques du dashboard"""
+        try:
+            # CORRECTION : Utiliser le bon nom de relation
+            types_populaires = TypeEvenement.objects.annotate(
+                nb_evenements=Count('evenement')  # 'evenement' au lieu de 'evenements'
+            ).filter(
+                evenement__date_debut__gte=date_debut
+            ).order_by('-nb_evenements')[:5]
+            
+            # Évolution mensuelle des événements
+            evolution_mensuelle = []
+            current_date = date_debut
+            
+            for i in range(12):
+                month_start = current_date.replace(day=1)
+                if current_date.month == 12:
+                    month_end = current_date.replace(year=current_date.year + 1, month=1, day=1)
+                else:
+                    month_end = current_date.replace(month=current_date.month + 1, day=1)
+                
+                count = Evenement.objects.filter(
+                    date_debut__gte=month_start,
+                    date_debut__lt=month_end
+                ).count()
+                
+                evolution_mensuelle.append({
+                    'mois': current_date.strftime('%B'),
+                    'nb_evenements': count
+                })
+                
+                current_date = month_end
+            
+            return {
+                'types_populaires': types_populaires,
+                'evolution_mensuelle': evolution_mensuelle
+            }
+        except Exception as e:
+            # En cas d'erreur, retourner des données vides
+            return {
+                'types_populaires': [],
+                'evolution_mensuelle': []
+            }
     
 # =============================================================================
 # VUES ÉVÉNEMENTS
@@ -107,7 +155,6 @@ class EvenementListView(LoginRequiredMixin, ListView):
     context_object_name = 'evenements'
     paginate_by = 20
     
-    # CORRECTION : Pas de StaffRequiredMixin ici
     def get_queryset(self):
         # Tous les utilisateurs connectés voient les événements publiés
         if self.request.user.is_staff:
@@ -130,20 +177,6 @@ class EvenementListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = EvenementSearchForm(self.request.GET)
-        
-        # CORRECTION : Utiliser les URLs directes au lieu des namespaces
-        try:
-            context['ajax_urls'] = {
-                'autocomplete_organisateurs': reverse('evenements:autocomplete_organisateurs'),
-                'autocomplete_lieux': reverse('evenements:autocomplete_lieux'),
-            }
-        except:
-            # Fallback si les URLs n'existent pas encore
-            context['ajax_urls'] = {
-                'autocomplete_organisateurs': '#',
-                'autocomplete_lieux': '#',
-            }
-        
         return context
 
 class EvenementDetailView(LoginRequiredMixin, DetailView):
@@ -1433,15 +1466,15 @@ class AutocompleteOrganisateursView(StaffRequiredMixin, AjaxRequiredMixin, View)
             return JsonResponse({'results': []})
         
         # Rechercher parmi les membres actifs
-        organisateurs = Membre.objects.filter(
+        membres = Membre.objects.filter(
             Q(nom__icontains=query) | Q(prenom__icontains=query) | Q(email__icontains=query),
             deleted_at__isnull=True
         ).select_related('utilisateur')[:10]
         
         results = []
-        for membre in organisateurs:
+        for membre in membres:
             results.append({
-                'id': membre.utilisateur.id,
+                'id': membre.utilisateur.id if membre.utilisateur else membre.id,
                 'text': f"{membre.prenom} {membre.nom} ({membre.email})",
                 'nom_complet': f"{membre.prenom} {membre.nom}",
                 'email': membre.email,

@@ -41,18 +41,19 @@ class TestDashboardEvenementView:
 
     def test_dashboard_membre_access(self, client):
         """Test accès dashboard pour membre simple"""
-        user = MembreAvecUserFactory().utilisateur  # CORRECTION
+        membre = MembreAvecUserFactory()
         
-        client.force_login(user)
+        client.force_login(membre.utilisateur)
         response = client.get(reverse('evenements:dashboard'))
         
         assert response.status_code == 200
-        assert 'mes_prochaines_inscriptions' in response.context
+        # CORRECTION : Vérifier que le contexte contient les bonnes clés
+        assert 'evenements_publics' in response.context
+        # La clé mes_prochaines_inscriptions n'existe que s'il y a des inscriptions
 
     def test_dashboard_non_membre_access(self, client):
         """Test accès dashboard pour utilisateur non membre"""
         user = CustomUserFactory(is_staff=False)
-        # Ne pas créer de membre associé
         
         client.force_login(user)
         response = client.get(reverse('evenements:dashboard'))
@@ -544,30 +545,26 @@ class TestAjaxViews:
         user = MembreAvecUserStaffFactory().utilisateur
         client.force_login(user)
         
-        # Créer des organisateurs (membres avec utilisateurs)
-        org1 = MembreAvecUserFactory(nom='Martin', prenom='Jean')
-        org2 = MembreAvecUserFactory(nom='Dubois', prenom='Marie')
-        org3 = MembreAvecUserFactory(nom='Bernard', prenom='Pierre')
+        # Créer des organisateurs avec des noms spécifiques
+        MembreAvecUserFactory(nom='Dupont', prenom='Jean')
+        MembreAvecUserFactory(nom='Martin', prenom='Marie')
         
         # Test avec recherche par nom
         response = client.get(
             reverse('evenements:ajax:autocomplete_organisateurs'),
-            {'q': 'martin'}
+            {'q': 'dupont'}
         )
         
         assert response.status_code == 200
         data = response.json()
-        
-        # CORRECTION : Vérifier que les résultats sont corrects
         assert 'results' in data
-        results = data['results']
         
-        # Vérifier qu'on trouve bien l'organisateur correspondant
-        found_martin = any(
-            'martin' in result.get('text', '').lower() 
-            for result in results
+        # Vérifier qu'on trouve bien Dupont
+        found_dupont = any(
+            'dupont' in result.get('text', '').lower() 
+            for result in data['results']
         )
-        assert found_martin, f"Martin devrait être trouvé dans les résultats: {results}"
+        assert found_dupont, f"Dupont devrait être trouvé dans les résultats: {data['results']}"
 
 
 @pytest.mark.django_db

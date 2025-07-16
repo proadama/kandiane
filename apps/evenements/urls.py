@@ -219,12 +219,15 @@ urlpatterns = [
     # Sous-patterns organisés
     path('evenements/', include(evenements_patterns)),
     path('inscriptions/', include(inscriptions_patterns)),
-    path('validation/', include(validation_patterns)),
+    # path('validation/', include(validation_patterns)),
+    path('validation/', include((validation_patterns, 'validation'), namespace='validation')),
     path('types/', include(types_patterns)),
     path('export/', include(export_patterns)),
     path('rapports/', include(rapports_patterns)),
-    path('ajax/', include(ajax_patterns)),
-    path('corbeille/', include(corbeille_patterns)),
+    # path('ajax/', include(ajax_patterns)),
+    path('ajax/', include((ajax_patterns, 'ajax'), namespace='ajax')),
+    # path('corbeille/', include(corbeille_patterns)),
+    path('corbeille/', include((corbeille_patterns, 'corbeille'), namespace='corbeille')),
     path('api/', include(api_patterns)),
     path('public/', include(public_patterns)),
     

@@ -167,12 +167,10 @@ class EvenementFactory(DjangoModelFactory):
     adresse_complete = factory.Faker('address', locale='fr_FR')
     capacite_max = factory.LazyFunction(lambda: random.randint(10, 100))
     
-    # CORRECTION FINALE : Créer un utilisateur qui EST un membre
-    organisateur = factory.LazyFunction(lambda: MembreFactory().utilisateur)
+    # CORRECTION : Créer un membre avec utilisateur pour l'organisateur
+    organisateur = factory.LazyAttribute(lambda obj: MembreAvecUserFactory().utilisateur)
     
-    # statut = factory.Iterator(['brouillon', 'publie', 'en_attente_validation'])
     statut = 'publie'
-    # Inscriptions et tarifs
     inscriptions_ouvertes = True
     
     # CORRECTION : Par défaut événement gratuit pour simplifier les tests
