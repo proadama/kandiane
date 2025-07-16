@@ -60,22 +60,22 @@ class DashboardEvenementView(LoginRequiredMixin, TemplateView):
         ).order_by('date_debut')[:5]
         
         # Données supplémentaires pour les membres
-        if hasattr(user, 'membre_utilisateur'):
-            try:
-                membre = user.membre_utilisateur
-                context.update({
-                    'mes_prochaines_inscriptions': InscriptionEvenement.objects.filter(
-                        membre=membre,
-                        evenement__date_debut__gte=timezone.now(),
-                        statut__in=['confirmee', 'en_attente']
-                    ).select_related('evenement')[:5],
-                    'historique_participations': InscriptionEvenement.objects.filter(
-                        membre=membre, statut='presente'
-                    ).count(),
-                })
-            except Exception:
-                # Si pas de membre, on continue sans erreur
-                pass
+        try:
+            # CORRECTION : Utiliser la bonne façon de récupérer le membre
+            membre = Membre.objects.get(utilisateur=user)
+            context.update({
+                'mes_prochaines_inscriptions': InscriptionEvenement.objects.filter(
+                    membre=membre,
+                    evenement__date_debut__gte=timezone.now(),
+                    statut__in=['confirmee', 'en_attente']
+                ).select_related('evenement')[:5],
+                'historique_participations': InscriptionEvenement.objects.filter(
+                    membre=membre, statut='presente'
+                ).count(),
+            })
+        except Membre.DoesNotExist:
+            # Si pas de membre, on continue sans erreur
+            pass
         
         # Données administratives pour staff uniquement
         if user.is_staff:
@@ -156,11 +156,12 @@ class EvenementListView(LoginRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        # Tous les utilisateurs connectés voient les événements publiés
+        # CORRECTION : Tous les utilisateurs connectés peuvent voir les événements publiés
+        queryset = Evenement.objects.filter(statut='publie')
+        
+        # Les staff peuvent voir tous les événements
         if self.request.user.is_staff:
             queryset = Evenement.objects.all()
-        else:
-            queryset = Evenement.objects.filter(statut='publie')
         
         # Appliquer les filtres de recherche
         form = EvenementSearchForm(self.request.GET)
@@ -636,9 +637,9 @@ class RefuserEvenementView(StaffRequiredMixin, View):
 # VUES UTILITAIRES ET AJAX
 # =============================================================================
 
-class CheckPlacesDisponiblesView(AjaxRequiredMixin, View):
+class CheckPlacesDisponiblesView(LoginRequiredMixin, View):
     """
-    Vérification AJAX des places disponibles
+    Vérification des places disponibles (AJAX optionnel)
     """
     
     def get(self, request, pk):
@@ -1403,9 +1404,9 @@ class ConfigurerRecurrenceView(StaffRequiredMixin, FormView):
 # VUES AJAX ET API
 # =============================================================================
 
-class CalculerTarifView(LoginRequiredMixin, AjaxRequiredMixin, View):
+class CalculerTarifView(LoginRequiredMixin, View):
     """
-    Calcul AJAX du tarif pour un membre
+    Calcul du tarif pour un membre (AJAX optionnel)
     """
     
     def get(self, request, pk):
@@ -1455,9 +1456,9 @@ class CheckPeutInscrireView(LoginRequiredMixin, AjaxRequiredMixin, View):
             })
 
 
-class AutocompleteOrganisateursView(StaffRequiredMixin, AjaxRequiredMixin, View):
+class AutocompleteOrganisateursView(StaffRequiredMixin, View):
     """
-    Autocomplétion AJAX pour les organisateurs
+    Autocomplétion pour les organisateurs (AJAX optionnel)
     """
     
     def get(self, request):
@@ -1473,12 +1474,13 @@ class AutocompleteOrganisateursView(StaffRequiredMixin, AjaxRequiredMixin, View)
         
         results = []
         for membre in membres:
-            results.append({
-                'id': membre.utilisateur.id if membre.utilisateur else membre.id,
-                'text': f"{membre.prenom} {membre.nom} ({membre.email})",
-                'nom_complet': f"{membre.prenom} {membre.nom}",
-                'email': membre.email,
-            })
+            if membre.utilisateur:
+                results.append({
+                    'id': membre.utilisateur.id,
+                    'text': f"{membre.prenom} {membre.nom} ({membre.email})",
+                    'nom_complet': f"{membre.prenom} {membre.nom}",
+                    'email': membre.email,
+                })
         
         return JsonResponse({'results': results})
 

@@ -144,14 +144,13 @@ rapports_patterns = [
 ajax_patterns = [
     # Vérification disponibilité
     path('evenements/<int:pk>/places-disponibles/', views.CheckPlacesDisponiblesView.as_view(), name='places_disponibles'),
-    # path('places-disponibles/<int:pk>/', views.CheckPlacesDisponiblesView.as_view(), name='ajax_places_disponibles'),
     path('ajax/places-disponibles/<int:pk>/', views.CheckPlacesDisponiblesView.as_view(), name='places_disponibles'),
     path('evenements/<int:pk>/peut-inscrire/', views.CheckPeutInscrireView.as_view(), name='peut_inscrire'),
     
     # Calculs dynamiques
     path('evenements/<int:pk>/calculer-tarif/', views.CalculerTarifView.as_view(), name='calculer_tarif'),
-    # path('calculer-tarif/', views.CalculerTarifView.as_view(), name='ajax_calculer_tarif'),
-    path('ajax/calculer-tarif/<int:pk>/', views.CalculerTarifView.as_view(), name='calculer_tarif'),
+    path('calculer-tarif/', views.CalculerTarifView.as_view(), name='ajax_calculer_tarif'),
+    # path('ajax/calculer-tarif/<int:pk>/', views.CalculerTarifView.as_view(), name='calculer_tarif'),
     path('inscriptions/<int:pk>/calculer-montant/', views.CalculerMontantInscriptionView.as_view(), name='calculer_montant'),
     
     # Auto-complétion
@@ -179,9 +178,10 @@ corbeille_patterns = [
     path('inscriptions/', views.CorbeilleInscriptionsView.as_view(), name='inscriptions'),
     path('evenements/<int:pk>/restaurer/', views.RestaurerEvenementView.as_view(), name='restaurer_evenement'),
     path('<int:pk>/restaurer/', views.RestaurerEvenementView.as_view(), name='restaurer_evenement'),
+    path('corbeille/evenements/<int:pk>/restaurer/', views.RestaurerEvenementView.as_view(), name='restaurer_evenement'),
     path('inscriptions/<int:pk>/restaurer/', views.RestaurerInscriptionView.as_view(), name='restaurer_inscription'),
     path('evenements/<int:pk>/supprimer-definitivement/', views.SupprimerDefinitivementEvenementView.as_view(), name='supprimer_definitivement_evenement'),
-    path('corbeille-evenements/', views.CorbeilleEvenementsView.as_view(), name='corbeille_evenements'),  # AJOUTER
+    path('corbeille-evenements/', views.CorbeilleEvenementsView.as_view(), name='corbeille_evenements'),
 ]
 
 # URLs pour l'API publique
@@ -219,14 +219,11 @@ urlpatterns = [
     # Sous-patterns organisés
     path('evenements/', include(evenements_patterns)),
     path('inscriptions/', include(inscriptions_patterns)),
-    # path('validation/', include(validation_patterns)),
     path('validation/', include((validation_patterns, 'validation'), namespace='validation')),
     path('types/', include(types_patterns)),
     path('export/', include(export_patterns)),
     path('rapports/', include(rapports_patterns)),
-    # path('ajax/', include(ajax_patterns)),
     path('ajax/', include((ajax_patterns, 'ajax'), namespace='ajax')),
-    # path('corbeille/', include(corbeille_patterns)),
     path('corbeille/', include((corbeille_patterns, 'corbeille'), namespace='corbeille')),
     path('api/', include(api_patterns)),
     path('public/', include(public_patterns)),
@@ -236,6 +233,7 @@ urlpatterns = [
     path('validation/<int:pk>/', views.ValidationDetailView.as_view(), name='validation_detail'),
     path('validation/<int:pk>/approuver/', views.ApprouverEvenementView.as_view(), name='approuver'),
     path('validation/<int:pk>/refuser/', views.RefuserEvenementView.as_view(), name='refuser'),
+    path('validation/validation-masse/', views.ValidationMasseView.as_view(), name='validation_masse'),
     
     # URLs alternatives pour les vues publiques
     path('publics/', views.EvenementsPublicsView.as_view(), name='evenements_publics'),
