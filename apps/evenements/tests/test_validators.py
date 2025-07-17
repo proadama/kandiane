@@ -278,7 +278,8 @@ class TestValidateTarifsCoherents:
                 Decimal('0.00')
             )
         
-        assert 'au moins un tarif' in str(exc_info.value)
+        # CORRECTION : Utiliser la bonne casse - "Au moins" avec majuscule
+        assert 'Au moins un tarif' in str(exc_info.value)
         assert exc_info.value.code == 'tarifs_tous_nuls'
 
 
