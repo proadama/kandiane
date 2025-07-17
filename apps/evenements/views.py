@@ -371,7 +371,7 @@ class InscriptionCreateView(LoginRequiredMixin, CreateView):
             messages.error(request, "Vous devez être membre pour vous inscrire à un événement.")
             return redirect('evenements:detail', pk=self.evenement.pk)
         
-        # Vérifier si peut s'inscrire
+        # CORRECTION : Vérifier si peut s'inscrire (inclut la vérification de capacité)
         peut_inscrire, message = self.evenement.peut_s_inscrire(self.membre)
         if not peut_inscrire:
             messages.error(request, message)
@@ -1826,7 +1826,8 @@ class RestaurerEvenementView(StaffRequiredMixin, View):
         except Evenement.DoesNotExist:
             messages.error(request, "Événement non trouvé.")
         
-        return redirect('evenements:corbeille_evenements')
+        # CORRECTION : Utiliser le bon namespace
+        return redirect('evenements:corbeille:evenements')  # au lieu de 'evenements:corbeille_evenements'
 
 class ConfirmationPubliqueView(View):
     """

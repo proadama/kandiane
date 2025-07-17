@@ -358,18 +358,45 @@ class Evenement(BaseModel):
         date_reference = self.date_fin if self.date_fin else self.date_debut
         return date_reference < timezone.now()
 
-    @property
+    @property  
     def places_disponibles(self):
-        """Calcule le nombre de places disponibles"""
-        inscriptions_confirmees = self.inscriptions.filter(
-            statut__in=['confirmee', 'presente']
-        ).count()
-        return max(0, self.capacite_max - inscriptions_confirmees)
+        """
+        Nombre de places disponibles
+        """
+        if not self.capacite_max:
+            return float('inf')
+        
+        # Compter toutes les inscriptions confirmées + en_attente + leurs accompagnants
+        total_participants = 0
+        inscriptions_valides = self.inscriptions.filter(
+            statut__in=['confirmee', 'en_attente', 'presente']
+        )
+        
+        for inscription in inscriptions_valides:
+            # Le membre + ses accompagnants
+            total_participants += 1 + inscription.nombre_accompagnants
+        
+        return max(0, self.capacite_max - total_participants)
 
     @property
     def est_complet(self):
-        """Vérifie si l'événement est complet"""
-        return self.places_disponibles == 0
+        """
+        Vérifie si l'événement est complet
+        """
+        if not self.capacite_max:
+            return False
+        
+        # Compter toutes les inscriptions confirmées + en_attente + leurs accompagnants
+        total_participants = 0
+        inscriptions_valides = self.inscriptions.filter(
+            statut__in=['confirmee', 'en_attente', 'presente']
+        )
+        
+        for inscription in inscriptions_valides:
+            # Le membre + ses accompagnants
+            total_participants += 1 + inscription.nombre_accompagnants
+        
+        return total_participants >= self.capacite_max
 
     @property
     def taux_occupation(self):
@@ -396,6 +423,10 @@ class Evenement(BaseModel):
         # Vérification si déjà inscrit
         if self.inscriptions.filter(membre=membre, statut__in=['en_attente', 'confirmee']).exists():
             return False, "Vous êtes déjà inscrit à cet événement"
+        
+        # AJOUT : Vérification de la capacité maximale
+        if self.est_complet:
+            return False, "L'événement est complet"
         
         # Vérification des dates d'inscription
         now = timezone.now()
@@ -1028,7 +1059,7 @@ class AccompagnantInvite(BaseModel):
     )
 
     objects = AccompagnantInviteManager()
-    
+
     class Meta:
         db_table = 'accompagnants_invites'
         verbose_name = "Accompagnant/Invité"
