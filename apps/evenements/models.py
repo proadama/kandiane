@@ -366,7 +366,7 @@ class Evenement(BaseModel):
         if not self.capacite_max:
             return float('inf')
         
-        # Compter toutes les inscriptions confirmées + en_attente + leurs accompagnants
+        # CORRECTION : Même logique que est_complet
         total_participants = 0
         inscriptions_valides = self.inscriptions.filter(
             statut__in=['confirmee', 'en_attente', 'presente']
@@ -386,7 +386,7 @@ class Evenement(BaseModel):
         if not self.capacite_max:
             return False
         
-        # Compter toutes les inscriptions confirmées + en_attente + leurs accompagnants
+        # CORRECTION : Compter correctement les inscriptions valides
         total_participants = 0
         inscriptions_valides = self.inscriptions.filter(
             statut__in=['confirmee', 'en_attente', 'presente']

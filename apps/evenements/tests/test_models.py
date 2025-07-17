@@ -207,17 +207,24 @@ class TestEvenement:
     def test_peut_s_inscrire_evenement_ouvert(self):
         """Test peut s'inscrire - événement ouvert"""
         membre = MembreFactory()
+        # CORRECTION : Créer un événement vraiment vide
         evenement = EvenementFactory(
             statut='publie',
             inscriptions_ouvertes=True,
             capacite_max=10,
-            date_debut=timezone.now() + timedelta(days=30),  # AJOUTER : date future
-            date_ouverture_inscriptions=timezone.now() - timedelta(days=5),  # AJOUTER : ouvertes
-            date_fermeture_inscriptions=timezone.now() + timedelta(days=25)  # AJOUTER : pas encore fermées
+            date_debut=timezone.now() + timedelta(days=30),
+            date_ouverture_inscriptions=timezone.now() - timedelta(days=5),
+            date_fermeture_inscriptions=timezone.now() + timedelta(days=25)
         )
         
+        # CORRECTION : S'assurer qu'il n'y a pas d'inscriptions existantes
+        evenement.inscriptions.all().delete()
+        
+        # Vérifier que l'événement n'est pas complet
+        assert not evenement.est_complet, f"L'événement ne devrait pas être complet. Places: {evenement.places_disponibles}, Complet: {evenement.est_complet}"
+        
         peut_inscrire, message = evenement.peut_s_inscrire(membre)
-        assert peut_inscrire
+        assert peut_inscrire, f"Inscription devrait être possible. Message: {message}"
         assert "Inscription possible" in message
 
     def test_peut_s_inscrire_evenement_ferme(self):
