@@ -11,7 +11,8 @@ from ..models import (
 from .factories import (
     TypeEvenementFactory, EvenementFactory, MembreFactory,
     InscriptionEvenementFactory, ValidationEvenementFactory,
-    CustomUserFactory, EvenementCompletFactory
+    CustomUserFactory, EvenementCompletFactory,
+    EvenementPayantFactory, EvenementGratuitFactory  # AJOUT
 )
 
 
@@ -294,8 +295,9 @@ class TestEvenementManager:
 
     def test_payants_gratuits(self):
         """Test filtrage payants/gratuits"""
-        evt_payant = EvenementFactory(est_payant=True)
-        evt_gratuit = EvenementFactory(est_payant=False)
+        from .factories import EvenementPayantFactory, EvenementGratuitFactory
+        evt_payant = EvenementPayantFactory()  # Utiliser la factory spécialisée
+        evt_gratuit = EvenementGratuitFactory()
         
         payants = Evenement.objects.payants()
         gratuits = Evenement.objects.gratuits()
@@ -356,7 +358,7 @@ class TestEvenementManager:
         assert hasattr(evt_avec_stats, 'total_inscriptions')
         assert hasattr(evt_avec_stats, 'inscriptions_confirmees')
         assert hasattr(evt_avec_stats, 'inscriptions_en_attente')
-        assert hasattr(evt_avec_stats, 'taux_occupation')
+        assert hasattr(evt_avec_stats, 'taux_occupation_calcule')
         
         assert evt_avec_stats.total_inscriptions == 4
         assert evt_avec_stats.inscriptions_confirmees == 1

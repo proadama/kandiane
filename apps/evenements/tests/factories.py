@@ -187,7 +187,23 @@ class EvenementFactory(DjangoModelFactory):
     
     delai_confirmation = factory.LazyFunction(lambda: random.randint(24, 168))
 
+class EvenementPayantFactory(EvenementFactory):
+    """Factory pour créer des événements payants avec tarifs valides"""
+    
+    est_payant = True
+    tarif_membre = Decimal('25.00')
+    tarif_salarie = Decimal('35.00') 
+    tarif_invite = Decimal('15.00')
 
+
+class EvenementGratuitFactory(EvenementFactory):
+    """Factory pour créer des événements gratuits explicitement"""
+    
+    est_payant = False
+    tarif_membre = Decimal('0.00')
+    tarif_salarie = Decimal('0.00') 
+    tarif_invite = Decimal('0.00')
+    
 class InscriptionEvenementFactory(DjangoModelFactory):
     """Factory pour les inscriptions"""
     class Meta:
