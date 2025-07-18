@@ -16,6 +16,65 @@ from .managers import (
     TypeEvenementManager, EvenementManager, InscriptionEvenementManager,
     ValidationEvenementManager, SessionEvenementManager, AccompagnantInviteManager
 )
+from django.contrib.auth import get_user_model
+import json
+
+User = get_user_model()
+
+class Log(models.Model):
+    """
+    Modèle pour l'historique des actions utilisateur
+    """
+    utilisateur = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='logs_actions'
+    )
+    
+    action = models.CharField(
+        max_length=100,
+        help_text="Type d'action effectuée"
+    )
+    
+    details = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Détails de l'action en JSON"
+    )
+    
+    adresse_ip = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text="Adresse IP de l'utilisateur"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Date et heure de l'action"
+    )
+    
+    class Meta:
+        db_table = 'core_log'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['utilisateur']),
+            models.Index(fields=['action']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        username = self.utilisateur.username if self.utilisateur else 'Anonyme'
+        return f"{username} - {self.action} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+    
+    @property
+    def details_formatted(self):
+        """Retourne les détails formatés pour l'affichage"""
+        if isinstance(self.details, dict):
+            return json.dumps(self.details, indent=2, ensure_ascii=False)
+        return str(self.details)
+
 
 class TypeEvenement(BaseModel):
     """

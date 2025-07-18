@@ -187,6 +187,29 @@ class EvenementFactory(DjangoModelFactory):
     
     delai_confirmation = factory.LazyFunction(lambda: random.randint(24, 168))
 
+class EvenementAvecValidationFactory(EvenementFactory):
+    """Factory pour événements nécessitant validation"""
+    
+    type_evenement = factory.SubFactory(
+        TypeEvenementFactory,
+        necessite_validation=True
+    )
+    statut = 'en_attente_validation'
+    
+    @factory.post_generation
+    def force_create_validation(obj, create, extracted, **kwargs):
+        """Force la création de ValidationEvenement"""
+        if create:
+            from ..models import ValidationEvenement
+            
+            ValidationEvenement.objects.get_or_create(
+                evenement=obj,
+                defaults={
+                    'statut_validation': 'en_attente',
+                    'commentaires_organisateur': "Événement nécessitant validation"
+                }
+            )
+
 class EvenementPayantFactory(EvenementFactory):
     """Factory pour créer des événements payants avec tarifs valides"""
     
