@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 from decimal import Decimal
 from datetime import timedelta
 import time
+from apps.membres.models import Membre, TypeMembre, MembreTypeMembre
 
 # CORRECTION: Import sécurisé des modèles membres
 try:
@@ -64,24 +65,24 @@ class WorkflowInscriptionTestCase(TestCase):
         """SETUP CORRIGÉ - Configuration complète pour les tests d'inscription"""
         # Créer utilisateurs
         self.organisateur_user = User.objects.create_user(
-            username='organisateur',
-            email='organisateur@example.com',
+            username='organisateur_inscr',  # CORRECTION: Nom unique
+            email='organisateur_inscr@example.com',
             password='orgpass123',
             first_name='Jean',
             last_name='Organisateur'
         )
         
         self.participant_user = User.objects.create_user(
-            username='participant',
-            email='participant@example.com',
+            username='participant_inscr',  # CORRECTION: Nom unique
+            email='participant_inscr@example.com',
             password='partpass123',
             first_name='Marie',
             last_name='Participant'
         )
         
-        # Créer type membre
+        # CORRECTION : Créer type membre avec le bon attribut
         self.type_membre = TypeMembre.objects.create(
-            nom='Membre Standard',
+            libelle='Membre Standard',  # CORRECTION: libelle au lieu de nom
             description='Membre standard de l\'organisation'
         )
         
@@ -90,33 +91,41 @@ class WorkflowInscriptionTestCase(TestCase):
             self.organisateur = Membre.objects.create(
                 nom='Organisateur',
                 prenom='Jean',
-                email='organisateur@example.com',
+                email='organisateur_inscr@example.com',  # CORRECTION: Email unique
                 utilisateur=self.organisateur_user,
                 date_adhesion=timezone.now().date()
             )
-            # CORRECTION : Gérer la relation ManyToMany après création
-            self.organisateur.types.add(self.type_membre)
+            # CORRECTION : Ajouter le type après création
+            MembreTypeMembre.objects.create(
+                membre=self.organisateur,
+                type_membre=self.type_membre,
+                date_debut=timezone.now().date()
+            )
             
             self.participant = Membre.objects.create(
                 nom='Participant',
                 prenom='Marie',
-                email='participant@example.com',
+                email='participant_inscr@example.com',  # CORRECTION: Email unique
                 utilisateur=self.participant_user,
                 date_adhesion=timezone.now().date()
             )
-            # CORRECTION : Gérer la relation ManyToMany après création
-            self.participant.types.add(self.type_membre)
+            # CORRECTION : Ajouter le type après création
+            MembreTypeMembre.objects.create(
+                membre=self.participant,
+                type_membre=self.type_membre,
+                date_debut=timezone.now().date()
+            )
             
         except Exception as e:
             # En cas d'erreur, créer des mocks
             self.organisateur = MagicMock()
             self.organisateur.nom = 'Organisateur'
-            self.organisateur.email = 'organisateur@example.com'
+            self.organisateur.email = 'organisateur_inscr@example.com'
             self.organisateur.utilisateur = self.organisateur_user
             
             self.participant = MagicMock()
             self.participant.nom = 'Participant'
-            self.participant.email = 'participant@example.com'
+            self.participant.email = 'participant_inscr@example.com'
             self.participant.utilisateur = self.participant_user
         
         # Créer types d'événements
@@ -134,6 +143,11 @@ class WorkflowInscriptionTestCase(TestCase):
             permet_accompagnants=True
         )
         
+        # CORRECTION: Créer mode de paiement manquant
+        self.mode_paiement = ModePaiement.objects.create(
+            libelle='Virement bancaire'
+        )
+        
         # Créer événement de test
         self.evenement = Evenement.objects.create(
             titre='Formation Django',
@@ -146,6 +160,10 @@ class WorkflowInscriptionTestCase(TestCase):
             capacite_max=20,
             statut='publie'
         )
+        
+        # CORRECTION: Ajouter membre manquant
+        self.membre = self.participant
+        self.membre_participant = self.participant
 
     def test_workflow_inscription_simple_complete(self):
         """Test du workflow complet d'inscription simple"""

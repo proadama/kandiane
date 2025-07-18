@@ -315,27 +315,24 @@ class NotificationService:
             self.logger.error(f"Erreur notification promotion {inscription.id}: {e}")
             return False
     
-    def envoyer_notification_accompagnants(self, inscription, accompagnants):
-        """Envoie une notification pour les accompagnants"""
+    def envoyer_notification_accompagnant(self, accompagnant):
+        """Envoie une notification à un accompagnant individuel"""
         try:
-            sujet = f"Invitation accompagnant : {inscription.evenement.titre}"
-            message = f"Vous êtes invité(e) à {inscription.evenement.titre}."
+            sujet = f"Invitation accompagnant : {accompagnant.inscription.evenement.titre}"
+            message = f"Vous êtes invité(e) à {accompagnant.inscription.evenement.titre}."
+            message += f"\n\nVous accompagnez {accompagnant.inscription.membre.nom} à cet événement."
             
-            # Inclure le mot "accompagnant" dans le message
-            message += f"\n\nVous accompagnez {inscription.membre.nom} à cet événement."
+            self._envoyer_email(
+                destinataire=accompagnant.email,
+                sujet=sujet,
+                message=message
+            )
             
-            for accompagnant in accompagnants:
-                self._envoyer_email(
-                    destinataire=accompagnant.email,
-                    sujet=sujet,
-                    message=message
-                )
-            
-            self.logger.info(f"Notifications accompagnants envoyées pour {inscription.id}")
+            self.logger.info(f"Notification accompagnant envoyée pour {accompagnant.id}")
             return True
             
         except Exception as e:
-            self.logger.error(f"Erreur notifications accompagnants {inscription.id}: {e}")
+            self.logger.error(f"Erreur notification accompagnant {accompagnant.id}: {e}")
             return False
 
     def envoyer_notifications_annulation_evenement(self, evenement):

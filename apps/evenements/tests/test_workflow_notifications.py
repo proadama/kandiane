@@ -59,7 +59,7 @@ class WorkflowNotificationsTestCase(TestCase):
         """Configuration des données de test"""
         # Utilisateurs
         self.organisateur = User.objects.create_user(
-            username='organisateur',
+            username='taskuser_notif',  # CORRECTION: Nom unique
             email='organisateur@example.com',
             password='orgpass123',
             first_name='Jean',
@@ -446,8 +446,8 @@ class WorkflowNotificationsTestCase(TestCase):
         
         mail.outbox = []
         
-        # Simuler la notification à l'accompagnant
-        self.notification_service.envoyer_notification_accompagnant(accompagnant)
+        # CORRECTION: Utiliser la bonne méthode avec liste d'accompagnants
+        self.notification_service.envoyer_notification_accompagnants(inscription, [accompagnant])
         
         # Vérifier la notification
         self.assertEqual(len(mail.outbox), 1)
@@ -462,10 +462,10 @@ class WorkflowNotificationsTestCase(TestCase):
         evenement = Evenement.objects.create(
             titre='Événement à Modifier',
             description='Description originale',
-            type_evenement=self.type_evenement,
+            type_evenement=self.type_sans_validation,  # CORRECTION: Utiliser l'attribut existant
             organisateur=self.organisateur,
             date_debut=timezone.now() + timedelta(days=10),
-            date_fin=timezone.now() + timedelta(days=10, hours=3),  # CORRECTION : date_fin APRÈS date_debut
+            date_fin=timezone.now() + timedelta(days=10, hours=3),
             lieu='Lieu Original',
             capacite_max=30,
             statut='publie'
@@ -478,7 +478,7 @@ class WorkflowNotificationsTestCase(TestCase):
         
         # CORRECTION : S'assurer que date_fin reste après date_debut
         nouvelle_date_debut = timezone.now() + timedelta(days=15)
-        nouvelle_date_fin = nouvelle_date_debut + timedelta(hours=4)  # 4h après le début
+        nouvelle_date_fin = nouvelle_date_debut + timedelta(hours=4)
         
         evenement.date_debut = nouvelle_date_debut
         evenement.date_fin = nouvelle_date_fin
@@ -634,10 +634,10 @@ class WorkflowNotificationsTestCase(TestCase):
     def test_workflow_erreurs_notifications(self):
         """Test gestion des erreurs dans les notifications - CORRIGÉ"""
         
-        # Créer un utilisateur participant
+        # CORRECTION : Créer un utilisateur participant avec nom unique
         participant_user = User.objects.create_user(
-            username='participant',
-            email='participant@example.com',
+            username='participant_err',  # CORRECTION: Nom unique
+            email='participant_err@example.com',
             password='pass123'
         )
         
@@ -646,7 +646,7 @@ class WorkflowNotificationsTestCase(TestCase):
             participant_membre = Membre.objects.create(
                 nom='Participant',
                 prenom='Test',
-                email='participant@example.com',
+                email='participant_err@example.com',
                 utilisateur=participant_user,
                 date_adhesion=timezone.now().date()
             )
@@ -663,7 +663,7 @@ class WorkflowNotificationsTestCase(TestCase):
             # Si la création échoue, créer un mock
             participant_membre = MagicMock()
             participant_membre.nom = 'Participant'
-            participant_membre.email = 'participant@example.com'
+            participant_membre.email = 'participant_err@example.com'
             
             inscription = MagicMock()
             inscription.evenement = self.evenement
