@@ -59,14 +59,12 @@ def creer_validation_evenement(sender, instance, created, **kwargs):
             instance.type_evenement.necessite_validation and 
             not ValidationEvenement.objects.filter(evenement=instance).exists()):
             
-            # CORRECTION : Utiliser des champs qui existent vraiment
+            # CORRECTION : Utiliser les bons noms de champs
             validation = ValidationEvenement.objects.create(
                 evenement=instance,
                 statut_validation='en_attente',
-                # CORRECTION : Ne pas accéder à date_creation qui n'existe pas
-                date_demande=instance.date_creation if hasattr(instance, 'date_creation') else None,
-                # Utiliser un champ qui existe réellement, comme date_debut ou une date automatique
-                commentaire_organisateur=f"Demande de validation automatique pour {instance.titre}"
+                # CORRECTION : Utiliser commentaire_validation au lieu de commentaire_organisateur
+                commentaire_validation=f"Demande de validation automatique pour {instance.titre}"
             )
             
             # Mettre à jour le statut de l'événement
@@ -78,7 +76,6 @@ def creer_validation_evenement(sender, instance, created, **kwargs):
             
     except Exception as e:
         logger.error(f"Erreur création ValidationEvenement pour {instance.id}: {e}")
-
 
 @receiver(post_save, sender=Evenement)
 def publier_evenement_sans_validation(sender, instance, created, **kwargs):

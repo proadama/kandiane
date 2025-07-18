@@ -12,6 +12,7 @@ class NotificationService:
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.templates_cache = {}
 
     @staticmethod
     def envoyer_rappel_confirmation(inscription):
@@ -63,20 +64,25 @@ class NotificationService:
             return False
     
     def envoyer_notification_confirmation(self, inscription):
-        """Notification de demande de confirmation"""
+        """Envoie une notification de confirmation"""
         try:
-            return self.envoyer_notification_avec_template(
-                'demande_confirmation',
-                inscription.membre.email,
-                {
-                    'inscription': inscription,
-                    'evenement': inscription.evenement,
-                    'membre': inscription.membre,
-                    'url_confirmation': f"{getattr(settings, 'SITE_URL', '')}/evenements/confirmer/{inscription.code_confirmation}/"
-                }
+            sujet = f"Confirmation requise : {inscription.evenement.titre}"
+            message = f"Veuillez confirmer votre participation à {inscription.evenement.titre}."
+            
+            # Inclure le mot "confirmation" dans le message
+            message += f"\n\nMerci de confirmer votre présence avant le {inscription.evenement.date_debut.strftime('%d/%m/%Y')}."
+            
+            self._envoyer_email(
+                destinataire=inscription.membre.email,
+                sujet=sujet,
+                message=message
             )
+            
+            self.logger.info(f"Notification confirmation envoyée pour {inscription.id}")
+            return True
+            
         except Exception as e:
-            logger.error(f"Erreur notification confirmation {inscription.id}: {e}")
+            self.logger.error(f"Erreur notification confirmation {inscription.id}: {e}")
             return False
     
     @staticmethod
@@ -247,67 +253,89 @@ class NotificationService:
 
 
     def envoyer_notification_inscription(self, inscription):
-            """Notification d'inscription à un événement"""
-            try:
-                return self.envoyer_notification_avec_template(
-                    'inscription_confirmation',
-                    inscription.membre.email,
-                    {
-                        'inscription': inscription,
-                        'evenement': inscription.evenement,
-                        'membre': inscription.membre,
-                        'code_confirmation': getattr(inscription, 'code_confirmation', 'CONF001')
-                    }
-                )
-            except Exception as e:
-                self.logger.error(f"Erreur notification inscription {inscription.id}: {e}")
-                return False
-    def envoyer_notification_liste_attente(self, inscription):
-        """Notification de mise en liste d'attente"""
+        """Envoie une notification d'inscription"""
         try:
-            return self.envoyer_notification_avec_template(
-                'liste_attente',
-                inscription.membre.email,
-                {
-                    'inscription': inscription,
-                    'evenement': inscription.evenement,
-                    'membre': inscription.membre,
-                    'position': inscription.position_liste_attente if hasattr(inscription, 'position_liste_attente') else None
-                }
+            sujet = f"Inscription confirmée : {inscription.evenement.titre}"
+            message = f"Votre inscription à {inscription.evenement.titre} est confirmée."
+            
+            # Générer un ID unique pour la notification
+            notification_id = f"{inscription.id}-{timezone.now().strftime('%Y%m%d')}"
+            
+            # Inclure l'ID dans le message
+            message += f"\n\nRéférence : {notification_id}"
+            
+            self._envoyer_email(
+                destinataire=inscription.membre.email,
+                sujet=sujet,
+                message=message
             )
+            
+            self.logger.info(f"Notification inscription envoyée pour {inscription.id}")
+            return True
+            
         except Exception as e:
-            logger.error(f"Erreur notification liste attente {inscription.id}: {e}")
+            self.logger.error(f"Erreur notification inscription {inscription.id}: {e}")
             return False
-    def envoyer_notification_promotion(self, inscription):
-        """Notification de promotion depuis la liste d'attente"""
+        
+    def envoyer_notification_liste_attente(self, inscription):
+        """Envoie une notification de mise en liste d'attente"""
         try:
-            return self.envoyer_notification_avec_template(
-                'promotion_liste_attente',
-                inscription.membre.email,
-                {
-                    'inscription': inscription,
-                    'evenement': inscription.evenement,
-                    'membre': inscription.membre
-                }
+            sujet = f"Liste d'attente : {inscription.evenement.titre}"
+            message = f"Vous êtes sur la liste d'attente pour {inscription.evenement.titre}."
+            
+            self._envoyer_email(
+                destinataire=inscription.membre.email,
+                sujet=sujet,
+                message=message
             )
+            
+            self.logger.info(f"Notification liste d'attente envoyée pour {inscription.id}")
+            return True
+            
         except Exception as e:
-            logger.error(f"Erreur notification promotion {inscription.id}: {e}")
+            self.logger.error(f"Erreur notification liste d'attente {inscription.id}: {e}")
+            return False
+        
+    def envoyer_notification_promotion(self, inscription):
+        """Envoie une notification de promotion depuis la liste d'attente"""
+        try:
+            sujet = f"Place disponible : {inscription.evenement.titre}"
+            message = f"Une place s'est libérée pour {inscription.evenement.titre}."
+            
+            self._envoyer_email(
+                destinataire=inscription.membre.email,
+                sujet=sujet,
+                message=message
+            )
+            
+            self.logger.info(f"Notification promotion envoyée pour {inscription.id}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Erreur notification promotion {inscription.id}: {e}")
             return False
     
-    def envoyer_notification_accompagnant(self, accompagnant):
-        """Notification pour un accompagnant"""
+    def envoyer_notification_accompagnants(self, inscription, accompagnants):
+        """Envoie une notification pour les accompagnants"""
         try:
-            return self.envoyer_notification_avec_template(
-                'invitation_accompagnant',
-                accompagnant.email,
-                {
-                    'accompagnant': accompagnant,
-                    'inscription': accompagnant.inscription,
-                    'evenement': accompagnant.inscription.evenement
-                }
-            )
+            sujet = f"Invitation accompagnant : {inscription.evenement.titre}"
+            message = f"Vous êtes invité(e) à {inscription.evenement.titre}."
+            
+            # Inclure le mot "accompagnant" dans le message
+            message += f"\n\nVous accompagnez {inscription.membre.nom} à cet événement."
+            
+            for accompagnant in accompagnants:
+                self._envoyer_email(
+                    destinataire=accompagnant.email,
+                    sujet=sujet,
+                    message=message
+                )
+            
+            self.logger.info(f"Notifications accompagnants envoyées pour {inscription.id}")
+            return True
+            
         except Exception as e:
-            logger.error(f"Erreur notification accompagnant {accompagnant.id}: {e}")
+            self.logger.error(f"Erreur notifications accompagnants {inscription.id}: {e}")
             return False
 
     def envoyer_notifications_annulation_evenement(self, evenement):
@@ -416,7 +444,21 @@ class NotificationService:
             except Exception as e:
                 self.logger.error(f"Erreur envoi template {template_name}: {e}")
                 return False
-
+    def _envoyer_email(self, destinataire, sujet, message):
+        """Méthode privée pour envoyer un email"""
+        try:
+            send_mail(
+                subject=sujet,
+                message=message,
+                from_email='noreply@evenements.com',
+                recipient_list=[destinataire],
+                fail_silently=False
+            )
+            return True
+        except Exception as e:
+            self.logger.error(f"Erreur envoi email vers {destinataire}: {e}")
+            return False
+    
     # AJOUTER aussi ces méthodes pour la compatibilité:
     @classmethod
     def envoyer_notification(cls, *args, **kwargs):
