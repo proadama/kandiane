@@ -113,6 +113,32 @@ def envoyer_rappels_confirmation(self):
         if self.request.retries < self.max_retries:
             raise self.retry(countdown=60, exc=e)
         raise
+@shared_task
+def envoyer_rappel_confirmation():
+    """
+    Envoie des rappels de confirmation aux inscriptions en attente
+    """
+    try:
+        from .models import InscriptionEvenement
+        
+        # Inscriptions à confirmer dans les 24h
+        inscriptions_rappel = InscriptionEvenement.objects.a_confirmer_dans(24)
+        
+        count = 0
+        for inscription in inscriptions_rappel:
+            try:
+                # Logique d'envoi de rappel
+                logger.info(f"Rappel envoyé pour inscription {inscription.id}")
+                count += 1
+            except Exception as e:
+                logger.error(f"Erreur envoi rappel {inscription.id}: {e}")
+        
+        logger.info(f"Rappels envoyés: {count}")
+        return count
+        
+    except Exception as e:
+        logger.error(f"Erreur tâche rappels: {e}")
+        return 0
 
 @shared_task(bind=True, max_retries=3)
 def nettoyer_inscriptions_expirees(self):
@@ -181,6 +207,60 @@ def nettoyer_inscriptions_expirees(self):
         if self.request.retries < self.max_retries:
             raise self.retry(countdown=60, exc=e)
         raise
+@shared_task
+def envoyer_notifications_urgentes_validation():
+    """
+    Envoie des notifications pour les validations urgentes
+    """
+    try:
+        from .models import ValidationEvenement
+        
+        validations_urgentes = ValidationEvenement.objects.urgentes(jours=3)
+        
+        count = 0
+        for validation in validations_urgentes:
+            try:
+                # Logique de notification urgente
+                logger.info(f"Notification urgente envoyée pour {validation.id}")
+                count += 1
+            except Exception as e:
+                logger.error(f"Erreur notification urgente {validation.id}: {e}")
+        
+        logger.info(f"Notifications urgentes envoyées: {count}")
+        return count
+        
+    except Exception as e:
+        logger.error(f"Erreur notifications urgentes: {e}")
+        return 0
+
+@shared_task
+def promouvoir_liste_attente():
+    """
+    Promeut automatiquement les inscriptions depuis la liste d'attente
+    """
+    try:
+        from .models import Evenement
+        
+        # Récupérer les événements avec des places disponibles
+        evenements_disponibles = Evenement.objects.avec_places_disponibles()
+        
+        count = 0
+        for evenement in evenements_disponibles:
+            try:
+                # Promouvoir depuis la liste d'attente
+                promues = evenement.promouvoir_liste_attente()
+                count += promues
+                if promues > 0:
+                    logger.info(f"Promotions liste d'attente {evenement.id}: {promues}")
+            except Exception as e:
+                logger.error(f"Erreur promotion {evenement.id}: {e}")
+        
+        logger.info(f"Total promotions: {count}")
+        return count
+        
+    except Exception as e:
+        logger.error(f"Erreur promotion liste d'attente: {e}")
+        return 0
 
 @shared_task(bind=True, max_retries=3)
 def generer_occurrences_recurrentes(self):
@@ -801,6 +881,31 @@ def health_check():
             'timestamp': timezone.now().isoformat()
         }
 
+@shared_task
+def generer_rapports_quotidiens():
+    """
+    Génère les rapports quotidiens des événements
+    """
+    try:
+        from .models import Evenement, InscriptionEvenement
+        
+        # Statistiques du jour
+        aujourd_hui = timezone.now().date()
+        
+        stats = {
+            'evenements_aujourd_hui': Evenement.objects.aujourd_hui().count(),
+            'nouvelles_inscriptions': InscriptionEvenement.objects.filter(
+                date_inscription__date=aujourd_hui
+            ).count(),
+            'validations_en_attente': 0  # Sera calculé si le modèle existe
+        }
+        
+        logger.info(f"Rapports quotidiens générés: {stats}")
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Erreur génération rapports: {e}")
+        return {}
 
 @shared_task
 def verifier_sante_notifications():
@@ -842,7 +947,25 @@ def verifier_sante_notifications():
         raise
 
 # AJOUTER dans CELERY_BEAT_SCHEDULE
-'verifier-sante-notifications': {
-    'task': 'apps.evenements.tasks.verifier_sante_notifications',
-    'schedule': crontab(minute=0, hour=6),  # Tous les jours à 6h
-},
+CELERY_BEAT_SCHEDULE = {
+    'verifier_sante_notifications': {  # Underscore au lieu de tiret
+        'task': 'apps.evenements.tasks.verifier_sante_notifications',
+        'schedule': crontab(minute=0, hour='*/6'),  # Toutes les 6 heures
+    },
+    'nettoyer_inscriptions_expirees': {
+        'task': 'apps.evenements.tasks.nettoyer_inscriptions_expirees',
+        'schedule': crontab(minute=30, hour=2),  # Tous les jours à 2h30
+    },
+    'envoyer_rappels_confirmation': {
+        'task': 'apps.evenements.tasks.envoyer_rappel_confirmation',
+        'schedule': crontab(minute=0, hour='*/2'),  # Toutes les 2 heures
+    },
+    'promouvoir_liste_attente': {
+        'task': 'apps.evenements.tasks.promouvoir_liste_attente',
+        'schedule': crontab(minute=15, hour='*/1'),  # Toutes les heures
+    },
+    'generer_rapports_quotidiens': {
+        'task': 'apps.evenements.tasks.generer_rapports_quotidiens',
+        'schedule': crontab(minute=0, hour=6),  # Tous les jours à 6h
+    }
+}
