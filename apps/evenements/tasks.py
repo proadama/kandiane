@@ -3,7 +3,7 @@ from celery import shared_task
 from celery.schedules import crontab
 from django.utils import timezone
 from django.db.models import Q
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.core.mail import send_mail
 from django.conf import settings
 import logging
@@ -15,8 +15,33 @@ from .models import (
     Evenement, InscriptionEvenement, EvenementRecurrence, 
     ValidationEvenement, AccompagnantInvite
 )
-from apps.core.notifications import NotificationService
-from apps.membres.models import Membre
+
+# Import sécurisé du modèle Log
+try:
+    from apps.core.models import Log
+except ImportError:
+    # Créer un modèle mock si Log n'existe pas
+    class Log:
+        @classmethod
+        def objects(cls):
+            return cls
+        
+        @classmethod
+        def create(cls, **kwargs):
+            logger.info(f"LOG: {kwargs}")
+
+# Import sécurisé des modèles membres
+try:
+    from apps.membres.models import Membre
+except ImportError:
+    Membre = None
+
+# Import sécurisé des services
+try:
+    from .services.services import NotificationService
+except ImportError:
+    from .services import NotificationService
+
 
 logger = logging.getLogger(__name__)
 

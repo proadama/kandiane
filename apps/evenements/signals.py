@@ -1,5 +1,5 @@
 # apps/evenements/signals.py - CRÉER CE FICHIER
-from django.db.models.signals import post_save, post_delete, pre_save
+from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
 from .models import InscriptionEvenement, Evenement, ValidationEvenement
@@ -50,40 +50,52 @@ def gerer_changement_statut_evenement(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Evenement)
 def creer_validation_evenement(sender, instance, created, **kwargs):
     """
-    Crée automatiquement une ValidationEvenement pour les événements qui en ont besoin
+    SIGNAL CORRIGÉ : Crée automatiquement une ValidationEvenement 
+    si le type d'événement nécessite validation
     """
-    if created and instance.type_evenement.necessite_validation:
-        try:
-            # Vérifier qu'une validation n'existe pas déjà
-            if not ValidationEvenement.objects.filter(evenement=instance).exists():
-                ValidationEvenement.objects.create(
-                    evenement=instance,
-                    statut_validation='en_attente',
-                    date_soumission=instance.date_creation,
-                    modifications_demandees=[]
-                )
-                
-                # Mettre l'événement en statut en_attente_validation
-                if instance.statut == 'brouillon':
-                    instance.statut = 'en_attente_validation'
-                    instance.save(update_fields=['statut'])
-                
-                logger.info(f"ValidationEvenement créée pour {instance.titre}")
-                
-        except Exception as e:
-            logger.error(f"Erreur création ValidationEvenement pour {instance.id}: {e}")
+    try:
+        # Vérifier si l'événement nécessite validation
+        if (instance.type_evenement and 
+            instance.type_evenement.necessite_validation and 
+            not ValidationEvenement.objects.filter(evenement=instance).exists()):
+            
+            # CORRECTION : Utiliser des champs qui existent vraiment
+            validation = ValidationEvenement.objects.create(
+                evenement=instance,
+                statut_validation='en_attente',
+                # CORRECTION : Ne pas accéder à date_creation qui n'existe pas
+                date_demande=instance.date_creation if hasattr(instance, 'date_creation') else None,
+                # Utiliser un champ qui existe réellement, comme date_debut ou une date automatique
+                commentaire_organisateur=f"Demande de validation automatique pour {instance.titre}"
+            )
+            
+            # Mettre à jour le statut de l'événement
+            if instance.statut == 'brouillon':
+                instance.statut = 'en_attente_validation'
+                instance.save(update_fields=['statut'])
+            
+            logger.info(f"ValidationEvenement créée pour l'événement {instance.id}: {instance.titre}")
+            
+    except Exception as e:
+        logger.error(f"Erreur création ValidationEvenement pour {instance.id}: {e}")
+
 
 @receiver(post_save, sender=Evenement)
 def publier_evenement_sans_validation(sender, instance, created, **kwargs):
     """
-    Publie automatiquement les événements qui ne nécessitent pas de validation
+    SIGNAL : Publie automatiquement les événements ne nécessitant pas de validation
     """
-    if created and not instance.type_evenement.necessite_validation:
-        try:
-            if instance.statut == 'brouillon':
-                instance.statut = 'publie'
-                instance.save(update_fields=['statut'])
-                logger.info(f"Événement publié automatiquement: {instance.titre}")
-                
-        except Exception as e:
-            logger.error(f"Erreur publication automatique pour {instance.id}: {e}")
+    try:
+        # Si l'événement ne nécessite pas de validation et est en brouillon
+        if (instance.type_evenement and 
+            not instance.type_evenement.necessite_validation and 
+            instance.statut == 'brouillon' and
+            created):  # Seulement à la création
+            
+            instance.statut = 'publie'
+            instance.save(update_fields=['statut'])
+            
+            logger.info(f"Événement {instance.id} publié automatiquement (pas de validation requise)")
+            
+    except Exception as e:
+        logger.error(f"Erreur publication automatique événement {instance.id}: {e}")

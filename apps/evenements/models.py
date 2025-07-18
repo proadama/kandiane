@@ -16,65 +16,6 @@ from .managers import (
     TypeEvenementManager, EvenementManager, InscriptionEvenementManager,
     ValidationEvenementManager, SessionEvenementManager, AccompagnantInviteManager
 )
-from django.contrib.auth import get_user_model
-import json
-
-User = get_user_model()
-
-class Log(models.Model):
-    """
-    Modèle pour l'historique des actions utilisateur
-    """
-    utilisateur = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='logs_actions'
-    )
-    
-    action = models.CharField(
-        max_length=100,
-        help_text="Type d'action effectuée"
-    )
-    
-    details = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text="Détails de l'action en JSON"
-    )
-    
-    adresse_ip = models.GenericIPAddressField(
-        null=True,
-        blank=True,
-        help_text="Adresse IP de l'utilisateur"
-    )
-    
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        help_text="Date et heure de l'action"
-    )
-    
-    class Meta:
-        db_table = 'core_log'
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['utilisateur']),
-            models.Index(fields=['action']),
-            models.Index(fields=['created_at']),
-        ]
-    
-    def __str__(self):
-        username = self.utilisateur.username if self.utilisateur else 'Anonyme'
-        return f"{username} - {self.action} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
-    
-    @property
-    def details_formatted(self):
-        """Retourne les détails formatés pour l'affichage"""
-        if isinstance(self.details, dict):
-            return json.dumps(self.details, indent=2, ensure_ascii=False)
-        return str(self.details)
-
 
 class TypeEvenement(BaseModel):
     """
@@ -1223,7 +1164,7 @@ class ValidationEvenement(BaseModel):
         
         # Mettre à jour le statut de l'événement
         self.evenement.statut = 'publie'
-        self.evenement.save()
+        self.evenement.save(update_fields=['statut'])
 
     def refuser(self, validateur, commentaire):
         """Refuse l'événement"""
@@ -1235,16 +1176,27 @@ class ValidationEvenement(BaseModel):
         
         # Mettre à jour le statut de l'événement
         self.evenement.statut = 'brouillon'
-        self.evenement.save()
+        self.evenement.save(update_fields=['statut'])
 
     def demander_modifications(self, validateur, modifications):
-        """Demande des modifications à l'organisateur"""
-        self.statut_validation = 'en_attente'
+        """Demande des modifications"""
+        from django.utils import timezone
+        
         self.validateur = validateur
         self.date_validation = timezone.now()
+        
+        # Ajouter les modifications demandées
+        if not self.modifications_demandees:
+            self.modifications_demandees = []
+        
         self.modifications_demandees.append({
             'date': timezone.now().isoformat(),
-            'validateur': validateur.get_full_name(),
+            'validateur': f"{validateur.first_name} {validateur.last_name}",
             'modifications': modifications
         })
+        
         self.save()
+        
+        # L'événement reste en attente de validation
+        self.evenement.statut = 'en_attente_validation'
+        self.evenement.save(update_fields=['statut'])

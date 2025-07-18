@@ -109,34 +109,38 @@ class WorkflowValidationTestCase(TestCase):
         )
 
     def test_workflow_validation_complete_approbation(self):
-        """Test du workflow complet : création → validation → approbation"""
+        """Test du workflow complet d'approbation - CORRIGÉ"""
         
-        # 1. Création d'un événement nécessitant validation
+        # Créer un événement nécessitant validation
         evenement = Evenement.objects.create(
-            titre='Grande Conférence 2024',
-            description='Conférence annuelle de l\'association',
-            type_evenement=self.type_avec_validation,
+            titre='Formation Django',
+            description='Formation complète sur Django',
+            type_evenement=self.type_avec_validation,  # Nécessite validation
             organisateur=self.organisateur,
-            date_debut=timezone.now() + timedelta(days=30),
-            date_fin=timezone.now() + timedelta(days=30, hours=8),
-            lieu='Centre de conférences',
-            capacite_max=100,
-            est_payant=True,
-            tarif_membre=50.00,
-            permet_accompagnants=True,
-            nombre_max_accompagnants=1
+            date_debut=timezone.now() + timedelta(days=21),
+            date_fin=timezone.now() + timedelta(days=21, hours=8),
+            lieu='Centre de formation',
+            capacite_max=25,
+            statut='brouillon'  # Statut initial
         )
         
-        # Vérifications après création
+        # CORRECTION: Le signal doit créer la ValidationEvenement et changer le statut
+        # Attendre que le signal soit traité
+        evenement.refresh_from_db()
+        
+        # ASSERTION CORRIGÉE: Vérifier le statut après traitement du signal
         self.assertEqual(evenement.statut, 'en_attente_validation')
         
-        # Vérifier qu'une validation est créée automatiquement
+        # Vérifier qu'une validation a été créée
+        self.assertTrue(ValidationEvenement.objects.filter(evenement=evenement).exists())
         validation = ValidationEvenement.objects.get(evenement=evenement)
+        
+        # Vérifications initiales
         self.assertEqual(validation.statut_validation, 'en_attente')
         self.assertIsNone(validation.validateur)
         self.assertIsNone(validation.date_validation)
         
-        # 2. Approbation par le validateur
+        # Approbation par le validateur
         commentaire_approbation = "Événement bien préparé, approuvé sans réserve"
         validation.approuver(self.validateur, commentaire_approbation)
         
@@ -148,7 +152,7 @@ class WorkflowValidationTestCase(TestCase):
         self.assertEqual(validation.validateur, self.validateur)
         self.assertIsNotNone(validation.date_validation)
         self.assertEqual(validation.commentaire_validation, commentaire_approbation)
-        self.assertEqual(evenement.statut, 'publie')
+        self.assertEqual(evenement.statut, 'publie')  # Statut final après approbation
 
     def test_workflow_validation_refus(self):
         """Test du workflow de refus d'un événement"""
@@ -225,24 +229,28 @@ class WorkflowValidationTestCase(TestCase):
         self.assertEqual(derniere_demande['modifications'], modifications_demandees)
 
     def test_workflow_sans_validation_necessaire(self):
-        """Test d'un événement ne nécessitant pas de validation"""
+        """Test d'un événement ne nécessitant pas de validation - CORRIGÉ"""
         
         evenement = Evenement.objects.create(
             titre='Réunion Mensuelle',
             description='Réunion de routine',
-            type_evenement=self.type_sans_validation,
+            type_evenement=self.type_sans_validation,  # Ne nécessite PAS de validation
             organisateur=self.organisateur,
             date_debut=timezone.now() + timedelta(days=7),
+            date_fin=timezone.now() + timedelta(days=7, hours=2),
             lieu='Salle de réunion',
-            capacite_max=20
+            capacite_max=20,
+            statut='brouillon'  # Statut initial
         )
         
-        # Vérifications
-        self.assertEqual(evenement.statut, 'publie')  # Directement publié
+        # CORRECTION: Le signal doit publier automatiquement
+        evenement.refresh_from_db()
+        
+        # Vérifications - ASSERTION CORRIGÉE
+        self.assertEqual(evenement.statut, 'publie')  # Publié automatiquement
         
         # Aucune validation ne doit être créée
-        validations = ValidationEvenement.objects.filter(evenement=evenement)
-        self.assertEqual(validations.count(), 0)
+        self.assertFalse(ValidationEvenement.objects.filter(evenement=evenement).exists())
 
     def test_workflow_modification_apres_validation(self):
         """Test de modification d'un événement après validation"""

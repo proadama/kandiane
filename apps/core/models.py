@@ -4,7 +4,8 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.db.models import Q
 from .managers import BaseManager
-
+from django.conf import settings
+import json
 
 class BaseModel(models.Model):
     """
@@ -158,3 +159,65 @@ class Statut(BaseModel):
         # Statut par défaut
         else:
             return 'secondary'
+
+
+class Log(models.Model):
+    """
+    Modèle pour l'historique des actions utilisateur
+    """
+    utilisateur = models.ForeignKey(
+        settings.AUTH_USER_MODEL,  # Utiliser settings.AUTH_USER_MODEL au lieu de get_user_model()
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='logs_actions'
+    )
+    
+    action = models.CharField(
+        max_length=100,
+        help_text="Type d'action effectuée"
+    )
+    
+    details = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Détails de l'action en JSON"
+    )
+    
+    adresse_ip = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text="Adresse IP de l'utilisateur"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Date et heure de l'action"
+    )
+    
+    class Meta:
+        db_table = 'core_log'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['utilisateur']),
+            models.Index(fields=['action']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        username = self.utilisateur.username if self.utilisateur else 'Anonyme'
+        return f"{username} - {self.action} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+    
+    @property
+    def details_formatted(self):
+        """Retourne les détails formatés pour l'affichage"""
+        if isinstance(self.details, dict):
+            return json.dumps(self.details, indent=2, ensure_ascii=False)
+        return str(self.details)
+
+    def get_details_json(self):
+        """Retourne les détails formatés en JSON"""
+        try:
+            return json.dumps(self.details, indent=2, ensure_ascii=False)
+        except:
+            return str(self.details)
