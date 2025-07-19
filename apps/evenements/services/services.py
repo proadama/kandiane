@@ -334,7 +334,51 @@ class NotificationService:
         except Exception as e:
             self.logger.error(f"Erreur notification accompagnant {accompagnant.id}: {e}")
             return False
+    def envoyer_notification_accompagnants(self, inscription, accompagnants):
+        """Envoie des notifications à une liste d'accompagnants"""
+        try:
+            notifications_envoyees = 0
+            
+            for accompagnant in accompagnants:
+                if self.envoyer_notification_accompagnant(accompagnant):
+                    notifications_envoyees += 1
+            
+            self.logger.info(f"Notifications accompagnants envoyées: {notifications_envoyees}/{len(accompagnants)}")
+            return notifications_envoyees > 0
+            
+        except Exception as e:
+            self.logger.error(f"Erreur notifications accompagnants: {e}")
+            return False
 
+    def envoyer_notifications_modification_evenement(self, evenement, modifications=None):
+        """Envoie des notifications de modification d'événement"""
+        try:
+            # Récupérer tous les inscrits
+            inscriptions = evenement.inscriptions.filter(
+                statut__in=['confirmee', 'en_attente']
+            )
+            
+            notifications_envoyees = 0
+            for inscription in inscriptions:
+                sujet = f"Modification événement : {evenement.titre}"
+                message = f"L'événement {evenement.titre} a été modifié."
+                
+                if modifications:
+                    message += f"\n\nModifications :\n{modifications}"
+                
+                if self._envoyer_email(
+                    destinataire=inscription.membre.email,
+                    sujet=sujet,
+                    message=message
+                ):
+                    notifications_envoyees += 1
+            
+            return notifications_envoyees > 0
+            
+        except Exception as e:
+            self.logger.error(f"Erreur notifications modification: {e}")
+            return False
+    
     def envoyer_notifications_annulation_evenement(self, evenement):
         """Notification d'annulation d'événement à tous les inscrits"""
         try:
