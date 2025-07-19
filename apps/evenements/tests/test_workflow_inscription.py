@@ -393,9 +393,26 @@ class WorkflowInscriptionTestCase(TestCase):
     def test_workflow_inscription_evenement_payant(self):
         """Test du workflow pour un événement payant"""
         
+        # CORRECTION: Créer un événement explicitement payant
+        evenement_payant = Evenement.objects.create(
+            titre='Formation Payante',
+            description='Formation avec tarifs',
+            type_evenement=self.type_evenement,
+            organisateur=self.organisateur_user,
+            date_debut=timezone.now() + timedelta(days=15),
+            date_fin=timezone.now() + timedelta(days=15, hours=4),
+            lieu='Centre Formation Payant',
+            capacite_max=25,
+            statut='publie',
+            est_payant=True,
+            tarif_membre=Decimal('50.00'),
+            tarif_salarie=Decimal('75.00'),
+            tarif_invite=Decimal('25.00')
+        )
+        
         # Inscription avec paiement partiel
         inscription = InscriptionEvenement.objects.create(
-            evenement=self.evenement,
+            evenement=evenement_payant,  # CORRECTION: Utiliser l'événement payant
             membre=self.membre_participant,
             montant_paye=Decimal('25.00'),  # Paiement partiel
             mode_paiement=self.mode_paiement
@@ -414,6 +431,7 @@ class WorkflowInscriptionTestCase(TestCase):
         
         # Vérifier la cotisation associée - CORRECTION: Gestion d'erreur
         try:
+            from apps.cotisations.models import Cotisation
             cotisation = Cotisation.objects.filter(
                 membre=self.membre_participant,
                 reference__startswith='EVENT-'
@@ -421,7 +439,7 @@ class WorkflowInscriptionTestCase(TestCase):
             
             if cotisation:
                 self.assertEqual(cotisation.montant, Decimal('50.00'))
-        except Exception:
+        except ImportError:
             # Si le module cotisations n'est pas disponible, ignorer
             self.skipTest("Module cotisations non disponible")
 
@@ -488,6 +506,7 @@ class WorkflowInscriptionTestCase(TestCase):
             inscriptions.append(inscription)
         
         # Vérifier le calcul des places disponibles après création
+        self.evenement.refresh_from_db()  # CORRECTION: Rafraîchir avant calcul
         places_apres_creation = self.evenement.places_disponibles
         self.assertEqual(places_apres_creation, self.evenement.capacite_max - 5)
         
@@ -495,7 +514,8 @@ class WorkflowInscriptionTestCase(TestCase):
         for inscription in inscriptions[:3]:
             inscription.confirmer_inscription()
         
-        # Vérifier que seules les confirmées comptent dans les places disponibles
+        # CORRECTION: Rafraîchir l'événement avant de recalculer
+        self.evenement.refresh_from_db()
         places_apres_confirmation = self.evenement.places_disponibles
         self.assertEqual(
             places_apres_confirmation, 
@@ -505,7 +525,8 @@ class WorkflowInscriptionTestCase(TestCase):
         # Annuler une inscription confirmée
         inscriptions[0].annuler_inscription("Test")
         
-        # Vérifier que la place est libérée
+        # CORRECTION: Rafraîchir l'événement après annulation
+        self.evenement.refresh_from_db()
         places_apres_annulation = self.evenement.places_disponibles
         self.assertEqual(
             places_apres_annulation,

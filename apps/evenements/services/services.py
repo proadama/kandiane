@@ -319,7 +319,7 @@ class NotificationService:
         """Envoie une notification à un accompagnant individuel"""
         try:
             sujet = f"Invitation accompagnant : {accompagnant.inscription.evenement.titre}"
-            message = f"Vous êtes invité(e) à {accompagnant.inscription.evenement.titre}."
+            message = f"Vous êtes invité(e) en tant qu'accompagnant à {accompagnant.inscription.evenement.titre}."
             message += f"\n\nVous accompagnez {accompagnant.inscription.membre.nom} à cet événement."
             
             self._envoyer_email(
@@ -334,6 +334,7 @@ class NotificationService:
         except Exception as e:
             self.logger.error(f"Erreur notification accompagnant {accompagnant.id}: {e}")
             return False
+        
     def envoyer_notification_accompagnants(self, inscription, accompagnants):
         """Envoie des notifications à une liste d'accompagnants"""
         try:
