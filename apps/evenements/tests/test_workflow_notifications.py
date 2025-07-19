@@ -758,7 +758,7 @@ class WorkflowNotificationsTachesTestCase(TestCase):
             titre='Événement Proche',
             description='Événement nécessitant confirmation',
             type_evenement=self.type_evenement,
-            organisateur=self.organisateur_user,
+            organisateur=self.organisateur_user,  # CORRECTION: Utiliser l'attribut existant
             date_debut=timezone.now() + timedelta(days=3),
             date_fin=timezone.now() + timedelta(days=3, hours=2),
             lieu='Centre Test',
@@ -771,12 +771,12 @@ class WorkflowNotificationsTachesTestCase(TestCase):
             membre = Membre.objects.create(
                 nom='Participant',
                 prenom='Test',
-                email='participant@example.com',
+                email='participant_task@example.com',
                 date_adhesion=timezone.now().date()
             )
         except Exception:
             membre = MagicMock()
-            membre.email = 'participant@example.com'
+            membre.email = 'participant_task@example.com'
             membre.nom = 'Participant'
         
         # Créer une inscription en attente de confirmation
