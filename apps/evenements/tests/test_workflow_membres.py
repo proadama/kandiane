@@ -4,6 +4,11 @@ from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Q
 
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.core import mail
+from unittest.mock import patch, MagicMock
+
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre
 from ..models import Evenement, InscriptionEvenement
 from .factories import (

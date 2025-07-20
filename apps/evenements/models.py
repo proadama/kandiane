@@ -369,7 +369,7 @@ class Evenement(BaseModel):
         # CORRECTION : Même logique que est_complet
         total_participants = 0
         inscriptions_valides = self.inscriptions.filter(
-            statut__in=['confirmee', 'en_attente', 'presente']
+            statut__in=['confirmee', 'presente']
         )
         
         for inscription in inscriptions_valides:

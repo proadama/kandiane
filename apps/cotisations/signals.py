@@ -118,3 +118,29 @@ def post_delete_paiement(sender, instance, **kwargs):
     except Cotisation.DoesNotExist:
         # La cotisation a déjà été supprimée, rien à faire
         pass
+
+# Signal pour la création de cotisations d'événements (utilisé dans les tests)
+def creer_cotisation_evenement(membre, evenement, inscription, user=None):
+    """
+    Signal simulé pour créer une cotisation lors d'une inscription à un événement payant.
+    Cette fonction est principalement utilisée dans les tests.
+    """
+    if not evenement.est_payant:
+        return None, "Événement non payant"
+    
+    # Calculer le montant selon le type de membre
+    montant = evenement.tarif_membre if hasattr(evenement, 'tarif_membre') else Decimal('50.00')
+    
+    cotisation = Cotisation.objects.create(
+        membre=membre,
+        montant=montant,
+        type_cotisation='evenement',
+        evenement_id=evenement.id,
+        inscription_evenement_id=inscription.id,
+        date_echeance=timezone.now().date() + timezone.timedelta(days=30),
+        statut_paiement='non_payee',
+        cree_par=user,
+        metadata={'inscription_id': inscription.id}
+    )
+    
+    return cotisation, f"Cotisation créée pour {montant}€"

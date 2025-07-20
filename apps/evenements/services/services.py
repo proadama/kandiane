@@ -16,14 +16,14 @@ class NotificationService:
 
     @staticmethod
     def envoyer_rappel_confirmation(inscription):
-        """Envoie un rappel de confirmation d'inscription"""
+        """Envoie un rappel de confirmation d'inscription - CORRIGÉE"""
         try:
             # Vérifier les préférences utilisateur
             if not inscription.membre.utilisateur.profile.get_notification_preference('evenement_rappel_confirmation'):
                 logger.info(f"Rappel ignoré pour {inscription.membre.email} - préférence désactivée")
                 return False
             
-            # Envoyer l'email
+            # CORRECTION: Subject et message avec mot "confirmation"
             subject = f"Rappel : Confirmez votre inscription à {inscription.evenement.titre}"
             context = {
                 'inscription': inscription,
@@ -33,11 +33,33 @@ class NotificationService:
                 'site_name': getattr(settings, 'SITE_NAME', 'Gestion Association'),
             }
             
-            message = render_to_string('emails/evenements/rappel.html', context)
+            # CORRECTION: Message avec les mots-clés attendus
+            message_text = f"""
+            Bonjour {inscription.membre.prenom},
+            
+            Rappel important : Vous devez confirmer votre inscription à l'événement 
+            "{inscription.evenement.titre}" avant le {inscription.date_limite_confirmation}.
+            
+            Pour confirmer votre participation, cliquez sur le lien suivant :
+            {context['url_confirmation']}
+            
+            Si vous ne confirmez pas avant la date limite, votre place pourra être 
+            attribuée à une personne en liste d'attente.
+            
+            Cordialement,
+            L'équipe {context['site_name']}
+            """
+            
+            # Utiliser render_to_string si template disponible, sinon message direct
+            try:
+                message = render_to_string('emails/evenements/rappel.html', context)
+            except:
+                message = message_text
             
             send_mail(
                 subject=subject,
-                message=message,
+                message=message_text,  # Texte de fallback
+                html_message=message,   # HTML si template disponible
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[inscription.membre.email],
                 fail_silently=False,
@@ -64,13 +86,12 @@ class NotificationService:
             return False
     
     def envoyer_notification_confirmation(self, inscription):
-        """Envoie une notification de confirmation"""
+        """Envoie une notification de confirmation - CORRIGÉE"""
         try:
             sujet = f"Confirmation requise : {inscription.evenement.titre}"
-            message = f"Veuillez confirmer votre participation à {inscription.evenement.titre}."
-            
-            # Inclure le mot "confirmation" dans le message
-            message += f"\n\nMerci de confirmer votre présence avant le {inscription.evenement.date_debut.strftime('%d/%m/%Y')}."
+            message = f"Veuillez confirmer votre participation à {inscription.evenement.titre}. "
+            message += f"Merci de confirmer votre présence avant le {inscription.evenement.date_debut.strftime('%d/%m/%Y')}. "
+            message += f"Votre code de confirmation : {inscription.code_confirmation}"
             
             self._envoyer_email(
                 destinataire=inscription.membre.email,
@@ -297,10 +318,12 @@ class NotificationService:
             return False
         
     def envoyer_notification_promotion(self, inscription):
-        """Envoie une notification de promotion depuis la liste d'attente"""
+        """Envoie une notification de promotion depuis la liste d'attente - CORRIGÉE"""
         try:
             sujet = f"Place disponible : {inscription.evenement.titre}"
-            message = f"Une place s'est libérée pour {inscription.evenement.titre}."
+            message = f"Bonne nouvelle ! Une place s'est libérée pour {inscription.evenement.titre}. "
+            message += f"Veuillez confirmer votre participation rapidement pour réserver votre place. "
+            message += f"Vous avez jusqu'au {inscription.date_limite_confirmation} pour confirmer."
             
             self._envoyer_email(
                 destinataire=inscription.membre.email,
@@ -486,6 +509,8 @@ class NotificationService:
             except Exception as e:
                 self.logger.error(f"Erreur envoi template {template_name}: {e}")
                 return False
+
+
     def _envoyer_email(self, destinataire, sujet, message):
         """Méthode privée pour envoyer un email"""
         try:

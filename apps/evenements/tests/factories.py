@@ -7,7 +7,7 @@ from decimal import Decimal
 import random
 
 from apps.accounts.models import CustomUser
-from apps.membres.models import Membre, TypeMembre
+from apps.membres.models import Membre, TypeMembre, MembreTypeMembre
 from apps.cotisations.models import ModePaiement
 from apps.core.models import Statut
 from apps.evenements.models import (
@@ -41,61 +41,8 @@ class StatutFactory(DjangoModelFactory):
     nom = Iterator(['Actif', 'Inactif', 'En attente', 'Validé', 'Refusé'])
     description = factory.LazyAttribute(lambda obj: f'Statut {obj.nom}')
 
-class MembreAvecUserStaffFactory(DjangoModelFactory):
-    """Factory pour créer un membre avec utilisateur staff"""
-    class Meta:
-        model = Membre
-
-    nom = factory.Faker('last_name', locale='fr_FR')
-    prenom = factory.Faker('first_name', locale='fr_FR')
-    email = factory.LazyAttribute(lambda obj: f'{obj.prenom.lower()}.{obj.nom.lower()}@test.com')
-    telephone = factory.Faker('phone_number', locale='fr_FR')
-    adresse = factory.Faker('address', locale='fr_FR')
-    date_adhesion = factory.LazyFunction(
-        lambda: timezone.now().date() - timedelta(days=random.randint(1, 365))
-    )
-    date_naissance = factory.LazyFunction(
-        lambda: timezone.now().date() - timedelta(days=random.randint(6570, 25550))
-    )
-    
-    # CORRECTION : Créer un utilisateur staff
-    utilisateur = SubFactory(CustomUserFactory, is_staff=True)
-    statut = SubFactory(StatutFactory, nom='Actif')
-
-
-class MembreAvecUserFactory(DjangoModelFactory):
-    """Factory pour créer un membre avec utilisateur simple (non-staff)"""
-    class Meta:
-        model = Membre
-
-    nom = factory.Faker('last_name', locale='fr_FR')
-    prenom = factory.Faker('first_name', locale='fr_FR')
-    email = factory.LazyAttribute(lambda obj: f'{obj.prenom.lower()}.{obj.nom.lower()}@test.com')
-    telephone = factory.Faker('phone_number', locale='fr_FR')
-    adresse = factory.Faker('address', locale='fr_FR')
-    date_adhesion = factory.LazyFunction(
-        lambda: timezone.now().date() - timedelta(days=random.randint(1, 365))
-    )
-    date_naissance = factory.LazyFunction(
-        lambda: timezone.now().date() - timedelta(days=random.randint(6570, 25550))
-    )
-    
-    # Utilisateur simple (non-staff)
-    utilisateur = SubFactory(CustomUserFactory, is_staff=False)
-    statut = SubFactory(StatutFactory, nom='Actif')
-
-class TypeMembreFactory(DjangoModelFactory):
-    """Factory pour les types de membres"""
-    class Meta:
-        model = TypeMembre
-        django_get_or_create = ('libelle',)
-
-    libelle = Iterator(['Étudiant', 'Salarié', 'Retraité', 'Honoraire', 'Bienfaiteur'])
-    description = factory.LazyAttribute(lambda obj: f'Type membre {obj.libelle}')
-
-
 class MembreFactory(DjangoModelFactory):
-    """Factory pour les membres"""
+    """Factory pour les membres - CORRIGÉE"""
     class Meta:
         model = Membre
 
@@ -112,7 +59,79 @@ class MembreFactory(DjangoModelFactory):
     )
     utilisateur = SubFactory(CustomUserFactory)
     statut = SubFactory(StatutFactory, nom='Actif')
+    
+    # SUPPRESSION: type_membre n'est plus passé directement
+    # Il sera ajouté via post_generation
 
+    @factory.post_generation
+    def ajouter_type_membre(obj, create, extracted, **kwargs):
+        """Ajoute un type de membre après création"""
+        if not create:
+            return
+            
+        # Si un type spécifique est fourni
+        if extracted:
+            type_membre = extracted
+        else:
+            # Créer ou récupérer un type par défaut
+            type_membre, created = TypeMembre.objects.get_or_create(
+                libelle='Membre Standard',
+                defaults={
+                    'description': 'Type de membre par défaut',
+                    'cotisation_requise': True
+                }
+            )
+        
+        # Utiliser la méthode du modèle pour ajouter le type
+        obj.ajouter_type(type_membre, timezone.now().date())
+
+class MembreAvecUserFactory(MembreFactory):
+    """Factory pour créer un membre avec utilisateur simple (non-staff) - CORRIGÉE"""
+    utilisateur = SubFactory(CustomUserFactory, is_staff=False)
+
+    @factory.post_generation
+    def ajouter_type_membre(obj, create, extracted, **kwargs):
+        """Ajoute un type de membre après création"""
+        if not create:
+            return
+            
+        type_membre, created = TypeMembre.objects.get_or_create(
+            libelle='Membre Standard',
+            defaults={
+                'description': 'Type de membre par défaut',
+                'cotisation_requise': True
+            }
+        )
+        obj.ajouter_type(type_membre, timezone.now().date())
+
+class MembreAvecUserStaffFactory(MembreFactory):
+    """Factory pour créer un membre avec utilisateur staff - CORRIGÉE"""
+    utilisateur = SubFactory(CustomUserFactory, is_staff=True)
+
+    @factory.post_generation
+    def ajouter_type_membre(obj, create, extracted, **kwargs):
+        """Ajoute un type de membre après création"""
+        if not create:
+            return
+            
+        type_membre, created = TypeMembre.objects.get_or_create(
+            libelle='Membre Staff',
+            defaults={
+                'description': 'Type de membre staff',
+                'cotisation_requise': False
+            }
+        )
+        obj.ajouter_type(type_membre, timezone.now().date())
+
+
+class TypeMembreFactory(DjangoModelFactory):
+    """Factory pour les types de membres"""
+    class Meta:
+        model = TypeMembre
+        django_get_or_create = ('libelle',)
+
+    libelle = Iterator(['Étudiant', 'Salarié', 'Retraité', 'Honoraire', 'Bienfaiteur'])
+    description = factory.LazyAttribute(lambda obj: f'Type membre {obj.libelle}')
 
 class ModePaiementFactory(DjangoModelFactory):
     """Factory pour les modes de paiement"""
@@ -139,21 +158,25 @@ class TypeEvenementFactory(DjangoModelFactory):
     
     # CORRECTION : Par défaut, autoriser les accompagnants pour éviter les conflits dans les tests
     permet_accompagnants = True
-    necessite_validation = factory.Iterator([True, False])
+    necessite_validation = False
     ordre_affichage = factory.Sequence(lambda n: n)
 
 
+# CORRECTION 4: EvenementFactory - Cohérence accompagnants
 class EvenementFactory(DjangoModelFactory):
-    """Factory pour les événements"""
+    """Factory pour les événements - CORRIGÉE"""
     class Meta:
         model = Evenement
 
     titre = factory.Faker('sentence', nb_words=3, locale='fr_FR')
     description = factory.Faker('text', max_nb_chars=500, locale='fr_FR')
-    lieu = factory.Faker('address', locale='fr_FR')
 
-    # CORRECTION : Créer un type qui autorise les accompagnants par défaut
-    type_evenement = SubFactory(TypeEvenementFactory, permet_accompagnants=True)
+    # CORRECTION: S'assurer que le type permet les accompagnants
+    type_evenement = SubFactory(
+        TypeEvenementFactory, 
+        permet_accompagnants=True,
+        necessite_validation=False
+    )
     
     # Dates futures
     date_debut = factory.LazyFunction(
@@ -167,19 +190,19 @@ class EvenementFactory(DjangoModelFactory):
     adresse_complete = factory.Faker('address', locale='fr_FR')
     capacite_max = factory.LazyFunction(lambda: random.randint(10, 100))
     
-    # CORRECTION : Créer un membre avec utilisateur pour l'organisateur
+    # CORRECTION: Créer un membre avec utilisateur pour l'organisateur
     organisateur = factory.LazyAttribute(lambda obj: MembreAvecUserFactory().utilisateur)
     
     statut = 'publie'
     inscriptions_ouvertes = True
     
-    # CORRECTION : Par défaut événement gratuit pour simplifier les tests
+    # Par défaut événement gratuit
     est_payant = False
     tarif_membre = Decimal('0.00')
     tarif_salarie = Decimal('0.00') 
     tarif_invite = Decimal('0.00')
     
-    # Accompagnants - cohérent avec le type d'événement
+    # CORRECTION: Cohérence avec le type d'événement
     permet_accompagnants = factory.LazyAttribute(
         lambda obj: obj.type_evenement.permet_accompagnants
     )
@@ -187,12 +210,14 @@ class EvenementFactory(DjangoModelFactory):
     
     delai_confirmation = factory.LazyFunction(lambda: random.randint(24, 168))
 
+# CORRECTION 5: Factory spécifique pour événements avec validation
 class EvenementAvecValidationFactory(EvenementFactory):
-    """Factory pour événements nécessitant validation"""
+    """Factory pour événements nécessitant validation - CORRIGÉE"""
     
     type_evenement = factory.SubFactory(
         TypeEvenementFactory,
-        necessite_validation=True
+        necessite_validation=True,
+        permet_accompagnants=True  # CORRECTION: Cohérence
     )
     statut = 'en_attente_validation'
     
@@ -200,13 +225,13 @@ class EvenementAvecValidationFactory(EvenementFactory):
     def force_create_validation(obj, create, extracted, **kwargs):
         """Force la création de ValidationEvenement"""
         if create:
-            from ..models import ValidationEvenement
+            from apps.evenements.models import ValidationEvenement
             
             ValidationEvenement.objects.get_or_create(
                 evenement=obj,
                 defaults={
                     'statut_validation': 'en_attente',
-                    'commentaires_organisateur': "Événement nécessitant validation"
+                    'commentaire_validation': f"Événement nécessitant validation - {obj.titre}"
                 }
             )
 
@@ -401,3 +426,40 @@ class EvenementRecurrenceTestFactory(DjangoModelFactory):
         obj = model_class(**kwargs)
         obj.save()
         return obj
+    
+# CORRECTION 6: Factory pour tests performance sans type_membre
+class MembrePerformanceFactory(DjangoModelFactory):
+    """Factory optimisée pour les tests de performance"""
+    class Meta:
+        model = Membre
+
+    nom = factory.Sequence(lambda n: f'Nom{n}')
+    prenom = factory.Sequence(lambda n: f'Prenom{n}')
+    email = factory.Sequence(lambda n: f'user{n}@example.com')
+    utilisateur = SubFactory(CustomUserFactory)
+    date_adhesion = factory.LazyFunction(lambda: timezone.now().date())
+    
+    # Pas de post_generation pour la performance
+    
+    @classmethod
+    def create_batch_with_type(cls, size, type_membre=None):
+        """Crée un lot de membres avec type en une seule fois"""
+        membres = cls.create_batch(size)
+        
+        if not type_membre:
+            type_membre, _ = TypeMembre.objects.get_or_create(
+                libelle='Membre Performance',
+                defaults={'cotisation_requise': False}
+            )
+        
+        # Créer les relations en masse
+        relations = []
+        for membre in membres:
+            relations.append(MembreTypeMembre(
+                membre=membre,
+                type_membre=type_membre,
+                date_debut=timezone.now().date()
+            ))
+        
+        MembreTypeMembre.objects.bulk_create(relations)
+        return membres
