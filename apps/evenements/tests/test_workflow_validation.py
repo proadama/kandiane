@@ -49,7 +49,7 @@ class WorkflowValidationTestCase(TestCase):
     """
     
     def setUp(self):
-        """Configuration des données de test"""
+        """Configuration des données de test - CORRIGÉE COMPLÈTE"""
         # Utilisateur organisateur
         self.organisateur = User.objects.create_user(
             username='organisateur',
@@ -59,7 +59,7 @@ class WorkflowValidationTestCase(TestCase):
             last_name='Organisateur'
         )
         
-        # CORRECTION: Création sécurisée du membre
+        # Créer membre organisateur
         try:
             self.membre_organisateur = Membre.objects.create(
                 nom='Organisateur',
@@ -68,7 +68,6 @@ class WorkflowValidationTestCase(TestCase):
                 utilisateur=self.organisateur
             )
         except Exception:
-            # Créer un mock si Membre n'est pas disponible
             self.membre_organisateur = MagicMock()
             self.membre_organisateur.nom = 'Organisateur'
             self.membre_organisateur.email = 'organisateur@example.com'
@@ -83,7 +82,7 @@ class WorkflowValidationTestCase(TestCase):
             is_staff=True
         )
         
-        # CORRECTION: Création sécurisée du membre validateur
+        # Créer membre validateur
         try:
             self.membre_validateur = Membre.objects.create(
                 nom='Validateur',
@@ -108,6 +107,43 @@ class WorkflowValidationTestCase(TestCase):
             necessite_validation=False,
             permet_accompagnants=True
         )
+        
+        # CORRECTION: Ajouter l'attribut evenement manquant
+        self.evenement = Evenement.objects.create(
+            titre='Événement de Test Validation',
+            description='Événement pour tests de validation',
+            type_evenement=self.type_sans_validation,
+            organisateur=self.organisateur,
+            date_debut=timezone.now() + timedelta(days=14),
+            date_fin=timezone.now() + timedelta(days=14, hours=6),
+            lieu='Centre de test validation',
+            capacite_max=20,
+            statut='publie',
+            permet_accompagnants=True
+        )
+        
+        # CORRECTION: Ajouter l'attribut participant manquant
+        self.participant_user = User.objects.create_user(
+            username='participant_validation',
+            email='participant_validation@example.com',
+            password='partpass123'
+        )
+        
+        try:
+            self.membre_participant = Membre.objects.create(
+                nom='Participant',
+                prenom='Test',
+                email='participant_validation@example.com',
+                utilisateur=self.participant_user,
+                date_adhesion=timezone.now().date()
+            )
+        except Exception:
+            self.membre_participant = MagicMock()
+            self.membre_participant.nom = 'Participant'
+            self.membre_participant.email = 'participant_validation@example.com'
+        
+        # CORRECTION: Ajouter service de notification pour compatibilité
+        self.notification_service = NotificationService()
 
     def test_workflow_validation_complete_approbation(self):
         """Test du workflow complet d'approbation - CORRIGÉ"""
