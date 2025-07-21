@@ -159,37 +159,60 @@ class TestEvenement:
         evenement_passe.refresh_from_db()
         assert evenement_passe.est_termine
 
+    
     def test_places_disponibles_calcul(self):
-        """Test calcul places disponibles"""
-        # NE PAS utiliser EvenementCompletFactory, créer manuellement
+        """Test calcul places disponibles - ISOLATION COMPLÈTE"""
+        # CORRECTION : Créer un événement complètement isolé
         evenement = EvenementFactory(capacite_max=20)
         
+        # NETTOYER : S'assurer qu'aucune inscription n'existe
+        evenement.inscriptions.all().delete()
+        
         # Créer exactement 5 inscriptions confirmées manuellement
+        membres_confirmes = []
         for i in range(5):
-            membre = MembreFactory()  # Créer un membre unique à chaque fois
-            InscriptionEvenementFactory(
+            membre = MembreFactory()
+            inscription = InscriptionEvenementFactory(
                 evenement=evenement,
                 membre=membre,
-                statut='confirmee'
+                statut='confirmee',
+                nombre_accompagnants=0  # EXPLICITE : pas d'accompagnant
             )
+            membres_confirmes.append(inscription)
         
-        # Vérifier le nombre d'inscriptions confirmées
-        inscriptions_count = evenement.inscriptions.filter(statut='confirmee').count()
-        assert inscriptions_count == 5, f"Attendu 5 inscriptions, trouvé {inscriptions_count}"
+        # VÉRIFICATION DEBUG
+        count_confirmees = evenement.inscriptions.filter(statut='confirmee').count()
+        assert count_confirmees == 5, f"Attendu 5 inscriptions confirmées, trouvé {count_confirmees}"
         
+        # Test final
         assert evenement.places_disponibles == 15
 
     def test_est_complet_property(self):
-        """Test propriété est_complet"""
-        evenement = EvenementFactory(capacite_max=2)
+        """Test propriété est_complet - COHÉRENCE AVEC places_disponibles"""
+        evenement = EvenementFactory(capacite_max=3)
         
-        # Événement non complet
-        InscriptionEvenementFactory(evenement=evenement, statut='confirmee')
+        # NETTOYER d'abord
+        evenement.inscriptions.all().delete()
+        
+        # 1 inscription confirmée -> pas complet
+        InscriptionEvenementFactory(
+            evenement=evenement, 
+            statut='confirmee',
+            nombre_accompagnants=0
+        )
         assert not evenement.est_complet
+        assert evenement.places_disponibles == 2
         
-        # Événement complet
-        InscriptionEvenementFactory(evenement=evenement, statut='confirmee')
+        # 3 inscriptions confirmées -> complet
+        for _ in range(2):
+            InscriptionEvenementFactory(
+                evenement=evenement, 
+                statut='confirmee',
+                nombre_accompagnants=0
+            )
+        
         assert evenement.est_complet
+        assert evenement.places_disponibles == 0
 
     def test_taux_occupation_calcul(self):
         """Test calcul taux d'occupation"""
@@ -314,51 +337,60 @@ class TestEvenement:
         tarif = evenement.calculer_tarif_membre(membre)
         assert tarif == Decimal('0.00')
 
-    def test_promouvoir_liste_attente(self):
-        """Test promotion depuis liste d'attente"""
-        evenement = EvenementFactory(capacite_max=3)
-        
-        # Remplir l'événement avec exactement 3 inscriptions confirmées
-        membres_confirmes = []
-        for i in range(3):
-            membre = MembreFactory()
-            inscription = InscriptionEvenementFactory(
-                evenement=evenement,
-                membre=membre,
-                statut='confirmee'
-            )
-            membres_confirmes.append(inscription)
-        
-        # Vérifier que l'événement est complet
-        assert evenement.places_disponibles == 0
-        
-        # Ajouter en liste d'attente
-        membre_attente = MembreFactory()
-        inscription_attente = InscriptionEvenementFactory(
-            evenement=evenement,
-            membre=membre_attente,
-            statut='liste_attente'
-        )
-        
-        # Libérer une place en supprimant une inscription
-        membres_confirmes[0].delete()
-        
-        # Vérifier qu'une place est libre
-        assert evenement.places_disponibles == 1
-        
-        # Promouvoir depuis la liste d'attente
-        promus = evenement.promouvoir_liste_attente()
-        
-        # Vérifier le résultat
-        inscription_attente.refresh_from_db()
-        assert inscription_attente.statut == 'en_attente'
-        assert promus == 1  # Une inscription promue
+    
 
 
 @pytest.mark.django_db
 @pytest.mark.unit
 class TestInscriptionEvenement:
     """Tests unitaires pour le modèle InscriptionEvenement"""
+    
+    def test_promouvoir_liste_attente(self):
+            """Test promotion depuis liste d'attente - WORKFLOW COMPLET"""
+            evenement = EvenementFactory(capacite_max=2)
+            
+            # NETTOYER d'abord
+            evenement.inscriptions.all().delete()
+            
+            # Remplir exactement avec 2 inscriptions confirmées
+            inscriptions_confirmees = []
+            for i in range(2):
+                membre = MembreFactory()
+                inscription = InscriptionEvenementFactory(
+                    evenement=evenement,
+                    membre=membre,
+                    statut='confirmee',
+                    nombre_accompagnants=0
+                )
+                inscriptions_confirmees.append(inscription)
+            
+            # Vérifier que c'est complet
+            assert evenement.places_disponibles == 0
+            assert evenement.est_complet
+            
+            # Ajouter en liste d'attente
+            membre_attente = MembreFactory()
+            inscription_attente = InscriptionEvenementFactory(
+                evenement=evenement,
+                membre=membre_attente,
+                statut='liste_attente',
+                nombre_accompagnants=0
+            )
+            
+            # Libérer UNE place en supprimant une inscription confirmée
+            inscriptions_confirmees[0].delete()
+            
+            # Vérifier qu'une place est maintenant libre
+            evenement.refresh_from_db()  # Important !
+            assert evenement.places_disponibles == 1
+            
+            # Promouvoir depuis la liste d'attente
+            promus = evenement.promouvoir_liste_attente()
+            
+            # Vérifications finales
+            inscription_attente.refresh_from_db()
+            assert inscription_attente.statut == 'en_attente'  # Promu vers en_attente
+            assert promus == 1
 
     def test_creation_inscription_valide(self):
         """Test création inscription valide"""

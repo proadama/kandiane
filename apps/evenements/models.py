@@ -358,22 +358,25 @@ class Evenement(BaseModel):
         date_reference = self.date_fin if self.date_fin else self.date_debut
         return date_reference < timezone.now()
 
+    # CONSTANTE POUR LA COHÉRENCE
+    STATUTS_OCCUPENT_PLACE = ['confirmee', 'presente']
+    
     @property  
     def places_disponibles(self):
         """
         Nombre de places disponibles
+        Seules les inscriptions confirmées/présentes comptent définitivement
         """
         if not self.capacite_max:
             return float('inf')
         
-        # CORRECTION : Même logique que est_complet
         total_participants = 0
-        inscriptions_valides = self.inscriptions.filter(
-            statut__in=['confirmee', 'presente']
+        inscriptions_definitives = self.inscriptions.filter(
+            statut__in=self.STATUTS_OCCUPENT_PLACE
         )
         
-        for inscription in inscriptions_valides:
-            # Le membre + ses accompagnants
+        for inscription in inscriptions_definitives:
+            # Le membre principal + ses accompagnants
             total_participants += 1 + inscription.nombre_accompagnants
         
         return max(0, self.capacite_max - total_participants)
@@ -382,21 +385,9 @@ class Evenement(BaseModel):
     def est_complet(self):
         """
         Vérifie si l'événement est complet
+        COHÉRENCE : Même logique que places_disponibles
         """
-        if not self.capacite_max:
-            return False
-        
-        # CORRECTION : Compter correctement les inscriptions valides
-        total_participants = 0
-        inscriptions_valides = self.inscriptions.filter(
-            statut__in=['confirmee', 'en_attente', 'presente']
-        )
-        
-        for inscription in inscriptions_valides:
-            # Le membre + ses accompagnants
-            total_participants += 1 + inscription.nombre_accompagnants
-        
-        return total_participants >= self.capacite_max
+        return self.places_disponibles <= 0
 
     @property
     def taux_occupation(self):
@@ -408,6 +399,20 @@ class Evenement(BaseModel):
         ).count()
         return (inscriptions_confirmees / self.capacite_max) * 100
 
+    @property
+    def places_en_attente(self):
+        """
+        NOUVELLE PROPRIÉTÉ : Places temporairement réservées (en_attente)
+        Utile pour l'interface utilisateur
+        """
+        total_en_attente = 0
+        inscriptions_en_attente = self.inscriptions.filter(statut='en_attente')
+        
+        for inscription in inscriptions_en_attente:
+            total_en_attente += 1 + inscription.nombre_accompagnants
+        
+        return total_en_attente
+    
     def peut_s_inscrire(self, membre):
         """Vérifie si un membre peut s'inscrire à l'événement"""
         # Vérifications de base
@@ -421,10 +426,13 @@ class Evenement(BaseModel):
             return False, "L'événement est terminé"
         
         # Vérification si déjà inscrit
-        if self.inscriptions.filter(membre=membre, statut__in=['en_attente', 'confirmee']).exists():
+        if self.inscriptions.filter(
+            membre=membre, 
+            statut__in=['en_attente', 'confirmee', 'liste_attente']
+        ).exists():
             return False, "Vous êtes déjà inscrit à cet événement"
         
-        # AJOUT : Vérification de la capacité maximale
+        # CORRECTION : Vérification cohérente de la capacité
         if self.est_complet:
             return False, "L'événement est complet"
         
