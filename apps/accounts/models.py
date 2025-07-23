@@ -354,6 +354,55 @@ class UserProfile(BaseModel):
         
     def __str__(self):
         return f"Profil de {self.user.email}"
+    
+    # Propriétés pour les préférences de notifications événements
+    @property
+    def notif_evenement_invitation(self):
+        """Préférence pour les invitations aux événements"""
+        try:
+            return self.get_notification_preference('evenement_invitation')
+        except (AttributeError, KeyError):
+            return True  # Valeur par défaut si pas configuré
+
+    @property
+    def notif_evenement_rappel_confirmation(self):
+        """Préférence pour les rappels de confirmation"""
+        try:
+            return self.get_notification_preference('evenement_rappel_confirmation')
+        except (AttributeError, KeyError):
+            return True  # Valeur par défaut
+
+    @property
+    def notif_evenement_modification(self):
+        """Préférence pour les modifications d'événements"""
+        try:
+            return self.get_notification_preference('evenement_modification')
+        except (AttributeError, KeyError):
+            return True  # Valeur par défaut
+
+    @property
+    def notif_evenement_annulation(self):
+        """Préférence pour les annulations d'événements"""
+        try:
+            return self.get_notification_preference('evenement_annulation')
+        except (AttributeError, KeyError):
+            return True  # Valeur par défaut
+
+    @property
+    def notif_evenement_promotion_liste(self):
+        """Préférence pour les promotions depuis liste d'attente"""
+        try:
+            return self.get_notification_preference('evenement_promotion_liste')
+        except (AttributeError, KeyError):
+            return True  # Valeur par défaut
+
+    @property
+    def notif_evenement_nouveau_type(self):
+        """Préférence pour les nouveaux types d'événements"""
+        try:
+            return self.get_notification_preference('evenement_nouveau_type')
+        except (AttributeError, KeyError):
+            return False  # Valeur par défaut : désactivé pour éviter le spam
 
 
 @receiver(post_save, sender=CustomUser)
