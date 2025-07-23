@@ -217,7 +217,8 @@ urlpatterns = [
     path('', views.DashboardEvenementView.as_view(), name='dashboard'),
     
     # Sous-patterns organisés
-    path('evenements/', include(evenements_patterns)),
+    # path('evenements/', include(evenements_patterns)),
+    path('', include(evenements_patterns)),
     path('inscriptions/', include(inscriptions_patterns)),
     path('validation/', include((validation_patterns, 'validation'), namespace='validation')),
     # path('types/', include(types_patterns)),

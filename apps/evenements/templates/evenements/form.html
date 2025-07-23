@@ -1,840 +1,136 @@
-{% extends 'evenements/base_evenement.html' %}
-{% load static %}
+{% extends 'layouts/base.html' %}
 
-{% block page_title %}{{ action }} un événement{% endblock page_title %}
+{% block title %}DEBUG - Créer Événement{% endblock title %}
 
-{% block extra_css %}
-{{ block.super }}
-<style>
-.form-section {
-    background: white;
-    border-radius: 15px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    margin-bottom: 2rem;
-    overflow: hidden;
-}
-.form-section-header {
-    background: linear-gradient(135deg, #007bff, #0056b3);
-    color: white;
-    padding: 1rem 1.5rem;
-    margin: 0;
-    border-bottom: none;
-}
-.form-section-header h5 {
-    margin: 0;
-    font-weight: 600;
-}
-.form-section-body {
-    padding: 2rem;
-}
-.form-preview {
-    position: sticky;
-    top: 20px;
-    background: #f8f9fa;
-    border-radius: 15px;
-    padding: 1.5rem;
-    border: 2px dashed #dee2e6;
-}
-.preview-card {
-    background: white;
-    border-radius: 10px;
-    padding: 1rem;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    margin-bottom: 1rem;
-}
-.image-preview {
-    max-width: 100%;
-    height: 200px;
-    object-fit: cover;
-    border-radius: 8px;
-    border: 2px dashed #dee2e6;
-    display: none;
-}
-.required-field {
-    position: relative;
-}
-.required-field::after {
-    content: '*';
-    color: #dc3545;
-    margin-left: 4px;
-}
-.form-help {
-    font-size: 0.875rem;
-    color: #6c757d;
-    margin-top: 0.25rem;
-}
-.step-indicator {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 2rem;
-    position: relative;
-}
-.step-indicator::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: #dee2e6;
-    z-index: 1;
-}
-.step {
-    background: white;
-    border: 3px solid #dee2e6;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    z-index: 2;
-    font-weight: bold;
-}
-.step.active {
-    border-color: #007bff;
-    background: #007bff;
-    color: white;
-}
-.step.completed {
-    border-color: #28a745;
-    background: #28a745;
-    color: white;
-}
-.character-counter {
-    font-size: 0.75rem;
-    color: #6c757d;
-    text-align: right;
-    margin-top: 0.25rem;
-}
-.price-calculator {
-    background: #e3f2fd;
-    border-radius: 8px;
-    padding: 1rem;
-    margin-top: 1rem;
-}
-.datetime-info {
-    background: #fff3cd;
-    border-radius: 8px;
-    padding: 0.75rem;
-    margin-top: 0.5rem;
-    font-size: 0.875rem;
-}
-</style>
-{% endblock extra_css %}
-
-{% block evenement_content %}
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <h1 class="h3 mb-1">
-                    <i class="fas fa-{% if object.pk %}edit{% else %}plus{% endif %} text-primary me-2"></i>
-                    {{ action }} un événement
-                </h1>
-                <p class="text-muted mb-0">
-                    {% if object.pk %}
-                        Modification de "{{ object.titre }}"
-                    {% else %}
-                        Créer un nouvel événement pour votre association
-                    {% endif %}
-                </p>
-            </div>
-            <div>
-                <a href="{% if object.pk %}{% url 'evenements:detail' object.pk %}{% else %}{% url 'evenements:liste' %}{% endif %}" 
-                   class="btn btn-outline-secondary">
-                    <i class="fas fa-arrow-left me-1"></i>Retour
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Indicateur d'étapes -->
-<div class="step-indicator">
-    <div class="step active" data-step="1">1</div>
-    <div class="step" data-step="2">2</div>
-    <div class="step" data-step="3">3</div>
-    <div class="step" data-step="4">4</div>
-</div>
-
-<form method="post" enctype="multipart/form-data" id="eventForm" novalidate>
-    {% csrf_token %}
-    
-    <div class="row">
-        <!-- Formulaire principal -->
-        <div class="col-lg-8">
-            <!-- Étape 1: Informations générales -->
-            <div class="form-section" data-section="1">
-                <div class="form-section-header">
-                    <h5><i class="fas fa-info-circle me-2"></i>Informations générales</h5>
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3>DEBUG - Créer un Événement</h3>
                 </div>
-                <div class="form-section-body">
-                    <div class="row">
-                        <div class="col-md-8 mb-3">
-                            <label class="form-label required-field">{{ form.titre.label }}</label>
+                
+                <div class="card-body">
+                    <!-- AFFICHAGE DES ERREURS GLOBALES -->
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <h5>Erreurs générales :</h5>
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+                    
+                    <!-- AFFICHAGE DE TOUTES LES ERREURS DE CHAMPS -->
+                    {% if form.errors %}
+                        <div class="alert alert-warning">
+                            <h5>Erreurs de validation :</h5>
+                            {% for field, errors in form.errors.items %}
+                                <strong>{{ field }} :</strong> {{ errors|join:", " }}<br>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <!-- CHAMPS ESSENTIELS SEULEMENT -->
+                        <div class="mb-3">
+                            <label for="{{ form.titre.id_for_label }}" class="form-label">
+                                Titre <span class="text-danger">*</span>
+                            </label>
                             {{ form.titre }}
-                            <div class="character-counter">
-                                <span id="titreCounter">0</span>/255 caractères
-                            </div>
                             {% if form.titre.errors %}
-                                <div class="text-danger small">{{ form.titre.errors.0 }}</div>
+                                <div class="text-danger">{{ form.titre.errors }}</div>
                             {% endif %}
                         </div>
                         
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label required-field">{{ form.type_evenement.label }}</label>
+                        <div class="mb-3">
+                            <label for="{{ form.type_evenement.id_for_label }}" class="form-label">
+                                Type d'événement <span class="text-danger">*</span>
+                            </label>
                             {{ form.type_evenement }}
                             {% if form.type_evenement.errors %}
-                                <div class="text-danger small">{{ form.type_evenement.errors.0 }}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label required-field">{{ form.description.label }}</label>
-                        {{ form.description }}
-                        <div class="character-counter">
-                            <span id="descriptionCounter">0</span>/2000 caractères
-                        </div>
-                        <div class="form-help">
-                            Décrivez votre événement de manière attractive et détaillée
-                        </div>
-                        {% if form.description.errors %}
-                            <div class="text-danger small">{{ form.description.errors.0 }}</div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-8 mb-3">
-                            <label class="form-label">{{ form.organisateur.label }}</label>
-                            {% if form.organisateur %}
-                                {{ form.organisateur }}
-                            {% else %}
-                                <input type="text" class="form-control" 
-                                       value="{{ user.get_full_name }}" readonly>
-                                <div class="form-help">Vous serez l'organisateur de cet événement</div>
-                            {% endif %}
-                            {% if form.organisateur.errors %}
-                                <div class="text-danger small">{{ form.organisateur.errors.0 }}</div>
+                                <div class="text-danger">{{ form.type_evenement.errors }}</div>
                             {% endif %}
                         </div>
                         
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.image.label }}</label>
-                            {{ form.image }}
-                            <div class="form-help">Format recommandé: 800x400px, max 2MB</div>
-                            {% if form.image.errors %}
-                                <div class="text-danger small">{{ form.image.errors.0 }}</div>
+                        <div class="mb-3">
+                            <label for="{{ form.description.id_for_label }}" class="form-label">
+                                Description
+                            </label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                                <div class="text-danger">{{ form.description.errors }}</div>
                             {% endif %}
                         </div>
-                    </div>
-                    
-                    <!-- Prévisualisation de l'image -->
-                    <div class="mb-3">
-                        <img id="imagePreview" class="image-preview" alt="Aperçu">
-                        {% if object.image %}
-                        <img src="{{ object.image.url }}" class="image-preview" style="display: block;" alt="Image actuelle">
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Étape 2: Dates et lieu -->
-            <div class="form-section" data-section="2" style="display: none;">
-                <div class="form-section-header">
-                    <h5><i class="fas fa-calendar-alt me-2"></i>Dates et lieu</h5>
-                </div>
-                <div class="form-section-body">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label required-field">{{ form.date_debut.label }}</label>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.date_debut.id_for_label }}" class="form-label">
+                                Date début <span class="text-danger">*</span>
+                            </label>
                             {{ form.date_debut }}
                             {% if form.date_debut.errors %}
-                                <div class="text-danger small">{{ form.date_debut.errors.0 }}</div>
+                                <div class="text-danger">{{ form.date_debut.errors }}</div>
                             {% endif %}
                         </div>
                         
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">{{ form.date_fin.label }}</label>
-                            {{ form.date_fin }}
-                            <div class="form-help">Optionnel si l'événement dure moins d'une journée</div>
-                            {% if form.date_fin.errors %}
-                                <div class="text-danger small">{{ form.date_fin.errors.0 }}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    <!-- Informations sur la durée -->
-                    <div id="durationInfo" class="datetime-info" style="display: none;">
-                        <i class="fas fa-clock me-2"></i>
-                        <span id="durationText">Durée: -</span>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-8 mb-3">
-                            <label class="form-label required-field">{{ form.lieu.label }}</label>
+                        <div class="mb-3">
+                            <label for="{{ form.lieu.id_for_label }}" class="form-label">
+                                Lieu <span class="text-danger">*</span>
+                            </label>
                             {{ form.lieu }}
-                            <div class="form-help">
-                                <i class="fas fa-lightbulb me-1"></i>
-                                Commencez à taper pour voir les suggestions de lieux
-                            </div>
                             {% if form.lieu.errors %}
-                                <div class="text-danger small">{{ form.lieu.errors.0 }}</div>
+                                <div class="text-danger">{{ form.lieu.errors }}</div>
                             {% endif %}
                         </div>
                         
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label required-field">{{ form.capacite_max.label }}</label>
+                        <div class="mb-3">
+                            <label for="{{ form.capacite_max.id_for_label }}" class="form-label">
+                                Capacité maximum <span class="text-danger">*</span>
+                            </label>
                             {{ form.capacite_max }}
                             {% if form.capacite_max.errors %}
-                                <div class="text-danger small">{{ form.capacite_max.errors.0 }}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.adresse_complete.label }}</label>
-                        {{ form.adresse_complete }}
-                        <div class="form-help">Adresse complète pour faciliter l'accès</div>
-                        {% if form.adresse_complete.errors %}
-                            <div class="text-danger small">{{ form.adresse_complete.errors.0 }}</div>
-                        {% endif %}
-                    </div>
-                    
-                    <!-- Dates d'inscription -->
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">{{ form.date_ouverture_inscriptions.label }}</label>
-                            {{ form.date_ouverture_inscriptions }}
-                            <div class="form-help">Si vide, les inscriptions sont ouvertes immédiatement</div>
-                            {% if form.date_ouverture_inscriptions.errors %}
-                                <div class="text-danger small">{{ form.date_ouverture_inscriptions.errors.0 }}</div>
+                                <div class="text-danger">{{ form.capacite_max.errors }}</div>
                             {% endif %}
                         </div>
                         
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">{{ form.date_fermeture_inscriptions.label }}</label>
-                            {{ form.date_fermeture_inscriptions }}
-                            <div class="form-help">Si vide, fermeture automatique au début de l'événement</div>
-                            {% if form.date_fermeture_inscriptions.errors %}
-                                <div class="text-danger small">{{ form.date_fermeture_inscriptions.errors.0 }}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Étape 3: Tarification et inscriptions -->
-            <div class="form-section" data-section="3" style="display: none;">
-                <div class="form-section-header">
-                    <h5><i class="fas fa-euro-sign me-2"></i>Tarification et inscriptions</h5>
-                </div>
-                <div class="form-section-body">
-                    <!-- Événement payant -->
-                    <div class="mb-4">
-                        <div class="form-check form-switch">
-                            {{ form.est_payant }}
-                            <label class="form-check-label" for="{{ form.est_payant.id_for_label }}">
-                                {{ form.est_payant.label }}
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <!-- Tarifs (affichés seulement si payant) -->
-                    <div id="tarifsSection" style="display: none;">
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">{{ form.tarif_membre.label }}</label>
-                                {{ form.tarif_membre }}
-                                {% if form.tarif_membre.errors %}
-                                    <div class="text-danger small">{{ form.tarif_membre.errors.0 }}</div>
-                                {% endif %}
-                            </div>
-                            
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">{{ form.tarif_salarie.label }}</label>
-                                {{ form.tarif_salarie }}
-                                {% if form.tarif_salarie.errors %}
-                                    <div class="text-danger small">{{ form.tarif_salarie.errors.0 }}</div>
-                                {% endif %}
-                            </div>
-                            
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">{{ form.tarif_invite.label }}</label>
-                                {{ form.tarif_invite }}
-                                {% if form.tarif_invite.errors %}
-                                    <div class="text-danger small">{{ form.tarif_invite.errors.0 }}</div>
-                                {% endif %}
+                        <!-- CHAMPS OPTIONNELS AVEC VALEURS PAR DÉFAUT -->
+                        <div class="mb-3">
+                            <div class="form-check">
+                                {{ form.inscriptions_ouvertes }}
+                                <label class="form-check-label" for="{{ form.inscriptions_ouvertes.id_for_label }}">
+                                    Inscriptions ouvertes
+                                </label>
                             </div>
                         </div>
                         
-                        <!-- Calculateur de revenus -->
-                        <div class="price-calculator">
-                            <h6><i class="fas fa-calculator me-2"></i>Estimation des revenus</h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <small class="text-muted">Si complet ({{ form.capacite_max.value|default:"XX" }} participants)</small>
-                                    <div class="fw-bold" id="revenueEstimate">0€</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <small class="text-muted">Revenu moyen par participant</small>
-                                    <div class="fw-bold" id="averageRevenue">0€</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Accompagnants -->
-                    <div class="mb-4">
-                        <div class="form-check form-switch">
-                            {{ form.permet_accompagnants }}
-                            <label class="form-check-label" for="{{ form.permet_accompagnants.id_for_label }}">
-                                {{ form.permet_accompagnants.label }}
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div id="accompagnantsSection">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">{{ form.nombre_max_accompagnants.label }}</label>
-                                {{ form.nombre_max_accompagnants }}
-                                {% if form.nombre_max_accompagnants.errors %}
-                                    <div class="text-danger small">{{ form.nombre_max_accompagnants.errors.0 }}</div>
-                                {% endif %}
-                            </div>
-                            
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">{{ form.delai_confirmation.label }}</label>
-                                {{ form.delai_confirmation }}
-                                <div class="form-help">Délai en heures pour confirmer l'inscription</div>
-                                {% if form.delai_confirmation.errors %}
-                                    <div class="text-danger small">{{ form.delai_confirmation.errors.0 }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Ouverture des inscriptions -->
-                    <div class="mb-3">
-                        <div class="form-check form-switch">
-                            {{ form.inscriptions_ouvertes }}
-                            <label class="form-check-label" for="{{ form.inscriptions_ouvertes.id_for_label }}">
-                                {{ form.inscriptions_ouvertes.label }}
-                            </label>
-                            <div class="form-help">Vous pouvez modifier ceci à tout moment</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Étape 4: Informations complémentaires -->
-            <div class="form-section" data-section="4" style="display: none;">
-                <div class="form-section-header">
-                    <h5><i class="fas fa-plus-circle me-2"></i>Informations complémentaires</h5>
-                </div>
-                <div class="form-section-body">
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.instructions_particulieres.label }}</label>
-                        {{ form.instructions_particulieres }}
-                        <div class="form-help">
-                            Instructions spéciales, code vestimentaire, prérequis, etc.
-                        </div>
-                        {% if form.instructions_particulieres.errors %}
-                            <div class="text-danger small">{{ form.instructions_particulieres.errors.0 }}</div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.materiel_requis.label }}</label>
-                        {{ form.materiel_requis }}
-                        <div class="form-help">
-                            Matériel que les participants doivent apporter
-                        </div>
-                        {% if form.materiel_requis.errors %}
-                            <div class="text-danger small">{{ form.materiel_requis.errors.0 }}</div>
-                        {% endif %}
-                    </div>
-                    
-                    <!-- Résumé final -->
-                    <div class="alert alert-info">
-                        <h6><i class="fas fa-info-circle me-2"></i>Avant de {{ action|lower }}</h6>
-                        <ul class="mb-0">
-                            <li>Vérifiez toutes les informations saisies</li>
-                            <li>Assurez-vous que les dates sont correctes</li>
-                            <li>Confirmez la capacité et les tarifs</li>
-                            {% if not object.pk %}
-                            <li>L'événement sera 
-                                <span id="statusPreview">
-                                    {% if form.instance.type_evenement.necessite_validation %}
-                                        <span class="text-warning">soumis pour validation</span>
-                                    {% else %}
-                                        <span class="text-success">publié immédiatement</span>
-                                    {% endif %}
-                                </span>
-                            </li>
-                            {% endif %}
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Boutons de navigation -->
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <button type="button" class="btn btn-outline-secondary" id="prevBtn" style="display: none;">
-                    <i class="fas fa-arrow-left me-1"></i>Précédent
-                </button>
-                
-                <div class="ms-auto d-flex gap-2">
-                    <button type="button" class="btn btn-primary" id="nextBtn">
-                        Suivant<i class="fas fa-arrow-right ms-1"></i>
-                    </button>
-                    
-                    <button type="submit" class="btn btn-success" id="submitBtn" style="display: none;">
-                        <i class="fas fa-save me-1"></i>{{ action }} l'événement
-                    </button>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Aperçu en temps réel -->
-        <div class="col-lg-4">
-            <div class="form-preview">
-                <h6 class="mb-3">
-                    <i class="fas fa-eye me-2"></i>Aperçu de l'événement
-                </h6>
-                
-                <div class="preview-card">
-                    <div class="preview-image mb-2" style="height: 120px; background: #f8f9fa; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
-                        <i class="fas fa-image fa-2x text-muted"></i>
-                    </div>
-                    
-                    <div class="preview-content">
-                        <h6 class="preview-title text-muted">Titre de l'événement</h6>
-                        <p class="preview-description small text-muted">Description de l'événement...</p>
-                        
-                        <div class="preview-meta">
-                            <div class="d-flex align-items-center mb-1">
-                                <i class="fas fa-calendar-alt text-primary me-2"></i>
-                                <small class="preview-date text-muted">Date non définie</small>
-                            </div>
-                            <div class="d-flex align-items-center mb-1">
-                                <i class="fas fa-map-marker-alt text-primary me-2"></i>
-                                <small class="preview-lieu text-muted">Lieu non défini</small>
-                            </div>
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-users text-primary me-2"></i>
-                                <small class="preview-capacite text-muted">Capacité non définie</small>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                {{ form.est_payant }}
+                                <label class="form-check-label" for="{{ form.est_payant.id_for_label }}">
+                                    Événement payant
+                                </label>
                             </div>
                         </div>
                         
-                        <div class="preview-price mt-2">
-                            <span class="badge bg-success preview-price-badge">Gratuit</span>
+                        <!-- DEBUG : AFFICHER TOUS LES CHAMPS DU FORMULAIRE -->
+                        <div class="alert alert-info">
+                            <h6>DEBUG - Champs du formulaire :</h6>
+                            {% for field in form %}
+                                <small>{{ field.name }} : {{ field.field.required|yesno:"Requis,Optionnel" }}</small><br>
+                            {% endfor %}
                         </div>
-                    </div>
-                </div>
-                
-                <!-- Progression du formulaire -->
-                <div class="mt-3">
-                    <div class="d-flex justify-content-between mb-1">
-                        <small>Progression</small>
-                        <small id="progressText">25%</small>
-                    </div>
-                    <div class="progress" style="height: 6px;">
-                        <div class="progress-bar" id="progressBar" style="width: 25%"></div>
-                    </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            Créer l'Événement (DEBUG)
+                        </button>
+                        <a href="{% url 'evenements:liste' %}" class="btn btn-secondary ms-2">
+                            Annuler
+                        </a>
+                    </form>
                 </div>
             </div>
         </div>
     </div>
-</form>
-{% endblock evenement_content %}
-
-{% block extra_js %}
-{{ block.super }}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    let currentStep = 1;
-    const totalSteps = 4;
-    
-    // Éléments du formulaire
-    const form = document.getElementById('eventForm');
-    const prevBtn = document.getElementById('prevBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const submitBtn = document.getElementById('submitBtn');
-    const steps = document.querySelectorAll('.step');
-    const sections = document.querySelectorAll('.form-section');
-    
-    // Mise à jour de l'aperçu en temps réel
-    function updatePreview() {
-        const titre = document.getElementById('{{ form.titre.id_for_label }}').value;
-        const description = document.getElementById('{{ form.description.id_for_label }}').value;
-        const lieu = document.getElementById('{{ form.lieu.id_for_label }}').value;
-        const capacite = document.getElementById('{{ form.capacite_max.id_for_label }}').value;
-        const dateDebut = document.getElementById('{{ form.date_debut.id_for_label }}').value;
-        const estPayant = document.getElementById('{{ form.est_payant.id_for_label }}').checked;
-        const tarifMembre = document.getElementById('{{ form.tarif_membre.id_for_label }}').value;
-        
-        // Mise à jour du contenu
-        document.querySelector('.preview-title').textContent = titre || 'Titre de l\'événement';
-        document.querySelector('.preview-description').textContent = 
-            description ? description.substring(0, 100) + '...' : 'Description de l\'événement...';
-        document.querySelector('.preview-lieu').textContent = lieu || 'Lieu non défini';
-        document.querySelector('.preview-capacite').textContent = 
-            capacite ? capacite + ' participants max' : 'Capacité non définie';
-        
-        // Date
-        if (dateDebut) {
-            const date = new Date(dateDebut);
-            document.querySelector('.preview-date').textContent = 
-                date.toLocaleDateString('fr-FR') + ' à ' + date.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
-        } else {
-            document.querySelector('.preview-date').textContent = 'Date non définie';
-        }
-        
-        // Prix
-        const priceBadge = document.querySelector('.preview-price-badge');
-        if (estPayant && tarifMembre) {
-            priceBadge.textContent = tarifMembre + '€';
-            priceBadge.className = 'badge bg-primary preview-price-badge';
-        } else {
-            priceBadge.textContent = 'Gratuit';
-            priceBadge.className = 'badge bg-success preview-price-badge';
-        }
-    }
-    
-    // Navigation entre les étapes
-    function showStep(step) {
-        // Cacher toutes les sections
-        sections.forEach(section => section.style.display = 'none');
-        
-        // Afficher la section courante
-        const currentSection = document.querySelector(`[data-section="${step}"]`);
-        if (currentSection) {
-            currentSection.style.display = 'block';
-        }
-        
-        // Mettre à jour les indicateurs d'étapes
-        steps.forEach((stepEl, index) => {
-            stepEl.classList.remove('active', 'completed');
-            if (index + 1 < step) {
-                stepEl.classList.add('completed');
-            } else if (index + 1 === step) {
-                stepEl.classList.add('active');
-            }
-        });
-        
-        // Gestion des boutons
-        prevBtn.style.display = step > 1 ? 'block' : 'none';
-        nextBtn.style.display = step < totalSteps ? 'block' : 'none';
-        submitBtn.style.display = step === totalSteps ? 'block' : 'none';
-        
-        // Mise à jour de la progression
-        const progress = (step / totalSteps) * 100;
-        document.getElementById('progressBar').style.width = progress + '%';
-        document.getElementById('progressText').textContent = Math.round(progress) + '%';
-        
-        currentStep = step;
-    }
-    
-    // Validation d'une étape
-    function validateStep(step) {
-        const section = document.querySelector(`[data-section="${step}"]`);
-        const requiredFields = section.querySelectorAll('[required]');
-        let isValid = true;
-        
-        requiredFields.forEach(field => {
-            if (!field.value.trim()) {
-                field.classList.add('is-invalid');
-                isValid = false;
-            } else {
-                field.classList.remove('is-invalid');
-            }
-        });
-        
-        return isValid;
-    }
-    
-    // Événements des boutons
-    nextBtn.addEventListener('click', function() {
-        if (validateStep(currentStep)) {
-            if (currentStep < totalSteps) {
-                showStep(currentStep + 1);
-            }
-        }
-    });
-    
-    prevBtn.addEventListener('click', function() {
-        if (currentStep > 1) {
-            showStep(currentStep - 1);
-        }
-    });
-    
-    // Gestion de l'événement payant
-    const estPayantCheckbox = document.getElementById('{{ form.est_payant.id_for_label }}');
-    const tarifsSection = document.getElementById('tarifsSection');
-    
-    estPayantCheckbox.addEventListener('change', function() {
-        tarifsSection.style.display = this.checked ? 'block' : 'none';
-        updatePreview();
-        calculateRevenue();
-    });
-    
-    // Vérifier l'état initial
-    if (estPayantCheckbox.checked) {
-        tarifsSection.style.display = 'block';
-    }
-    
-    // Gestion des accompagnants
-    const permettAccompagnantsCheckbox = document.getElementById('{{ form.permet_accompagnants.id_for_label }}');
-    const accompagnantsSection = document.getElementById('accompagnantsSection');
-    
-    permettAccompagnantsCheckbox.addEventListener('change', function() {
-        const nombreField = document.getElementById('{{ form.nombre_max_accompagnants.id_for_label }}');
-        if (!this.checked) {
-            nombreField.value = '0';
-        } else if (nombreField.value === '0') {
-            nombreField.value = '2';
-        }
-    });
-    
-    // Compteurs de caractères
-    function setupCharacterCounter(fieldId, counterId, maxLength) {
-        const field = document.getElementById(fieldId);
-        const counter = document.getElementById(counterId);
-        
-        if (field && counter) {
-            function updateCounter() {
-                const length = field.value.length;
-                counter.textContent = length;
-                counter.style.color = length > maxLength * 0.9 ? '#dc3545' : '#6c757d';
-            }
-            
-            field.addEventListener('input', updateCounter);
-            updateCounter();
-        }
-    }
-    
-    setupCharacterCounter('{{ form.titre.id_for_label }}', 'titreCounter', 255);
-    setupCharacterCounter('{{ form.description.id_for_label }}', 'descriptionCounter', 2000);
-    
-    // Calculateur de revenus
-    function calculateRevenue() {
-        const capacite = parseInt(document.getElementById('{{ form.capacite_max.id_for_label }}').value) || 0;
-        const tarifMembre = parseFloat(document.getElementById('{{ form.tarif_membre.id_for_label }}').value) || 0;
-        const tarifInvite = parseFloat(document.getElementById('{{ form.tarif_invite.id_for_label }}').value) || 0;
-        
-        // Estimation simple (70% membres, 30% invités)
-        const revenueEstimate = (capacite * 0.7 * tarifMembre) + (capacite * 0.3 * tarifInvite);
-        const averageRevenue = capacite > 0 ? revenueEstimate / capacite : 0;
-        
-        document.getElementById('revenueEstimate').textContent = Math.round(revenueEstimate) + '€';
-        document.getElementById('averageRevenue').textContent = Math.round(averageRevenue) + '€';
-    }
-    
-    // Calcul de la durée
-    function calculateDuration() {
-        const dateDebut = document.getElementById('{{ form.date_debut.id_for_label }}').value;
-        const dateFin = document.getElementById('{{ form.date_fin.id_for_label }}').value;
-        
-        if (dateDebut && dateFin) {
-            const debut = new Date(dateDebut);
-            const fin = new Date(dateFin);
-            const diffMs = fin - debut;
-            
-            if (diffMs > 0) {
-                const diffHours = diffMs / (1000 * 60 * 60);
-                document.getElementById('durationText').textContent = 
-                    `Durée: ${Math.round(diffHours * 10) / 10}h`;
-                document.getElementById('durationInfo').style.display = 'block';
-            } else {
-                document.getElementById('durationInfo').style.display = 'none';
-            }
-        } else {
-            document.getElementById('durationInfo').style.display = 'none';
-        }
-    }
-    
-    // Prévisualisation de l'image
-    const imageInput = document.getElementById('{{ form.image.id_for_label }}');
-    if (imageInput) {
-        imageInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    document.getElementById('imagePreview').src = e.target.result;
-                    document.getElementById('imagePreview').style.display = 'block';
-                    
-                    // Mettre à jour l'aperçu aussi
-                    const previewImage = document.querySelector('.preview-image');
-                    previewImage.style.backgroundImage = `url(${e.target.result})`;
-                    previewImage.style.backgroundSize = 'cover';
-                    previewImage.style.backgroundPosition = 'center';
-                    previewImage.innerHTML = '';
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-    }
-    
-    // Autocomplétion pour les lieux
-    const lieuInput = document.getElementById('{{ form.lieu.id_for_label }}');
-    if (lieuInput) {
-        let timeoutId;
-        lieuInput.addEventListener('input', function() {
-            clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => {
-                // Ici on pourrait ajouter une requête AJAX pour l'autocomplétion
-                // fetch(window.EvenementsConfig.urls.autocompleteLieux + '?q=' + this.value)
-            }, 300);
-        });
-    }
-    
-    // Écouteurs pour la mise à jour en temps réel
-    const updateFields = [
-        '{{ form.titre.id_for_label }}',
-        '{{ form.description.id_for_label }}',
-        '{{ form.lieu.id_for_label }}',
-        '{{ form.capacite_max.id_for_label }}',
-        '{{ form.date_debut.id_for_label }}',
-        '{{ form.est_payant.id_for_label }}',
-        '{{ form.tarif_membre.id_for_label }}'
-    ];
-    
-    updateFields.forEach(fieldId => {
-        const field = document.getElementById(fieldId);
-        if (field) {
-            field.addEventListener('input', updatePreview);
-            field.addEventListener('change', updatePreview);
-        }
-    });
-    
-    // Écouteurs pour le calcul de revenus
-    ['{{ form.capacite_max.id_for_label }}', '{{ form.tarif_membre.id_for_label }}', '{{ form.tarif_invite.id_for_label }}'].forEach(fieldId => {
-        const field = document.getElementById(fieldId);
-        if (field) {
-            field.addEventListener('input', calculateRevenue);
-        }
-    });
-    
-    // Écouteurs pour la durée
-    ['{{ form.date_debut.id_for_label }}', '{{ form.date_fin.id_for_label }}'].forEach(fieldId => {
-        const field = document.getElementById(fieldId);
-        if (field) {
-            field.addEventListener('change', calculateDuration);
-        }
-    });
-    
-    // Initialisation
-    showStep(1);
-    updatePreview();
-    if (estPayantCheckbox.checked) {
-        calculateRevenue();
-    }
-    calculateDuration();
-});
-</script>
-{% endblock extra_js %}
+</div>
+{% endblock content %}

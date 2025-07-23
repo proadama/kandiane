@@ -3,6 +3,7 @@ from decimal import Decimal
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Q
+from django.db import transaction
 
 from ..models import (
     TypeEvenement, Evenement, InscriptionEvenement,
@@ -70,22 +71,48 @@ class TestTypeEvenementManager:
         assert types_ordonnes[2] == type1  # ordre 3
 
 
+@pytest.fixture(autouse=True)
+def clean_database():
+    """Nettoie la base de données avant chaque test"""
+    # Avant le test
+    yield
+    # Après le test (nettoyage)
+    with transaction.atomic():
+        Evenement.objects.all().delete()
+        TypeEvenement.objects.all().delete()
+
 @pytest.mark.django_db
 @pytest.mark.unit
 class TestEvenementManager:
     """Tests unitaires pour EvenementManager"""
 
+    def setup_method(self):
+        """Nettoyage avant chaque test de cette classe"""
+        Evenement.objects.all().delete()
+        
     def test_publies(self):
-        """Test événements publiés"""
+        """Test événements publiés - Version robuste avec count"""
+        # Compter les événements publiés AVANT
+        count_initial = Evenement.objects.publies().count()
+        
+        # Créer nos événements de test
         evt_publie = EvenementFactory(statut='publie')
         evt_brouillon = EvenementFactory(statut='brouillon')
         evt_annule = EvenementFactory(statut='annule')
         
+        # Vérifier les comptes
         publies = Evenement.objects.publies()
+        count_final = publies.count()
         
-        assert evt_publie in publies
-        assert evt_brouillon not in publies
-        assert evt_annule not in publies
+        # Le nombre d'événements publiés doit avoir augmenté de exactement 1
+        assert count_final == count_initial + 1, f"Attendu {count_initial + 1} événements publiés, trouvé {count_final}"
+        
+        # Vérifier que notre événement publié est bien là
+        assert publies.filter(id=evt_publie.id).exists(), "L'événement publié devrait exister"
+        
+        # Vérifier que les autres ne sont PAS là
+        assert not publies.filter(id=evt_brouillon.id).exists(), "L'événement brouillon ne devrait PAS exister dans publies()"
+        assert not publies.filter(id=evt_annule.id).exists(), "L'événement annulé ne devrait PAS exister dans publies()"
 
     def test_a_venir(self):
         """Test événements à venir"""
