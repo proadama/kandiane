@@ -104,8 +104,15 @@ rappel_detail = RappelDetailView.as_view()
 rappel_create = RappelCreateView.as_view()
 rappel_update = RappelUpdateView.as_view()
 
-# Les exports et imports restent dans l'ancien views.py
-# export, import_cotisations sont importés depuis old_views ci-dessus
+# Créer les aliases pour les vues d'export/import (depuis old_views)
+# Ces vues ne sont pas encore migrées, elles viennent de views.py
+try:
+    if 'ExportCotisationsView' in globals():
+        export = ExportCotisationsView.as_view()
+    if 'ImportCotisationsView' in globals():
+        import_cotisations = ImportCotisationsView.as_view()
+except Exception:
+    pass  # Les vues ne sont pas encore migrées
 
 
 # ============================================================================
