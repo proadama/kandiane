@@ -28,14 +28,14 @@ importe temporairement depuis l'ancien views.py.
 Une fois tous les modules créés, ce fichier importera depuis chaque module.
 """
 
-# Importer depuis les nouveaux modules
-from .utils import *
-from .dashboard import *
-from .cotisations import *
-from .paiements import *
-from .rappels import *
-from .baremes import *
-from .api import *
+# Importer depuis les nouveaux modules avec imports absolus
+from apps.cotisations.views.utils import *
+from apps.cotisations.views.dashboard import *
+from apps.cotisations.views.cotisations import *
+from apps.cotisations.views.paiements import *
+from apps.cotisations.views.rappels import *
+from apps.cotisations.views.baremes import *
+from apps.cotisations.views.api import *
 
 # Import conditionnel depuis l'ancien views.py pour les modules non migrés
 # (imports_exports.py reste dans views.py pour l'instant)
@@ -44,7 +44,7 @@ import os
 import importlib.util
 
 try:
-    current_dir = os.path.dirname(__file__)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(current_dir)
     old_views_path = os.path.join(parent_dir, 'views.py')
 
@@ -64,31 +64,6 @@ try:
             'export_rappels',
             '_apply_paiement_filters',
             '_apply_rappel_filters',
-            # Aliases de vues pour urls.py
-            'dashboard',
-            'cotisation_list',
-            'cotisation_detail',
-            'cotisation_create',
-            'cotisation_update',
-            'cotisation_delete',
-            'paiement_list',
-            'paiement_detail',
-            'paiement_create',
-            'paiement_update',
-            'paiement_delete',
-            'bareme_list',
-            'bareme_detail',
-            'bareme_create',
-            'bareme_update',
-            'bareme_delete',
-            'rappel_list',
-            'rappel_detail',
-            'rappel_create',
-            'corbeille',
-            'statistiques',
-            'export',
-            'import_cotisations',
-            'rappel_update',
         ]
 
         for name in non_migrated:
@@ -99,6 +74,38 @@ except Exception as e:
     import logging
     logger = logging.getLogger(__name__)
     logger.warning(f"Erreur lors de l'import des modules non migrés: {e}")
+
+# Créer les aliases de vues pour urls.py
+# Ces aliases pointent vers les vues des modules refactorés
+dashboard = DashboardView.as_view()
+statistiques = StatistiquesView.as_view()
+
+cotisation_list = CotisationListView.as_view()
+cotisation_detail = CotisationDetailView.as_view()
+cotisation_create = CotisationCreateView.as_view()
+cotisation_update = CotisationUpdateView.as_view()
+cotisation_delete = CotisationDeleteView.as_view()
+corbeille = CotisationCorbeilleView.as_view()
+
+paiement_list = PaiementListView.as_view()
+paiement_detail = PaiementDetailView.as_view()
+paiement_create = PaiementCreateView.as_view()
+paiement_update = PaiementUpdateView.as_view()
+paiement_delete = PaiementDeleteView.as_view()
+
+bareme_list = BaremeCotisationListView.as_view()
+bareme_detail = BaremeDetailView.as_view()
+bareme_create = BaremeCotisationCreateView.as_view()
+bareme_update = BaremeCotisationUpdateView.as_view()
+bareme_delete = BaremeCotisationDeleteView.as_view()
+
+rappel_list = RappelListView.as_view()
+rappel_detail = RappelDetailView.as_view()
+rappel_create = RappelCreateView.as_view()
+rappel_update = RappelUpdateView.as_view()
+
+# Les exports et imports restent dans l'ancien views.py
+# export, import_cotisations sont importés depuis old_views ci-dessus
 
 
 # ============================================================================

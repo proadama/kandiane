@@ -6,7 +6,7 @@ ainsi que les vues pour la corbeille et la restauration.
 """
 
 # Importations depuis utils.py
-from .utils import (
+from apps.cotisations.views.utils import (
     StaffRequiredMixin, TrashViewMixin, RestoreViewMixin, View,
     ListView, DetailView, CreateView, UpdateView, DeleteView,
     require_POST, get_object_or_404,

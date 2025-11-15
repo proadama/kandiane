@@ -7,7 +7,7 @@ Ce module contient les vues pour:
 """
 
 # Importations depuis utils.py
-from .utils import (
+from apps.cotisations.views.utils import (
     StaffRequiredMixin, TemplateView,
     Q, Sum, Count, F, ExpressionWrapper, DecimalField,
     Decimal, timezone, logger, json, traceback, _,

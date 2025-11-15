@@ -9,7 +9,7 @@ Ce module contient tous les endpoints API JSON pour:
 """
 
 # Importations depuis utils.py
-from .utils import (
+from apps.cotisations.views.utils import (
     login_required, require_POST, get_object_or_404,
     JsonResponse, HttpResponse, HttpResponseForbidden,
     logger, timezone, Decimal, Sum, Count, F, Q, _,

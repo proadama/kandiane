@@ -6,7 +6,7 @@ ainsi que les fonctions pour l'envoi de rappels (email, SMS, courrier).
 """
 
 # Importations depuis utils.py
-from .utils import (
+from apps.cotisations.views.utils import (
     StaffRequiredMixin, LoginRequiredMixin, View,
     CreateView, ListView, DetailView, UpdateView, DeleteView,
     login_required, require_http_methods, get_object_or_404,

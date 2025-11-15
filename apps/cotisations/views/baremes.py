@@ -5,7 +5,7 @@ Ce module contient toutes les vues CRUD pour les barèmes de cotisation.
 """
 
 # Importations depuis utils.py
-from .utils import (
+from apps.cotisations.views.utils import (
     StaffRequiredMixin, ListView, DetailView, CreateView, UpdateView, DeleteView,
     login_required, require_POST, redirect, messages, reverse_lazy, timezone,
     logger, Decimal, Sum, _,
