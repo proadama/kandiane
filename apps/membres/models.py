@@ -187,9 +187,20 @@ class Membre(BaseModel):
         verbose_name_plural = _("Membres")
         ordering = ['nom', 'prenom']
         indexes = [
+            # Index existants
             models.Index(fields=['nom', 'prenom']),
             models.Index(fields=['email']),
             models.Index(fields=['date_adhesion']),
+            # Index pour foreign keys fréquemment utilisés
+            models.Index(fields=['statut']),
+            models.Index(fields=['utilisateur']),
+            # Index pour soft delete et filtrage temporel
+            models.Index(fields=['deleted_at']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['updated_at']),
+            # Index composites pour requêtes communes
+            models.Index(fields=['deleted_at', 'date_adhesion']),
+            models.Index(fields=['deleted_at', 'statut']),
         ]
     
     def __str__(self):

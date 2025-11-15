@@ -114,6 +114,8 @@ AUTH_PASSWORD_VALIDATORS = [
 SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+CSRF_COOKIE_HTTPONLY = True
 
 # Si vous êtes en production, activez ces paramètres (commentés pour développement)
 # SECURE_SSL_REDIRECT = True  # Redirection vers HTTPS
@@ -128,6 +130,7 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'  # Peut être 'Strict' en production
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_AGE = 7200  # 2 heures en secondes
+SESSION_IDLE_TIMEOUT = 1800  # 30 minutes d'inactivité
 
 # Taux de limitation pour les connexions
 # Nécessite django-ratelimit (à ajouter aux requirements.txt)
@@ -174,16 +177,9 @@ SITE_URL = env('SITE_URL', default='http://localhost:8000')
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
 # URLs d'authentification
-LOGIN_URL = '/accounts/login/'
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/accounts/login/'
-
-# 8. Problème avec les URL login et l'authentification
-LOGIN_URL = 'accounts:login'  # À ajuster selon votre application
+LOGIN_URL = 'accounts:login'
 LOGIN_REDIRECT_URL = 'core:home'
-
-# Durée d'inactivité avant déconnexion (en secondes)
-SESSION_IDLE_TIMEOUT = 1800  # 30 minutes
+LOGOUT_REDIRECT_URL = 'accounts:login'
 
 # Nom du site pour les emails
 SITE_NAME = env('SITE_NAME', default='Nom de l\'association')
@@ -198,10 +194,7 @@ THUMBNAIL_ALIASES = {
 }
 
 # Paramètre pour le mode maintenance (False par défaut)
-MAINTENANCE_MODE = False
-
-# Pour les tests, définir une session très courte (30 secondes)
-SESSION_COOKIE_AGE = 600  # en secondes
+MAINTENANCE_MODE = env.bool('MAINTENANCE_MODE', default=False)
 
 LOGGING = {
     'version': 1,
