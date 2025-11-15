@@ -10,30 +10,28 @@ import json
 import logging
 import os
 import tempfile
-from datetime import datetime as dt
 import traceback
+from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
-from django.db import connection
-from django.views.decorators.http import require_http_methods
-from django.utils import timezone
 
 # Importations Django
-from django.contrib import messages
 from django import forms
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.serializers.json import DjangoJSONEncoder
+from django.db import connection
 from django.db.models import Q, Sum, Count, F, ExpressionWrapper, DecimalField
 from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 from django.views.generic import (
-    View, TemplateView, ListView, DetailView, 
+    View, TemplateView, ListView, DetailView,
     CreateView, UpdateView, DeleteView
 )
 
@@ -49,22 +47,19 @@ except ImportError:
 from apps.core.mixins import StaffRequiredMixin, TrashViewMixin, RestoreViewMixin
 from apps.core.models import Statut
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import View
-from apps.core.mixins import StaffRequiredMixin
+
 # Importations locales
 from . import export_utils
 from .models import (
     Cotisation, Paiement, ModePaiement, BaremeCotisation,
-    Rappel, HistoriqueCotisation, ConfigurationCotisation
+    Rappel, HistoriqueCotisation, ConfigurationCotisation,
+    RAPPEL_ETAT_PLANIFIE, RAPPEL_ETAT_ENVOYE, RAPPEL_ETAT_ECHOUE, RAPPEL_ETAT_LU
 )
 from .forms import (
     CotisationForm, PaiementForm, BaremeCotisationForm,
     RappelForm, CotisationSearchForm, ImportCotisationsForm,
     ConfigurationCotisationForm
 )
-
-from apps.cotisations.models import Rappel, RAPPEL_ETAT_PLANIFIE, RAPPEL_ETAT_ENVOYE, RAPPEL_ETAT_ECHOUE, RAPPEL_ETAT_LU
 
 # Configuration du logging
 logger = logging.getLogger(__name__)
@@ -372,7 +367,8 @@ class CotisationListView(StaffRequiredMixin, ListView):
                     Q(membre__email__icontains=terme)
                 )
         
-        return queryset.select_related('membre', 'type_membre', 'statut')
+        # Optimiser les requêtes pour éviter N+1
+        return queryset.select_related('membre', 'type_membre', 'statut', 'bareme')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -405,21 +401,27 @@ class CotisationDetailView(StaffRequiredMixin, DetailView):
     model = Cotisation
     template_name = 'cotisations/cotisation_detail.html'
     context_object_name = 'cotisation'
-    
+
+    def get_queryset(self):
+        """Optimiser la requête pour éviter N+1"""
+        return Cotisation.objects.select_related('membre', 'type_membre', 'statut', 'bareme')
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         cotisation = self.object
-        
-        # Paiements liés à cette cotisation
-        context['paiements'] = cotisation.paiements.all().order_by('-date_paiement')
-        
-        # Rappels envoyés
-        context['rappels'] = cotisation.rappels.all().order_by('-date_envoi')
-        
-        # Historique des modifications
+
+        # Paiements liés à cette cotisation avec optimisation
+        context['paiements'] = cotisation.paiements.select_related(
+            'mode_paiement', 'statut'
+        ).order_by('-date_paiement')
+
+        # Rappels envoyés avec optimisation
+        context['rappels'] = cotisation.rappels.select_related('membre').order_by('-date_envoi')
+
+        # Historique des modifications avec optimisation
         context['historique'] = HistoriqueCotisation.objects.filter(
             cotisation=cotisation
-        ).order_by('-date_action')
+        ).select_related('utilisateur').order_by('-date_action')
         
         # Formulaire pour un nouveau paiement
         context['paiement_form'] = PaiementForm(cotisation=cotisation)

@@ -294,9 +294,9 @@ class MembreListView(ListView):
             
             queryset = queryset.order_by(*order_fields)
         
-        # Précharger les relations pour optimiser les performances
-        result = queryset.select_related('statut').prefetch_related('types')
-        
+        # Précharger les relations pour optimiser les performances et éviter N+1
+        result = queryset.select_related('statut', 'utilisateur').prefetch_related('types')
+
         return result
     
 
@@ -333,7 +333,11 @@ class MembreDetailView(DetailView):
     model = Membre
     template_name = 'membres/detail.html'
     context_object_name = 'membre'
-    
+
+    def get_queryset(self):
+        """Optimiser la requête pour éviter N+1"""
+        return Membre.objects.select_related('statut', 'utilisateur').prefetch_related('types')
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         membre = self.object
@@ -361,9 +365,9 @@ class MembreDetailView(DetailView):
             from apps.cotisations.models import Cotisation
             context['cotisations'] = Cotisation.objects.filter(
                 membre=membre
-            ).order_by('-annee', '-mois')[:5]
+            ).select_related('statut', 'type_membre', 'bareme').order_by('-annee', '-mois')[:5]
             context['nb_cotisations_impayees'] = Cotisation.objects.filter(
-                membre=membre, 
+                membre=membre,
                 statut_paiement__in=['non_payée', 'partiellement_payée']
             ).count()
         except ImportError:
