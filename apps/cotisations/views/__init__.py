@@ -28,47 +28,77 @@ importe temporairement depuis l'ancien views.py.
 Une fois tous les modules créés, ce fichier importera depuis chaque module.
 """
 
-# TODO: Migrer progressivement depuis views.py vers les modules
-# Pour l'instant, importer depuis l'ancien fichier pour compatibilité
+# Importer depuis les nouveaux modules
+from .utils import *
+from .dashboard import *
+from .cotisations import *
+from .paiements import *
+from .rappels import *
+from .baremes import *
+from .api import *
+
+# Import conditionnel depuis l'ancien views.py pour les modules non migrés
+# (imports_exports.py reste dans views.py pour l'instant)
 import sys
 import os
+import importlib.util
 
-# Importer depuis l'ancien views.py (un niveau au-dessus)
-# Cette approche temporaire maintient la compatibilité durant la migration
 try:
-    # Chemin vers l'ancien views.py
     current_dir = os.path.dirname(__file__)
     parent_dir = os.path.dirname(current_dir)
     old_views_path = os.path.join(parent_dir, 'views.py')
 
     if os.path.exists(old_views_path):
-        # Importer tout depuis l'ancien fichier
-        import importlib.util
         spec = importlib.util.spec_from_file_location("cotisations_views_old", old_views_path)
         old_views = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(old_views)
 
-        # Réexporter tout
-        for name in dir(old_views):
-            if not name.startswith('_'):
+        # Importer uniquement les classes/fonctions non encore migrées
+        # (ImportCotisationsForm, ImportCotisationsView, ExportCotisationsView, etc.)
+        non_migrated = [
+            'ImportCotisationsForm',
+            'ImportCotisationsView',
+            'ExportCotisationsView',
+            'export_cotisations_pdf',
+            'export_paiements',
+            'export_rappels',
+            '_apply_paiement_filters',
+            '_apply_rappel_filters',
+            # Aliases de vues pour urls.py
+            'dashboard',
+            'cotisation_list',
+            'cotisation_detail',
+            'cotisation_create',
+            'cotisation_update',
+            'cotisation_delete',
+            'paiement_list',
+            'paiement_detail',
+            'paiement_create',
+            'paiement_update',
+            'paiement_delete',
+            'bareme_list',
+            'bareme_detail',
+            'bareme_create',
+            'bareme_update',
+            'bareme_delete',
+            'rappel_list',
+            'rappel_detail',
+            'rappel_create',
+            'corbeille',
+            'statistiques',
+            'export',
+            'import_cotisations',
+            'rappel_update',
+        ]
+
+        for name in non_migrated:
+            if hasattr(old_views, name):
                 globals()[name] = getattr(old_views, name)
-    else:
-        # Si views.py n'existe plus, utiliser les nouveaux modules
-        from .utils import *
-        # TODO: from .dashboard import *
-        # TODO: from .cotisations import *
-        # TODO: from .paiements import *
-        # TODO: from .rappels import *
-        # TODO: from .baremes import *
-        # TODO: from .imports_exports import *
-        # TODO: from .api import *
 
 except Exception as e:
-    # Fallback : au moins importer utils
-    from .utils import *
     import logging
     logger = logging.getLogger(__name__)
-    logger.warning(f"Erreur lors de l'import depuis views.py: {e}")
+    logger.warning(f"Erreur lors de l'import des modules non migrés: {e}")
 
 
 # ============================================================================
