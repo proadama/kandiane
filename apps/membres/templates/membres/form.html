@@ -43,83 +43,11 @@
         border-bottom: none;
         padding: 1rem 1.25rem;
     }
-    .password-strength {
-        height: 5px;
-        transition: all 0.3s ease;
-        border-radius: 3px;
-    }
 </style>
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-    // Fonction pour vérifier la force du mot de passe
-    function checkPasswordStrength(password) {
-        let strength = 0;
-        
-        // Longueur
-        if (password.length >= 8) strength += 25;
-        
-        // Lettres minuscules et majuscules
-        if (password.match(/[a-z]/)) strength += 10;
-        if (password.match(/[A-Z]/)) strength += 15;
-        
-        // Chiffres
-        if (password.match(/\d/)) strength += 20;
-        
-        // Caractères spéciaux
-        if (password.match(/[^a-zA-Z\d]/)) strength += 30;
-        
-        return strength;
-    }
-    
-    document.addEventListener('DOMContentLoaded', function() {
-        // Gestion de l'affichage du champ mot de passe
-        const creerCompteCheckbox = document.getElementById('id_creer_compte');
-        const passwordContainer = document.getElementById('password-container');
-        const passwordField = document.getElementById('id_password');
-        const passwordStrength = document.getElementById('password-strength');
-        const passwordFeedback = document.getElementById('password-feedback');
-        
-        // Fonction pour afficher/masquer le champ mot de passe
-        function togglePasswordField() {
-            if (creerCompteCheckbox.checked) {
-                passwordContainer.style.display = 'block';
-            } else {
-                passwordContainer.style.display = 'none';
-            }
-        }
-        
-        // Initialisation
-        if (creerCompteCheckbox) {
-            togglePasswordField();
-            creerCompteCheckbox.addEventListener('change', togglePasswordField);
-        }
-        
-        // Vérification de la force du mot de passe
-        if (passwordField && passwordStrength && passwordFeedback) {
-            passwordField.addEventListener('input', function() {
-                const strength = checkPasswordStrength(this.value);
-                passwordStrength.style.width = strength + '%';
-                
-                // Changer la couleur en fonction de la force
-                if (strength < 30) {
-                    passwordStrength.className = 'password-strength bg-danger';
-                    passwordFeedback.textContent = "{% trans 'Très faible' %}";
-                    passwordFeedback.className = 'form-text text-danger';
-                } else if (strength < 60) {
-                    passwordStrength.className = 'password-strength bg-warning';
-                    passwordFeedback.textContent = "{% trans 'Moyen' %}";
-                    passwordFeedback.className = 'form-text text-warning';
-                } else {
-                    passwordStrength.className = 'password-strength bg-success';
-                    passwordFeedback.textContent = "{% trans 'Fort' %}";
-                    passwordFeedback.className = 'form-text text-success';
-                }
-            });
-        }
-    });
-</script>
+{{ form.media }}
 {% endblock %}
 
 {% block content %}
@@ -150,71 +78,51 @@
                     </div>
                 </div>
                 
-                <!-- Informations personnelles -->
+                <!-- Sélection utilisateur -->
                 <div class="card mb-4 shadow-sm">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">
-                            <i class="fas fa-user me-2"></i>{% trans "Informations personnelles" %}
+                            <i class="fas fa-user-circle me-2"></i>{% trans "Compte utilisateur" %}
                         </h5>
                         <span class="badge bg-primary">{% trans "Étape 1" %}</span>
                     </div>
                     <div class="card-body">
+                        <div class="alert alert-info" role="alert">
+                            <i class="fas fa-info-circle me-2"></i>
+                            {% if not form.instance.pk %}
+                                {% trans "Sélectionnez un utilisateur existant pour lui attacher un profil membre. Les informations personnelles (nom, prénom, email) proviennent du compte utilisateur." %}
+                            {% else %}
+                                {% trans "Ce membre est lié au compte utilisateur" %} <strong>{{ form.instance.utilisateur.username }}</strong>. {% trans "Les informations personnelles proviennent du compte utilisateur." %}
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.utilisateur.id_for_label }}" class="form-label required">{{ form.utilisateur.label }}</label>
+                            {{ form.utilisateur }}
+                            {% if form.utilisateur.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.utilisateur.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            {% if form.utilisateur.help_text %}
+                            <div class="form-text">{{ form.utilisateur.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Informations personnelles complémentaires -->
+                <div class="card mb-4 shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-user me-2"></i>{% trans "Informations personnelles complémentaires" %}
+                        </h5>
+                        <span class="badge bg-primary">{% trans "Étape 2" %}</span>
+                    </div>
+                    <div class="card-body">
                         <div class="row g-3">
-                            <div class="col-md-6">
-                                <label for="{{ form.nom.id_for_label }}" class="form-label required">{{ form.nom.label }}</label>
-                                {{ form.nom }}
-                                {% if form.nom.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {% for error in form.nom.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                                {% if form.nom.help_text %}
-                                <div class="form-text">{{ form.nom.help_text }}</div>
-                                {% endif %}
-                            </div>
-                            <div class="col-md-6">
-                                <label for="{{ form.prenom.id_for_label }}" class="form-label required">{{ form.prenom.label }}</label>
-                                {{ form.prenom }}
-                                {% if form.prenom.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {% for error in form.prenom.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                                {% if form.prenom.help_text %}
-                                <div class="form-text">{{ form.prenom.help_text }}</div>
-                                {% endif %}
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <label for="{{ form.email.id_for_label }}" class="form-label required">{{ form.email.label }}</label>
-                                {{ form.email }}
-                                {% if form.email.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {% for error in form.email.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                                {% if form.email.help_text %}
-                                <div class="form-text">{{ form.email.help_text }}</div>
-                                {% endif %}
-                            </div>
-                            <div class="col-md-6">
-                                <label for="{{ form.telephone.id_for_label }}" class="form-label">{{ form.telephone.label }}</label>
-                                {{ form.telephone }}
-                                {% if form.telephone.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {% for error in form.telephone.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                            </div>
-                            
                             <div class="col-md-6">
                                 <label for="{{ form.date_naissance.id_for_label }}" class="form-label">{{ form.date_naissance.label }}</label>
                                 {{ form.date_naissance }}
@@ -259,7 +167,7 @@
                         <h5 class="card-title mb-0">
                             <i class="fas fa-map-marker-alt me-2"></i>{% trans "Adresse" %}
                         </h5>
-                        <span class="badge bg-primary">{% trans "Étape 2" %}</span>
+                        <span class="badge bg-primary">{% trans "Étape 3" %}</span>
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
@@ -319,7 +227,7 @@
                         <h5 class="card-title mb-0">
                             <i class="fas fa-id-card me-2"></i>{% trans "Informations d'adhésion" %}
                         </h5>
-                        <span class="badge bg-primary">{% trans "Étape 3" %}</span>
+                        <span class="badge bg-primary">{% trans "Étape 4" %}</span>
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
@@ -367,70 +275,6 @@
                             {% if form.langue.errors %}
                             <div class="invalid-feedback d-block">
                                 {% for error in form.langue.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Compte utilisateur (Nouvelle section) -->
-                <div class="card mb-4 shadow-sm">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-user-lock me-2"></i>{% trans "Compte utilisateur" %}
-                        </h5>
-                        <span class="badge bg-primary">{% trans "Étape 4" %}</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="alert alert-info" role="alert">
-                            <i class="fas fa-info-circle me-2"></i>
-                            {% if not form.instance.pk %}
-                                {% trans "Un compte utilisateur sera créé automatiquement pour permettre au membre de se connecter à l'application." %}
-                            {% else %}
-                                {% if form.instance.utilisateur %}
-                                    {% trans "Ce membre dispose déjà d'un compte utilisateur actif." %}
-                                {% else %}
-                                    {% trans "Vous pouvez créer un compte utilisateur pour ce membre." %}
-                                {% endif %}
-                            {% endif %}
-                        </div>
-                        
-                        <div class="form-check form-switch mb-3">
-                            {{ form.creer_compte }}
-                            <label class="form-check-label" for="{{ form.creer_compte.id_for_label }}">
-                                {{ form.creer_compte.label }}
-                            </label>
-                            <div class="form-text">{{ form.creer_compte.help_text }}</div>
-                            {% if form.creer_compte.errors %}
-                            <div class="invalid-feedback d-block">
-                                {% for error in form.creer_compte.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-                        </div>
-                        
-                        <div id="password-container" class="mb-3">
-                            <label for="{{ form.password.id_for_label }}" class="form-label">{{ form.password.label }}</label>
-                            <div class="input-group">
-                                {{ form.password }}
-                                <button type="button" class="btn btn-outline-secondary" id="generate-password">
-                                    <i class="fas fa-key"></i> {% trans "Générer" %}
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary" id="toggle-password">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                            <div class="mt-2 bg-light rounded p-1">
-                                <div id="password-strength" class="password-strength bg-secondary" style="width: 0%"></div>
-                            </div>
-                            <div id="password-feedback" class="form-text">{% trans "Force du mot de passe" %}</div>
-                            <div class="form-text">{{ form.password.help_text }}</div>
-                            {% if form.password.errors %}
-                            <div class="invalid-feedback d-block">
-                                {% for error in form.password.errors %}
                                     {{ error }}
                                 {% endfor %}
                             </div>
@@ -544,48 +388,16 @@
 <script>
     // Script pour améliorer l'expérience utilisateur
     document.addEventListener('DOMContentLoaded', function() {
-        // Générer un mot de passe aléatoire
-        const generateButton = document.getElementById('generate-password');
-        const passwordField = document.getElementById('id_password');
-        
-        if (generateButton && passwordField) {
-            generateButton.addEventListener('click', function() {
-                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+';
-                let password = '';
-                for (let i = 0; i < 12; i++) {
-                    password += chars.charAt(Math.floor(Math.random() * chars.length));
-                }
-                passwordField.value = password;
-                // Déclencher l'événement input pour mettre à jour l'indicateur de force
-                passwordField.dispatchEvent(new Event('input'));
-            });
-        }
-        
-        // Afficher/masquer le mot de passe
-        const toggleButton = document.getElementById('toggle-password');
-        
-        if (toggleButton && passwordField) {
-            toggleButton.addEventListener('click', function() {
-                if (passwordField.type === 'password') {
-                    passwordField.type = 'text';
-                    toggleButton.innerHTML = '<i class="fas fa-eye-slash"></i>';
-                } else {
-                    passwordField.type = 'password';
-                    toggleButton.innerHTML = '<i class="fas fa-eye"></i>';
-                }
-            });
-        }
-        
         // Validation des champs requis
         const form = document.querySelector('form.needs-validation');
-        
+
         if (form) {
             form.addEventListener('submit', function(event) {
                 if (!form.checkValidity()) {
                     event.preventDefault();
                     event.stopPropagation();
                 }
-                
+
                 form.classList.add('was-validated');
             });
         }
