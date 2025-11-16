@@ -37,20 +37,14 @@ def validate_membre_data(sender, instance, **kwargs):
         date_adhesion = instance.date_adhesion
         if hasattr(date_adhesion, 'date'):
             date_adhesion = date_adhesion.date()
-            
+
         if date_adhesion > timezone.now().date():
             raise ValidationError({
                 'date_adhesion': _("La date d'adhésion ne peut pas être dans le futur")
             })
-    
-    # Le reste du code reste inchangé
-    if instance.nom:
-        instance.nom = instance.nom.strip().upper()
-    if instance.prenom:
-        instance.prenom = instance.prenom.strip().title()
-    
-    if instance.email:
-        instance.email = instance.email.strip().lower()
+
+    # Note: nom, prenom, email sont maintenant des @property qui viennent de utilisateur
+    # La normalisation de ces champs doit être faite au niveau du CustomUser
 
 
 @receiver(post_save, sender=Membre)
@@ -200,11 +194,14 @@ def handle_user_delete(sender, instance, **kwargs):
         logger.error(f"Erreur lors de la dissociation du compte utilisateur: {e}")
 
 
+"""
+DÉSACTIVÉ - Ce signal n'est plus nécessaire avec le nouveau workflow
+Dans le nouveau workflow, on crée d'abord l'utilisateur via l'admin,
+puis on attache le profil membre. L'association se fait manuellement via le formulaire.
+
 @receiver(post_save, sender=User)
 def handle_user_create(sender, instance, created, **kwargs):
-    """
     Gérer la création d'un utilisateur et tenter de l'associer à un membre existant
-    """
     if created and instance.email:
         try:
             # Rechercher un membre avec la même adresse email
@@ -212,12 +209,12 @@ def handle_user_create(sender, instance, created, **kwargs):
                 email=instance.email,
                 utilisateur__isnull=True
             ).first()
-            
+
             # Si un membre correspondant est trouvé, associer l'utilisateur
             if membre:
                 membre.utilisateur = instance
                 membre.save(update_fields=['utilisateur'])
-                
+
                 # Créer une entrée d'historique
                 HistoriqueMembre.objects.create(
                     membre=membre,
@@ -232,6 +229,7 @@ def handle_user_create(sender, instance, created, **kwargs):
                 logger.info(f"Compte utilisateur {instance} associé automatiquement au membre {membre}")
         except Exception as e:
             logger.error(f"Erreur lors de l'association automatique du compte utilisateur: {e}")
+"""
 """
 @receiver(post_save, sender=Membre)
 def create_user_for_membre(sender, instance, created, **kwargs):
