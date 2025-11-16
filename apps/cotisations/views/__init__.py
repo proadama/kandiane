@@ -37,38 +37,27 @@ from apps.cotisations.views.rappels import *
 from apps.cotisations.views.baremes import *
 from apps.cotisations.views.api import *
 
-# Import conditionnel depuis l'ancien views.py pour les modules non migrés
-# (imports_exports.py reste dans views.py pour l'instant)
-import sys
-import os
-import importlib.util
-
+# Import depuis l'ancien views_old.py pour les modules non migrés
+# (imports_exports.py reste dans views_old.py pour l'instant)
 try:
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    parent_dir = os.path.dirname(current_dir)
-    old_views_path = os.path.join(parent_dir, 'views.py')
+    from apps.cotisations import views_old
 
-    if os.path.exists(old_views_path):
-        spec = importlib.util.spec_from_file_location("cotisations_views_old", old_views_path)
-        old_views = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(old_views)
+    # Importer uniquement les classes/fonctions non encore migrées
+    # (ImportCotisationsForm, ImportCotisationsView, ExportCotisationsView, etc.)
+    non_migrated = [
+        'ImportCotisationsForm',
+        'ImportCotisationsView',
+        'ExportCotisationsView',
+        'export_cotisations_pdf',
+        'export_paiements',
+        'export_rappels',
+        '_apply_paiement_filters',
+        '_apply_rappel_filters',
+    ]
 
-        # Importer uniquement les classes/fonctions non encore migrées
-        # (ImportCotisationsForm, ImportCotisationsView, ExportCotisationsView, etc.)
-        non_migrated = [
-            'ImportCotisationsForm',
-            'ImportCotisationsView',
-            'ExportCotisationsView',
-            'export_cotisations_pdf',
-            'export_paiements',
-            'export_rappels',
-            '_apply_paiement_filters',
-            '_apply_rappel_filters',
-        ]
-
-        for name in non_migrated:
-            if hasattr(old_views, name):
-                globals()[name] = getattr(old_views, name)
+    for name in non_migrated:
+        if hasattr(views_old, name):
+            globals()[name] = getattr(views_old, name)
 
 except Exception as e:
     import logging
@@ -104,8 +93,8 @@ rappel_detail = RappelDetailView.as_view()
 rappel_create = RappelCreateView.as_view()
 rappel_update = RappelUpdateView.as_view()
 
-# Créer les aliases pour les vues d'export/import (depuis old_views)
-# Ces vues ne sont pas encore migrées, elles viennent de views.py
+# Créer les aliases pour les vues d'export/import (depuis views_old)
+# Ces vues ne sont pas encore migrées, elles viennent de views_old.py
 try:
     if 'ExportCotisationsView' in globals():
         export = ExportCotisationsView.as_view()
