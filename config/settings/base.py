@@ -13,6 +13,13 @@ environ.Env.read_env()
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Applications
+# IMPORTANT: dal et dal_select2 doivent être AVANT django.contrib.admin
+THIRD_PARTY_APPS = [
+    'dal',
+    'dal_select2',
+    'django_extensions',
+]
+
 DJANGO_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -21,12 +28,6 @@ DJANGO_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sites',
-
-]
-
-THIRD_PARTY_APPS = [
-    'django_extensions',
-    
 ]
 
 LOCAL_APPS = [
@@ -38,7 +39,7 @@ LOCAL_APPS = [
     'django_apscheduler',
 ]
 
-INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+INSTALLED_APPS = THIRD_PARTY_APPS + DJANGO_APPS + LOCAL_APPS
 
 SITE_ID = 1
 

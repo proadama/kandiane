@@ -415,81 +415,60 @@ class MembreCreateView(StaffRequiredMixin, CreateView):
         return super().form_invalid(form)
     
     def form_valid(self, form):
+        """
+        Crée le profil membre en le liant à l'utilisateur sélectionné.
+
+        L'utilisateur a déjà été créé via /admin/accounts/customuser/add/.
+        On lie simplement le profil membre à cet utilisateur.
+        """
         try:
-            # Extraire les données du formulaire
+            # Extraire les types de membre
             types_membre = form.cleaned_data.pop('types_membre', [])
-            creer_compte = form.cleaned_data.pop('creer_compte', False)
-            password = form.cleaned_data.pop('password', None)
-            form.cleaned_data.pop('password_confirm', None)
 
-            if creer_compte:
-                # Utiliser le service centralisé pour créer membre + compte
-                from apps.accounts.services import UserCreationService
+            # Créer le profil membre (l'utilisateur est déjà lié via le formulaire)
+            membre = form.save()
 
-                membre, user, generated_password = UserCreationService.creer_membre_avec_compte(
-                    nom=form.cleaned_data['nom'],
-                    prenom=form.cleaned_data['prenom'],
-                    email=form.cleaned_data['email'],
-                    telephone=form.cleaned_data.get('telephone', ''),
-                    adresse=form.cleaned_data.get('adresse', ''),
-                    code_postal=form.cleaned_data.get('code_postal', ''),
-                    ville=form.cleaned_data.get('ville', ''),
-                    pays=form.cleaned_data.get('pays', 'France'),
-                    date_adhesion=form.cleaned_data.get('date_adhesion'),
-                    date_naissance=form.cleaned_data.get('date_naissance'),
-                    langue=form.cleaned_data.get('langue', 'fr'),
-                    statut=form.cleaned_data.get('statut'),
-                    types_membre=list(types_membre),
-                    accepte_mail=form.cleaned_data.get('accepte_mail', True),
-                    accepte_sms=form.cleaned_data.get('accepte_sms', False),
-                    commentaires=form.cleaned_data.get('commentaires', ''),
-                    photo=form.cleaned_data.get('photo'),
-                    password=password,
-                    envoyer_email=True,
-                    request=self.request
-                )
-
-                messages.success(
-                    self.request,
-                    _("Le membre %(nom)s a été créé avec succès avec un compte utilisateur (%(username)s).") %
-                    {'nom': membre.nom_complet, 'username': user.username}
-                )
-            else:
-                # Créer uniquement le membre sans compte utilisateur
-                membre = form.save()
-
-                # Ajouter les types de membre
-                if types_membre:
-                    for type_membre in types_membre:
-                        membre.ajouter_type(type_membre)
-
-                messages.success(
-                    self.request,
-                    _("Le membre %(nom)s a été créé avec succès.") % {'nom': membre.nom_complet}
-                )
+            # Ajouter les types de membre
+            if types_membre:
+                for type_membre in types_membre:
+                    membre.ajouter_type(type_membre)
 
             # Ajouter un enregistrement dans l'historique
             HistoriqueMembre.objects.create(
                 membre=membre,
                 utilisateur=self.request.user,
                 action='creation',
-                description=_("Création du membre"),
+                description=_("Création du profil membre pour l'utilisateur %(username)s") % {
+                    'username': membre.utilisateur.username
+                },
                 donnees_apres={
                     field: str(value) for field, value in form.cleaned_data.items()
-                    if field not in ['types_membre', 'photo', 'creer_compte', 'password', 'password_confirm']
+                    if field not in ['types_membre', 'photo', 'utilisateur']
+                }
+            )
+
+            messages.success(
+                self.request,
+                _("Le profil membre pour %(nom)s (%(username)s) a été créé avec succès.") % {
+                    'nom': membre.nom_complet,
+                    'username': membre.utilisateur.username
                 }
             )
 
             return redirect(membre.get_absolute_url())
+
         except ValidationError as e:
-            # Gestion des erreurs de validation du service
-            for field, errors in e.message_dict.items():
-                for error in errors:
-                    messages.error(self.request, f"{field}: {error}")
+            # Gestion des erreurs de validation
+            if hasattr(e, 'message_dict'):
+                for field, errors in e.message_dict.items():
+                    for error in errors:
+                        messages.error(self.request, f"{field}: {error}")
+            else:
+                messages.error(self.request, str(e))
             return self.form_invalid(form)
         except Exception as e:
-            logger.error(f"Erreur lors de la création d'un membre: {str(e)}", exc_info=True)
-            messages.error(self.request, _("Erreur lors de la création du membre: %(error)s") % {'error': str(e)})
+            logger.error(f"Erreur lors de la création du profil membre: {str(e)}", exc_info=True)
+            messages.error(self.request, _("Erreur lors de la création du profil membre: %(error)s") % {'error': str(e)})
             return self.form_invalid(form)
 
 class MembreDeleteView(StaffRequiredMixin, DeleteView):

@@ -44,22 +44,23 @@ class MembreAdmin(admin.ModelAdmin):
     """
     list_display = ('nom_complet', 'email', 'telephone', 'date_adhesion', 'statut_display', 'types_liste', 'utilisateur_link', 'is_active', 'est_supprime')
     list_filter = ('statut', 'date_adhesion', 'types', 'langue', 'pays', 'accepte_mail', 'accepte_sms', 'deleted_at')
-    search_fields = ('nom', 'prenom', 'email', 'telephone', 'adresse', 'code_postal', 'ville')
-    ordering = ('nom', 'prenom')
+    search_fields = ('utilisateur__first_name', 'utilisateur__last_name', 'utilisateur__email', 'utilisateur__username', 'adresse', 'code_postal', 'ville')
+    ordering = ('date_adhesion',)
     date_hierarchy = 'date_adhesion'
-    
-    readonly_fields = ('created_at', 'updated_at')
+
+    readonly_fields = ('created_at', 'updated_at', 'nom_display', 'prenom_display', 'email_display', 'telephone_display')
     autocomplete_fields = ('utilisateur', 'statut')
-    
+
     fieldsets = (
         (_('Informations personnelles'), {
-            'fields': ('nom', 'prenom', 'email', 'telephone', 'date_naissance', 'photo')
+            'fields': ('utilisateur', 'nom_display', 'prenom_display', 'email_display', 'telephone_display', 'date_naissance', 'photo'),
+            'description': _("Les informations nom, prénom, email et téléphone proviennent du compte utilisateur lié.")
         }),
         (_('Adresse'), {
             'fields': ('adresse', 'code_postal', 'ville', 'pays')
         }),
         (_('Informations d\'adhésion'), {
-            'fields': ('date_adhesion', 'statut', 'utilisateur')
+            'fields': ('date_adhesion', 'statut')
         }),
         (_('Préférences'), {
             'fields': ('langue', 'accepte_mail', 'accepte_sms')
@@ -143,9 +144,29 @@ class MembreAdmin(admin.ModelAdmin):
         types = obj.get_types_actifs()
         if not types:
             return _("Aucun")
-        
+
         return ", ".join([t.libelle for t in types])
     types_liste.short_description = _("Types de membre")
+
+    def nom_display(self, obj):
+        """Afficher le nom (depuis l'utilisateur)"""
+        return obj.nom or _("Non renseigné")
+    nom_display.short_description = _("Nom")
+
+    def prenom_display(self, obj):
+        """Afficher le prénom (depuis l'utilisateur)"""
+        return obj.prenom or _("Non renseigné")
+    prenom_display.short_description = _("Prénom")
+
+    def email_display(self, obj):
+        """Afficher l'email (depuis l'utilisateur)"""
+        return obj.email or _("Non renseigné")
+    email_display.short_description = _("Email")
+
+    def telephone_display(self, obj):
+        """Afficher le téléphone (depuis l'utilisateur)"""
+        return obj.telephone or _("Non renseigné")
+    telephone_display.short_description = _("Téléphone")
     
     def utilisateur_link(self, obj):
         """Lien vers l'utilisateur associé"""
