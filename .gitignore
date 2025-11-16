@@ -27,6 +27,7 @@ var/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+db.sqlite3.old
 media/
 static/
 staticfiles/
@@ -34,6 +35,33 @@ staticfiles/
 # Environnement virtuel
 venv/
 .env
+.env.local
+.env.*.local
+
+# Fichiers de backup et temporaires
+*.old
+*.backup
+*.bak
+*.copy
+*.swp
+*.swo
+*~
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Répertoires de backup (à ne jamais committer)
+*_backup_*/
+backup_*/
+sauvegarde_*/
+tmp/
+temp/
+
+# Settings deprecated
+config/settings.py.deprecated
+local_settings.py
 
 # IDE
 .idea/

@@ -43,7 +43,7 @@ class CustomUserAdmin(UserAdmin):
     ordering = ('email',)
     readonly_fields = ('date_joined', 'derniere_connexion')
     inlines = [UserProfileInline]
-    
+
     fieldsets = (
         (None, {'fields': ('email', 'username', 'password')}),
         (_('Informations personnelles'), {'fields': ('first_name', 'last_name', 'avatar', 'telephone')}),
@@ -53,13 +53,52 @@ class CustomUserAdmin(UserAdmin):
         (_('Dates importantes'), {'fields': ('date_joined', 'derniere_connexion', 'date_desactivation')}),
         (_('Préférences'), {'fields': ('accepte_communications',)}),
     )
-    
+
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'username', 'password1', 'password2', 'role'),
+            'fields': ('email', 'username', 'password1', 'password2', 'first_name', 'last_name', 'telephone', 'is_staff', 'is_superuser'),
         }),
     )
+
+    def save_model(self, request, obj, form, change):
+        """
+        Utilise le UserCreationService pour créer les utilisateurs techniques.
+        """
+        if not change:  # Nouvel utilisateur
+            from apps.accounts.services import UserCreationService
+            from django.contrib import messages
+
+            try:
+                # Extraire le mot de passe du formulaire
+                password = form.cleaned_data.get('password1')
+
+                # Utiliser le service pour créer l'utilisateur technique
+                user, generated_password = UserCreationService.creer_utilisateur_technique(
+                    username=form.cleaned_data['username'],
+                    email=form.cleaned_data['email'],
+                    password=password,
+                    first_name=form.cleaned_data.get('first_name', ''),
+                    last_name=form.cleaned_data.get('last_name', ''),
+                    telephone=form.cleaned_data.get('telephone', ''),
+                    is_staff=form.cleaned_data.get('is_staff', False),
+                    is_superuser=form.cleaned_data.get('is_superuser', False),
+                )
+
+                # Copier l'objet créé par le service dans obj pour que Django l'utilise
+                obj.pk = user.pk
+                obj.id = user.id
+
+                messages.success(
+                    request,
+                    _("Utilisateur technique %(username)s créé avec succès.") % {'username': user.username}
+                )
+            except Exception as e:
+                messages.error(request, _("Erreur lors de la création de l'utilisateur: %(error)s") % {'error': str(e)})
+                raise
+        else:
+            # Modification d'un utilisateur existant - utiliser le comportement par défaut
+            super().save_model(request, obj, form, change)
 
 
 @admin.register(UserLoginHistory)
