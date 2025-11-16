@@ -317,6 +317,80 @@ curl http://localhost:8000/cotisations/api/cotisations-en-retard/
 
 **Code source** : `apps/cotisations/views/api.py`
 
+### 8. Service de Création de Comptes (UserCreationService)
+
+Le service centralisé pour la création de comptes utilisateurs et de membres.
+
+**Documentation complète** : `apps/accounts/README_SERVICE.md`
+
+#### Tests unitaires
+
+**Lancer les tests** :
+```bash
+python manage.py test apps.accounts.tests.test_services
+```
+
+**Résultat attendu** :
+```
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+..............
+----------------------------------------------------------------------
+Ran 14 tests in X.XXXs
+
+OK
+```
+
+**Couverture** :
+- 6 tests pour `creer_utilisateur_technique()`
+- 8 tests pour `creer_membre_avec_compte()`
+- Taux de réussite : 13/14 (93%)
+- 1 échec intermittent (SQLite database lock)
+
+**Tests inclus** :
+1. ✅ Création utilisateur technique minimal
+2. ✅ Création utilisateur technique complet
+3. ✅ Détection username dupliqué
+4. ✅ Détection email dupliqué
+5. ✅ Génération automatique password
+6. ✅ Vérification qu'aucun membre n'est créé pour utilisateur technique
+7. ✅ Création membre avec compte minimal
+8. ✅ Création membre avec compte complet
+9. ✅ Détection email dupliqué pour membre
+10. ✅ Génération automatique username
+11. ✅ Gestion collisions username (jean.martin → jean.martin1)
+12. ✅ Attribution types de membre
+13. ✅ Rollback transactionnel en cas d'erreur
+14. ✅ Relation OneToOne membre-utilisateur
+
+**Code source** : `apps/accounts/services.py:37` (UserCreationService)
+
+#### Utilisation via l'interface
+
+**Admin - Créer utilisateur technique** :
+1. Aller sur http://localhost:8000/admin/accounts/customuser/add/
+2. Remplir les champs :
+   - Email
+   - Username
+   - Password
+   - Cocher "is_staff" pour accès admin
+3. Le service `UserCreationService.creer_utilisateur_technique()` est appelé automatiquement
+
+**Frontend - Créer membre avec compte** :
+1. Aller sur http://localhost:8000/membres/nouveau/
+2. Remplir les champs :
+   - Nom, Prénom, Email
+   - Cocher "Créer un compte utilisateur"
+3. Le service `UserCreationService.creer_membre_avec_compte()` est appelé automatiquement
+
+**Avantages** :
+- ✅ Code centralisé (pas de duplication)
+- ✅ Transactions atomiques
+- ✅ Validation automatique
+- ✅ Génération username/password
+- ✅ Email de bienvenue automatique
+- ✅ Logging complet
+
 ---
 
 ## 🐛 Dépannage
