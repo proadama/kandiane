@@ -136,8 +136,8 @@ class MembreListView(ListView):
             return queryset
             
         # Récupérer les paramètres de tri
-        sort_by = self.request.GET.get('sort', 'nom')
-        sort_dir = self.request.GET.get('dir', 'asc')
+        sort_by = self.request.GET.get('sort', 'date_adhesion')
+        sort_dir = self.request.GET.get('dir', 'desc')
         
         # Variables pour stocker les différents critères de filtrage
         term = form.cleaned_data.get('terme')
@@ -162,11 +162,13 @@ class MembreListView(ListView):
         
         # Filtre par terme de recherche
         if term:
+            # Note: nom, prenom, email, telephone sont maintenant des @property depuis utilisateur
             q_objects = (
-                Q(nom__icontains=term) | 
-                Q(prenom__icontains=term) | 
-                Q(email__icontains=term) | 
-                Q(telephone__icontains=term) |
+                Q(utilisateur__last_name__icontains=term) |
+                Q(utilisateur__first_name__icontains=term) |
+                Q(utilisateur__email__icontains=term) |
+                Q(utilisateur__telephone__icontains=term) |
+                Q(utilisateur__username__icontains=term) |
                 Q(code_postal__icontains=term) |
                 Q(ville__icontains=term)
             )
@@ -263,20 +265,24 @@ class MembreListView(ListView):
         # Appliquer le tri
         if sort_by:
             direction = '' if sort_dir == 'asc' else '-'
-            
+
+            # Note: nom, prenom, email, telephone sont maintenant des @property depuis utilisateur
             if sort_by == 'nom':
-                order_fields = [f'{direction}nom', f'{direction}prenom']
+                queryset = queryset.select_related('utilisateur')
+                order_fields = [f'{direction}utilisateur__last_name', f'{direction}utilisateur__first_name']
             elif sort_by == 'email':
-                order_fields = [f'{direction}email']
+                queryset = queryset.select_related('utilisateur')
+                order_fields = [f'{direction}utilisateur__email']
             elif sort_by == 'telephone':
-                order_fields = [f'{direction}telephone']
+                queryset = queryset.select_related('utilisateur')
+                order_fields = [f'{direction}utilisateur__telephone']
             elif sort_by == 'date_adhesion':
                 order_fields = [f'{direction}date_adhesion']
             elif sort_by == 'statut':
-                queryset = queryset.select_related('statut')
-                order_fields = [f'{direction}statut__nom', f'{direction}nom']
+                queryset = queryset.select_related('statut', 'utilisateur')
+                order_fields = [f'{direction}statut__nom', f'{direction}utilisateur__last_name']
             elif sort_by == 'types':
-                queryset = queryset.annotate(
+                queryset = queryset.select_related('utilisateur').annotate(
                     nb_types=Count(
                         'types_historique',
                         filter=Q(
@@ -286,9 +292,10 @@ class MembreListView(ListView):
                         distinct=True
                     )
                 )
-                order_fields = [f'{direction}nb_types', f'{direction}nom']
+                order_fields = [f'{direction}nb_types', f'{direction}utilisateur__last_name']
             else:
-                order_fields = ['nom', 'prenom']
+                queryset = queryset.select_related('utilisateur')
+                order_fields = ['utilisateur__last_name', 'utilisateur__first_name']
             
             queryset = queryset.order_by(*order_fields)
         
