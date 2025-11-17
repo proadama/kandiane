@@ -44,22 +44,23 @@ class MembreAdmin(admin.ModelAdmin):
     """
     list_display = ('nom_complet', 'email', 'telephone', 'date_adhesion', 'statut_display', 'types_liste', 'utilisateur_link', 'is_active', 'est_supprime')
     list_filter = ('statut', 'date_adhesion', 'types', 'langue', 'pays', 'accepte_mail', 'accepte_sms', 'deleted_at')
-    search_fields = ('nom', 'prenom', 'email', 'telephone', 'adresse', 'code_postal', 'ville')
-    ordering = ('nom', 'prenom')
+    search_fields = ('utilisateur__first_name', 'utilisateur__last_name', 'utilisateur__email', 'utilisateur__username', 'adresse', 'code_postal', 'ville')
+    ordering = ('date_adhesion',)
     date_hierarchy = 'date_adhesion'
-    
-    readonly_fields = ('created_at', 'updated_at')
+
+    readonly_fields = ('created_at', 'updated_at', 'nom_display', 'prenom_display', 'email_display', 'telephone_display')
     autocomplete_fields = ('utilisateur', 'statut')
-    
+
     fieldsets = (
         (_('Informations personnelles'), {
-            'fields': ('nom', 'prenom', 'email', 'telephone', 'date_naissance', 'photo')
+            'fields': ('utilisateur', 'nom_display', 'prenom_display', 'email_display', 'telephone_display', 'date_naissance', 'photo'),
+            'description': _("Les informations nom, prénom, email et téléphone proviennent du compte utilisateur lié.")
         }),
         (_('Adresse'), {
             'fields': ('adresse', 'code_postal', 'ville', 'pays')
         }),
         (_('Informations d\'adhésion'), {
-            'fields': ('date_adhesion', 'statut', 'utilisateur')
+            'fields': ('date_adhesion', 'statut')
         }),
         (_('Préférences'), {
             'fields': ('langue', 'accepte_mail', 'accepte_sms')
@@ -74,9 +75,68 @@ class MembreAdmin(admin.ModelAdmin):
     )
     
     inlines = [MembreTypeMembreInline, HistoriqueMembreInline]
-    
+
     actions = ['export_selected_as_csv', 'create_user_accounts', 'mark_as_deleted', 'unmark_as_deleted', 'restaurer_membres', 'supprimer_definitivement']
-    
+
+    def get_readonly_fields(self, request, obj=None):
+        """Adapter les champs readonly selon création ou édition"""
+        if obj is None:  # Création
+            # Ne montrer que les champs système en readonly lors de la création
+            return ('created_at', 'updated_at')
+        else:  # Édition
+            # Montrer tous les champs readonly lors de l'édition
+            return ('created_at', 'updated_at', 'nom_display', 'prenom_display', 'email_display', 'telephone_display')
+
+    def get_fieldsets(self, request, obj=None):
+        """Adapter les fieldsets selon création ou édition"""
+        if obj is None:  # Création
+            # Lors de la création, ne pas montrer les champs readonly nom, prenom, email, telephone
+            return (
+                (_('Compte utilisateur'), {
+                    'fields': ('utilisateur',),
+                    'description': _("Sélectionnez un compte utilisateur existant. Les informations nom, prénom, email et téléphone proviennent de ce compte.")
+                }),
+                (_('Informations personnelles complémentaires'), {
+                    'fields': ('date_naissance', 'photo')
+                }),
+                (_('Adresse'), {
+                    'fields': ('adresse', 'code_postal', 'ville', 'pays')
+                }),
+                (_('Informations d\'adhésion'), {
+                    'fields': ('date_adhesion', 'statut')
+                }),
+                (_('Préférences'), {
+                    'fields': ('langue', 'accepte_mail', 'accepte_sms')
+                }),
+                (_('Commentaires'), {
+                    'fields': ('commentaires',)
+                }),
+            )
+        else:  # Édition
+            # Lors de l'édition, montrer tous les champs
+            return (
+                (_('Informations personnelles'), {
+                    'fields': ('utilisateur', 'nom_display', 'prenom_display', 'email_display', 'telephone_display', 'date_naissance', 'photo'),
+                    'description': _("Les informations nom, prénom, email et téléphone proviennent du compte utilisateur lié.")
+                }),
+                (_('Adresse'), {
+                    'fields': ('adresse', 'code_postal', 'ville', 'pays')
+                }),
+                (_('Informations d\'adhésion'), {
+                    'fields': ('date_adhesion', 'statut')
+                }),
+                (_('Préférences'), {
+                    'fields': ('langue', 'accepte_mail', 'accepte_sms')
+                }),
+                (_('Commentaires'), {
+                    'fields': ('commentaires',)
+                }),
+                (_('Informations système'), {
+                    'fields': ('created_at', 'updated_at', 'deleted_at'),
+                    'classes': ('collapse',)
+                }),
+            )
+
     def get_queryset(self, request):
         """Inclure les membres supprimés logiquement"""
         return Membre.objects.with_deleted().select_related(
@@ -143,9 +203,29 @@ class MembreAdmin(admin.ModelAdmin):
         types = obj.get_types_actifs()
         if not types:
             return _("Aucun")
-        
+
         return ", ".join([t.libelle for t in types])
     types_liste.short_description = _("Types de membre")
+
+    def nom_display(self, obj):
+        """Afficher le nom (depuis l'utilisateur)"""
+        return obj.nom or _("Non renseigné")
+    nom_display.short_description = _("Nom")
+
+    def prenom_display(self, obj):
+        """Afficher le prénom (depuis l'utilisateur)"""
+        return obj.prenom or _("Non renseigné")
+    prenom_display.short_description = _("Prénom")
+
+    def email_display(self, obj):
+        """Afficher l'email (depuis l'utilisateur)"""
+        return obj.email or _("Non renseigné")
+    email_display.short_description = _("Email")
+
+    def telephone_display(self, obj):
+        """Afficher le téléphone (depuis l'utilisateur)"""
+        return obj.telephone or _("Non renseigné")
+    telephone_display.short_description = _("Téléphone")
     
     def utilisateur_link(self, obj):
         """Lien vers l'utilisateur associé"""

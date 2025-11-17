@@ -2,17 +2,16 @@ from django import forms
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Q
 from apps.core.models import Statut
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, HistoriqueMembre
-from django.db.models import Count
-
-# Mise à jour de MembreForm dans apps/membres/forms.py
 
 class MembreForm(forms.ModelForm):
     """
-    Formulaire pour la création et l'édition d'un membre
+    Formulaire pour la création et l'édition d'un profil membre.
+
+    Le membre est lié à un utilisateur existant. Les informations de base
+    (nom, prénom, email, téléphone) sont récupérées depuis l'utilisateur.
     """
     types_membre = forms.ModelMultipleChoiceField(
         queryset=TypeMembre.objects.all(),
@@ -21,31 +20,18 @@ class MembreForm(forms.ModelForm):
         label=_("Types de membre")
     )
 
-    creer_compte = forms.BooleanField(
-        label=_("Créer un compte utilisateur"),
-        required=False,
-        initial=True,
-        help_text=_("Permettre à ce membre de se connecter à l'application")
-    )
-    
-    password = forms.CharField(
-        label=_("Mot de passe"),
-        required=False,
-        widget=forms.PasswordInput,
-        help_text=_("Laissez vide pour générer un mot de passe aléatoire ou entrez un mot de passe fort")
-    )
-    
-    password_confirm = forms.CharField(
-        label=_("Confirmer le mot de passe"),
-        required=False,
-        widget=forms.PasswordInput,
-        help_text=_("Entrez à nouveau le mot de passe pour confirmation")
+    utilisateur = forms.ModelChoiceField(
+        queryset=None,  # Sera défini dans __init__
+        required=True,
+        label=_("Utilisateur"),
+        help_text=_("Sélectionner un utilisateur existant sans profil membre"),
+        widget=forms.Select(attrs={'class': 'form-select'})
     )
     
     class Meta:
         model = Membre
         fields = [
-            'nom', 'prenom', 'email', 'telephone', 'adresse',
+            'utilisateur', 'adresse',
             'code_postal', 'ville', 'pays', 'date_adhesion', 'date_naissance',
             'langue', 'statut', 'accepte_mail', 'accepte_sms',
             'commentaires', 'photo'
@@ -70,7 +56,7 @@ class MembreForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        
+
         # Filtrer les statuts pour n'afficher que ceux applicables aux membres
         self.fields['statut'].queryset = Statut.pour_membres()
 
@@ -78,18 +64,28 @@ class MembreForm(forms.ModelForm):
         for field_name, field in self.fields.items():
             if field.widget.__class__.__name__ not in ['CheckboxInput', 'CheckboxSelectMultiple', 'RadioSelect']:
                 field.widget.attrs.update({'class': 'form-control'})
-        
-        # Pour les nouveaux membres, forcer la création d'un compte utilisateur
+
+        # Configurer le champ utilisateur
+        from apps.accounts.models import CustomUser
         if not self.instance.pk:
-            self.fields['creer_compte'].initial = True
-            self.fields['creer_compte'].help_text = _("Un compte utilisateur sera automatiquement créé pour ce membre")
-        # Si le membre a déjà un compte, désactiver l'option
-        elif self.instance and self.instance.pk and self.instance.utilisateur:
-            self.fields['creer_compte'].initial = False
-            self.fields['creer_compte'].disabled = True
-            self.fields['creer_compte'].help_text = _("Ce membre a déjà un compte utilisateur")
-            self.fields['password'].widget = forms.HiddenInput()
-            
+            # Nouveau membre : seulement les utilisateurs sans profil membre
+            self.fields['utilisateur'].queryset = CustomUser.objects.filter(
+                membre__isnull=True
+            ).order_by('username')
+        else:
+            # Édition : l'utilisateur actuel ou ceux sans membre
+            if self.instance.utilisateur:
+                self.fields['utilisateur'].queryset = CustomUser.objects.filter(
+                    Q(membre__isnull=True) | Q(pk=self.instance.utilisateur.pk)
+                ).order_by('username')
+            else:
+                self.fields['utilisateur'].queryset = CustomUser.objects.filter(
+                    membre__isnull=True
+                ).order_by('username')
+
+        # Personnaliser l'affichage du choix utilisateur
+        self.fields['utilisateur'].label_from_instance = lambda obj: f"{obj.username} ({obj.get_full_name() or 'Sans nom'} - {obj.email})"
+
         # Initialiser les types de membre si on édite un membre existant
         if self.instance.pk:
             self.fields['types_membre'].initial = [
@@ -99,39 +95,15 @@ class MembreForm(forms.ModelForm):
                 )
             ]
     
-    def clean(self):
-        """Validation globale du formulaire"""
-        cleaned_data = super().clean()
-        
-        # Vérifier que les mots de passe correspondent
-        creer_compte = cleaned_data.get('creer_compte')
-        password = cleaned_data.get('password')
-        password_confirm = cleaned_data.get('password_confirm')
-        
-        if creer_compte and not self.instance.utilisateur:
-            if password:
-                # Vérifier que les mots de passe correspondent
-                if password != password_confirm:
-                    self.add_error('password_confirm', _("Les mots de passe ne correspondent pas."))
-                
-                # Vérifier la force du mot de passe avec les validateurs Django
-                try:
-                    # Utiliser validate_password pour vérifier la conformité du mot de passe
-                    validate_password(password)
-                except DjangoValidationError as e:
-                    # Ajouter chaque erreur au champ password
-                    self.add_error('password', e)
-        
-        return cleaned_data
-    
-    def clean_email(self):
-        """Valider que l'email est unique"""
-        email = self.cleaned_data.get('email')
-        if email:
-            # Vérifier si l'email existe déjà pour un autre membre
-            if Membre.objects.filter(email=email).exclude(pk=self.instance.pk).exists():
-                raise ValidationError(_("Un membre avec cet email existe déjà."))
-        return email
+    def clean_utilisateur(self):
+        """Valider que l'utilisateur sélectionné n'a pas déjà un profil membre"""
+        utilisateur = self.cleaned_data.get('utilisateur')
+        if utilisateur:
+            # Vérifier si l'utilisateur a déjà un profil membre (sauf pour l'édition)
+            if not self.instance.pk or (self.instance.utilisateur and self.instance.utilisateur.pk != utilisateur.pk):
+                if hasattr(utilisateur, 'membre'):
+                    raise ValidationError(_("Cet utilisateur a déjà un profil membre."))
+        return utilisateur
     
     def clean_date_naissance(self):
         """Valider la date de naissance"""

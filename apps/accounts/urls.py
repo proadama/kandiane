@@ -68,4 +68,8 @@ urlpatterns = [
     # Guide d'intégration
     path('email-verification/<str:token>/', views.EmailVerificationView.as_view(), name='email_verify'),
     path('email-verification-required/', views.EmailVerificationRequiredView.as_view(), name='email_verification_required'),
+
+    # API pour la gestion des membres
+    path('user-autocomplete/', views.UserAutocompleteView.as_view(), name='user-autocomplete'),
+    path('api/user/<int:user_id>/', views.UserInfoAPIView.as_view(), name='user-info-api'),
 ]

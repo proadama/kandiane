@@ -351,10 +351,26 @@ class Cotisation(BaseModel):
         verbose_name_plural = _("Cotisations")
         ordering = ['-date_emission']
         indexes = [
+            # Index existants
             models.Index(fields=['membre']),
             models.Index(fields=['date_echeance']),
             models.Index(fields=['statut_paiement']),
             models.Index(fields=['annee', 'mois']),
+            # Index pour foreign keys
+            models.Index(fields=['statut']),
+            models.Index(fields=['type_membre']),
+            models.Index(fields=['bareme']),
+            # Index pour soft delete et filtrage temporel
+            models.Index(fields=['deleted_at']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['updated_at']),
+            models.Index(fields=['date_emission']),
+            # Index pour type_cotisation
+            models.Index(fields=['type_cotisation']),
+            # Index composites pour requêtes courantes
+            models.Index(fields=['deleted_at', 'statut_paiement']),
+            models.Index(fields=['deleted_at', 'membre']),
+            models.Index(fields=['membre', 'statut_paiement']),
         ]
     
     def __str__(self):

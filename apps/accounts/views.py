@@ -521,3 +521,64 @@ class EmailVerificationRequiredView(TemplateView):
         
         # Toujours afficher le même message pour éviter les fuites d'information
         messages.success(self.request, _("Si cette adresse est associée à un compte, un email de vérification sera envoyé."))
+
+
+# ==========================================
+# Vues pour la gestion des membres
+# ==========================================
+
+from dal import autocomplete
+from django.views import View
+
+
+class UserAutocompleteView(autocomplete.Select2QuerySetView):
+    """
+    Vue autocomplete pour sélectionner un utilisateur sans profil membre.
+
+    Utilisée dans le formulaire de création de membre pour sélectionner
+    un utilisateur existant et lui attacher un profil membre.
+    """
+
+    def get_queryset(self):
+        # Seulement les utilisateurs qui n'ont pas encore de profil membre
+        qs = User.objects.filter(membre__isnull=True).order_by('username')
+
+        # Filtrer par recherche
+        if self.q:
+            qs = qs.filter(
+                Q(username__icontains=self.q) |
+                Q(email__icontains=self.q) |
+                Q(first_name__icontains=self.q) |
+                Q(last_name__icontains=self.q)
+            )
+
+        return qs
+
+    def get_result_label(self, user):
+        """
+        Format d'affichage: jean.dupont (Jean Dupont - jean.dupont@example.com)
+        """
+        name = f"{user.first_name} {user.last_name}".strip() or "Sans nom"
+        return f"{user.username} ({name} - {user.email})"
+
+
+class UserInfoAPIView(View):
+    """
+    API pour récupérer les informations d'un utilisateur.
+
+    Utilisée en AJAX pour afficher les informations d'un utilisateur
+    sélectionné dans le formulaire de création de membre.
+    """
+
+    def get(self, request, user_id):
+        try:
+            user = User.objects.get(pk=user_id)
+            return JsonResponse({
+                'username': user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'email': user.email,
+                'telephone': user.telephone or '',
+            })
+        except User.DoesNotExist:
+            return JsonResponse({'error': 'User not found'}, status=404)

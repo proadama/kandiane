@@ -12,21 +12,28 @@ import re
 class LastUserActivityMiddleware:
     """
     Middleware qui met à jour la dernière date d'activité d'un utilisateur.
+    Optimisé pour éviter les requêtes DB inutiles en utilisant la session.
     """
     def __init__(self, get_response):
         self.get_response = get_response
-        
+        # Intervalle de mise à jour en secondes (15 minutes)
+        self.update_interval = getattr(settings, 'LAST_ACTIVITY_UPDATE_INTERVAL', 900)
+
     def __call__(self, request):
         response = self.get_response(request)
-        
+
         # Mettre à jour la dernière activité de l'utilisateur
         if request.user.is_authenticated:
-            # Mettre à jour seulement si la dernière mise à jour date de plus de 15 minutes
-            update_threshold = timezone.now() - timezone.timedelta(minutes=15)
-            if not request.user.derniere_connexion or request.user.derniere_connexion < update_threshold:
+            now = timezone.now().timestamp()
+            last_update = request.session.get('last_activity_db_update', 0)
+
+            # Mettre à jour la DB seulement si la dernière mise à jour date de plus de 15 minutes
+            if now - last_update > self.update_interval:
                 request.user.derniere_connexion = timezone.now()
                 request.user.save(update_fields=['derniere_connexion'])
-        
+                # Enregistrer le timestamp dans la session pour éviter les requêtes DB futures
+                request.session['last_activity_db_update'] = now
+
         return response
 
 

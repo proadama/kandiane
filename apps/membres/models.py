@@ -70,24 +70,9 @@ class Membre(BaseModel):
     ses informations personnelles et associatives
     """
     # Informations personnelles
-    nom = models.CharField(
-        max_length=100, 
-        verbose_name=_("Nom")
-    )
-    prenom = models.CharField(
-        max_length=100, 
-        verbose_name=_("Prénom")
-    )
-    email = models.EmailField(
-        unique=True, 
-        verbose_name=_("Email")
-    )
-    telephone = models.CharField(
-        max_length=100, 
-        blank=True, 
-        null=True, 
-        verbose_name=_("Téléphone")
-    )
+    # NOTE: Les champs nom, prenom, email, telephone sont maintenant des @property
+    # qui délèguent à l'utilisateur lié (CustomUser). Voir les propriétés plus bas.
+    # Les champs de base de données ont été supprimés via migration.
     adresse = models.CharField(
         max_length=255, 
         blank=True, 
@@ -185,11 +170,20 @@ class Membre(BaseModel):
     class Meta:
         verbose_name = _("Membre")
         verbose_name_plural = _("Membres")
-        ordering = ['nom', 'prenom']
+        ordering = ['date_adhesion']  # Tri par date d'adhésion par défaut
         indexes = [
-            models.Index(fields=['nom', 'prenom']),
-            models.Index(fields=['email']),
+            # Index pour les champs du modèle
             models.Index(fields=['date_adhesion']),
+            # Index pour foreign keys fréquemment utilisés
+            models.Index(fields=['statut']),
+            models.Index(fields=['utilisateur']),
+            # Index pour soft delete et filtrage temporel
+            models.Index(fields=['deleted_at']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['updated_at']),
+            # Index composites pour requêtes communes
+            models.Index(fields=['deleted_at', 'date_adhesion']),
+            models.Index(fields=['deleted_at', 'statut']),
         ]
     
     def __str__(self):
@@ -276,7 +270,40 @@ class Membre(BaseModel):
         """Surcharge de la méthode save pour la validation"""
         self.clean()
         super().save(*args, **kwargs)
-    
+
+    # ==========================================
+    # Propriétés déléguées à l'utilisateur
+    # ==========================================
+    # Ces champs sont stockés dans CustomUser et accessibles via des propriétés
+    # pour maintenir la rétrocompatibilité avec le code existant
+
+    @property
+    def nom(self):
+        """Nom du membre (récupéré depuis l'utilisateur)"""
+        return self.utilisateur.last_name if self.utilisateur else ''
+
+    @property
+    def prenom(self):
+        """Prénom du membre (récupéré depuis l'utilisateur)"""
+        return self.utilisateur.first_name if self.utilisateur else ''
+
+    @property
+    def email(self):
+        """Email du membre (récupéré depuis l'utilisateur)"""
+        return self.utilisateur.email if self.utilisateur else ''
+
+    @property
+    def telephone(self):
+        """Téléphone du membre (récupéré depuis l'utilisateur)"""
+        return self.utilisateur.telephone if self.utilisateur else ''
+
+    @property
+    def nom_complet(self):
+        """Nom complet du membre"""
+        return f"{self.prenom} {self.nom}".strip() or "Membre sans nom"
+
+    # ==========================================
+
     def get_types_actifs(self):
         """Retourne les types de membre actifs"""
         return TypeMembre.objects.filter(
@@ -525,11 +552,6 @@ class Membre(BaseModel):
         """Récupère le tarif applicable pour un événement"""
         return evenement.calculer_tarif_membre(self)
 
-    @property
-    def nom_complet(self):
-        """Retourne le nom complet du membre"""
-        return f"{self.prenom} {self.nom}"
-    
     @property
     def adresse_complete(self):
         """Retourne l'adresse complète formatée"""

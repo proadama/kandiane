@@ -30,8 +30,6 @@ from apps.membres.forms import (
 )
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, HistoriqueMembre
 from django.db.models import F, IntegerField
-from django.utils.crypto import get_random_string
-from apps.accounts.models import CustomUser
 from django.http import Http404
 import types
 import openpyxl.styles
@@ -138,8 +136,8 @@ class MembreListView(ListView):
             return queryset
             
         # Récupérer les paramètres de tri
-        sort_by = self.request.GET.get('sort', 'nom')
-        sort_dir = self.request.GET.get('dir', 'asc')
+        sort_by = self.request.GET.get('sort', 'date_adhesion')
+        sort_dir = self.request.GET.get('dir', 'desc')
         
         # Variables pour stocker les différents critères de filtrage
         term = form.cleaned_data.get('terme')
@@ -164,11 +162,13 @@ class MembreListView(ListView):
         
         # Filtre par terme de recherche
         if term:
+            # Note: nom, prenom, email, telephone sont maintenant des @property depuis utilisateur
             q_objects = (
-                Q(nom__icontains=term) | 
-                Q(prenom__icontains=term) | 
-                Q(email__icontains=term) | 
-                Q(telephone__icontains=term) |
+                Q(utilisateur__last_name__icontains=term) |
+                Q(utilisateur__first_name__icontains=term) |
+                Q(utilisateur__email__icontains=term) |
+                Q(utilisateur__telephone__icontains=term) |
+                Q(utilisateur__username__icontains=term) |
                 Q(code_postal__icontains=term) |
                 Q(ville__icontains=term)
             )
@@ -265,20 +265,24 @@ class MembreListView(ListView):
         # Appliquer le tri
         if sort_by:
             direction = '' if sort_dir == 'asc' else '-'
-            
+
+            # Note: nom, prenom, email, telephone sont maintenant des @property depuis utilisateur
             if sort_by == 'nom':
-                order_fields = [f'{direction}nom', f'{direction}prenom']
+                queryset = queryset.select_related('utilisateur')
+                order_fields = [f'{direction}utilisateur__last_name', f'{direction}utilisateur__first_name']
             elif sort_by == 'email':
-                order_fields = [f'{direction}email']
+                queryset = queryset.select_related('utilisateur')
+                order_fields = [f'{direction}utilisateur__email']
             elif sort_by == 'telephone':
-                order_fields = [f'{direction}telephone']
+                queryset = queryset.select_related('utilisateur')
+                order_fields = [f'{direction}utilisateur__telephone']
             elif sort_by == 'date_adhesion':
                 order_fields = [f'{direction}date_adhesion']
             elif sort_by == 'statut':
-                queryset = queryset.select_related('statut')
-                order_fields = [f'{direction}statut__nom', f'{direction}nom']
+                queryset = queryset.select_related('statut', 'utilisateur')
+                order_fields = [f'{direction}statut__nom', f'{direction}utilisateur__last_name']
             elif sort_by == 'types':
-                queryset = queryset.annotate(
+                queryset = queryset.select_related('utilisateur').annotate(
                     nb_types=Count(
                         'types_historique',
                         filter=Q(
@@ -288,15 +292,16 @@ class MembreListView(ListView):
                         distinct=True
                     )
                 )
-                order_fields = [f'{direction}nb_types', f'{direction}nom']
+                order_fields = [f'{direction}nb_types', f'{direction}utilisateur__last_name']
             else:
-                order_fields = ['nom', 'prenom']
+                queryset = queryset.select_related('utilisateur')
+                order_fields = ['utilisateur__last_name', 'utilisateur__first_name']
             
             queryset = queryset.order_by(*order_fields)
         
-        # Précharger les relations pour optimiser les performances
-        result = queryset.select_related('statut').prefetch_related('types')
-        
+        # Précharger les relations pour optimiser les performances et éviter N+1
+        result = queryset.select_related('statut', 'utilisateur').prefetch_related('types')
+
         return result
     
 
@@ -333,7 +338,11 @@ class MembreDetailView(DetailView):
     model = Membre
     template_name = 'membres/detail.html'
     context_object_name = 'membre'
-    
+
+    def get_queryset(self):
+        """Optimiser la requête pour éviter N+1"""
+        return Membre.objects.select_related('statut', 'utilisateur').prefetch_related('types')
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         membre = self.object
@@ -361,9 +370,9 @@ class MembreDetailView(DetailView):
             from apps.cotisations.models import Cotisation
             context['cotisations'] = Cotisation.objects.filter(
                 membre=membre
-            ).order_by('-annee', '-mois')[:5]
+            ).select_related('statut', 'type_membre', 'bareme').order_by('-annee', '-mois')[:5]
             context['nb_cotisations_impayees'] = Cotisation.objects.filter(
-                membre=membre, 
+                membre=membre,
                 statut_paiement__in=['non_payée', 'partiellement_payée']
             ).count()
         except ImportError:
@@ -413,130 +422,60 @@ class MembreCreateView(StaffRequiredMixin, CreateView):
         return super().form_invalid(form)
     
     def form_valid(self, form):
+        """
+        Crée le profil membre en le liant à l'utilisateur sélectionné.
+
+        L'utilisateur a déjà été créé via /admin/accounts/customuser/add/.
+        On lie simplement le profil membre à cet utilisateur.
+        """
         try:
-            # Enregistrer le membre
+            # Extraire les types de membre
+            types_membre = form.cleaned_data.pop('types_membre', [])
+
+            # Créer le profil membre (l'utilisateur est déjà lié via le formulaire)
             membre = form.save()
-            
-            # Créer un compte utilisateur si demandé
-            if form.cleaned_data.get('creer_compte'):
-                username = f"{membre.prenom.lower()}.{membre.nom.lower()}".replace(' ', '_')
-                base_username = username
-                counter = 1
-                
-                # Éviter les doublons
-                while CustomUser.objects.filter(username=username).exists():
-                    username = f"{base_username}{counter}"
-                    counter += 1
-                
-                # Utiliser le mot de passe fourni ou en générer un
-                password = form.cleaned_data.get('password')
-                if not password:
-                    password = get_random_string(length=12)
-                
-                # Créer l'utilisateur
-                user = CustomUser.objects.create_user(
-                    username=username,
-                    email=membre.email,
-                    password=password,
-                    first_name=membre.prenom,
-                    last_name=membre.nom,
-                    password_temporary=True
-                )
-                
-                # Lier à ce membre
-                membre.utilisateur = user
-                membre.save(update_fields=['utilisateur'])
-                
-                # Vérification d'email si nécessaire
-                if hasattr(settings, 'ACCOUNT_EMAIL_VERIFICATION_REQUIRED') and settings.ACCOUNT_EMAIL_VERIFICATION_REQUIRED:
-                    try:
-                        # Générer et envoyer le token de vérification
-                        token = user.generate_email_verification_token()
-                        verification_url = self.request.build_absolute_uri(
-                            reverse('email_verify', kwargs={'token': token})
-                        )
-                        
-                        from apps.core.services import EmailService
-                        EmailService.send_template_email(
-                            'emails/email_verification',
-                            {'user': user, 'verification_url': verification_url},
-                            _("Vérification de votre adresse email"),
-                            user.email
-                        )
-                        
-                        messages.info(
-                            self.request,
-                            _("Un email de vérification a été envoyé à %(email)s.") % {'email': user.email}
-                        )
-                    except Exception as email_error:
-                        logger.error(f"Erreur lors de l'envoi de l'email de vérification: {str(email_error)}")
-                        messages.warning(
-                            self.request,
-                            _("L'email de vérification n'a pas pu être envoyé.")
-                        )
-                else:
-                    # Envoyer un email de bienvenue avec les informations de connexion
-                    try:
-                        from django.core.mail import EmailMultiAlternatives
-                        from django.template.loader import render_to_string
-                        
-                        # Contexte pour le template d'email
-                        context = {
-                            'membre': membre,
-                            'username': username,
-                            'password': password,
-                            'login_url': self.request.build_absolute_uri(reverse('accounts:login')),
-                        }
-                        
-                        # Rendre les templates HTML et texte
-                        html_message = render_to_string('emails/nouveau_compte.html', context)
-                        text_message = render_to_string('emails/nouveau_compte.txt', context)
-                        
-                        # Envoyer l'email
-                        email = EmailMultiAlternatives(
-                            _("Bienvenue à l'association - Vos identifiants de connexion"),
-                            text_message,
-                            settings.DEFAULT_FROM_EMAIL,
-                            [membre.email]
-                        )
-                        email.attach_alternative(html_message, "text/html")
-                        email.send()
-                        
-                        logger.info(f"Email d'identifiants envoyé à {membre.email}")
-                    except Exception as e:
-                        logger.error(f"Erreur lors de l'envoi de l'email de bienvenue: {str(e)}")
-                        messages.warning(
-                            self.request,
-                            _("Le membre a été créé, mais l'envoi de l'email avec les identifiants a échoué.")
-                        )
-                
-                messages.success(
-                    self.request,
-                    _("Le membre %(nom)s a été créé avec succès avec un compte utilisateur (%(username)s).") % 
-                    {'nom': membre.nom_complet, 'username': username}
-                )
-            else:
-                messages.success(
-                    self.request,
-                    _("Le membre %(nom)s a été créé avec succès.") % {'nom': membre.nom_complet}
-                )
-            
+
+            # Ajouter les types de membre
+            if types_membre:
+                for type_membre in types_membre:
+                    membre.ajouter_type(type_membre)
+
             # Ajouter un enregistrement dans l'historique
             HistoriqueMembre.objects.create(
                 membre=membre,
                 utilisateur=self.request.user,
                 action='creation',
-                description=_("Création du membre"),
+                description=_("Création du profil membre pour l'utilisateur %(username)s") % {
+                    'username': membre.utilisateur.username
+                },
                 donnees_apres={
-                    field: str(value) for field, value in form.cleaned_data.items() 
-                    if field not in ['types_membre', 'photo', 'creer_compte', 'password', 'password_confirm']
+                    field: str(value) for field, value in form.cleaned_data.items()
+                    if field not in ['types_membre', 'photo', 'utilisateur']
                 }
             )
-            
+
+            messages.success(
+                self.request,
+                _("Le profil membre pour %(nom)s (%(username)s) a été créé avec succès.") % {
+                    'nom': membre.nom_complet,
+                    'username': membre.utilisateur.username
+                }
+            )
+
             return redirect(membre.get_absolute_url())
+
+        except ValidationError as e:
+            # Gestion des erreurs de validation
+            if hasattr(e, 'message_dict'):
+                for field, errors in e.message_dict.items():
+                    for error in errors:
+                        messages.error(self.request, f"{field}: {error}")
+            else:
+                messages.error(self.request, str(e))
+            return self.form_invalid(form)
         except Exception as e:
-            logger.error(f"Erreur lors de la création d'un membre: {str(e)}", exc_info=True)
-            messages.error(self.request, _("Erreur lors de la création du membre: %(error)s") % {'error': str(e)})
+            logger.error(f"Erreur lors de la création du profil membre: {str(e)}", exc_info=True)
+            messages.error(self.request, _("Erreur lors de la création du profil membre: %(error)s") % {'error': str(e)})
             return self.form_invalid(form)
 
 class MembreDeleteView(StaffRequiredMixin, DeleteView):

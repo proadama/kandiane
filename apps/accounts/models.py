@@ -409,9 +409,10 @@ class UserProfile(BaseModel):
 def create_user_profile(sender, instance, created, **kwargs):
     """
     Signal pour créer automatiquement un profil quand un utilisateur est créé.
+    Utilise get_or_create pour éviter les conflits avec l'admin inline.
     """
     if created:
-        UserProfile.objects.create(user=instance)
+        UserProfile.objects.get_or_create(user=instance)
 
 
 class UserLoginHistory(BaseModel):
