@@ -42,7 +42,16 @@ class CustomUserAdmin(UserAdmin):
     search_fields = ('email', 'username', 'first_name', 'last_name')
     ordering = ('email',)
     readonly_fields = ('date_joined', 'derniere_connexion')
-    inlines = [UserProfileInline]
+
+    def get_inlines(self, request, obj=None):
+        """
+        Afficher l'inline UserProfile seulement lors de l'édition, pas lors de la création.
+        Le profil est créé automatiquement par le signal post_save.
+        """
+        if obj is None:  # Création
+            return []
+        else:  # Édition
+            return [UserProfileInline]
 
     fieldsets = (
         (None, {'fields': ('email', 'username', 'password')}),
