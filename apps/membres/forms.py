@@ -5,9 +5,6 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 from apps.core.models import Statut
 from apps.membres.models import Membre, TypeMembre, MembreTypeMembre, HistoriqueMembre
-from dal import autocomplete
-
-# Mise à jour de MembreForm dans apps/membres/forms.py
 
 class MembreForm(forms.ModelForm):
     """
@@ -28,13 +25,7 @@ class MembreForm(forms.ModelForm):
         required=True,
         label=_("Utilisateur"),
         help_text=_("Sélectionner un utilisateur existant sans profil membre"),
-        widget=autocomplete.ModelSelect2(
-            url='accounts:user-autocomplete',
-            attrs={
-                'data-placeholder': _('Rechercher un utilisateur...'),
-                'data-minimum-input-length': 0,
-            }
-        )
+        widget=forms.Select(attrs={'class': 'form-select'})
     )
     
     class Meta:
@@ -91,6 +82,9 @@ class MembreForm(forms.ModelForm):
                 self.fields['utilisateur'].queryset = CustomUser.objects.filter(
                     membre__isnull=True
                 ).order_by('username')
+
+        # Personnaliser l'affichage du choix utilisateur
+        self.fields['utilisateur'].label_from_instance = lambda obj: f"{obj.username} ({obj.get_full_name() or 'Sans nom'} - {obj.email})"
 
         # Initialiser les types de membre si on édite un membre existant
         if self.instance.pk:
