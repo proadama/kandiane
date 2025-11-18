@@ -1,7 +1,9 @@
 # apps/accounts/admin.py
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.forms import UserChangeForm
 from django.utils.translation import gettext_lazy as _
+from django import forms
 from .models import CustomUser, Role, Permission, RolePermission, UserProfile, UserLoginHistory
 
 
@@ -27,6 +29,41 @@ class PermissionAdmin(admin.ModelAdmin):
     ordering = ('code',)
 
 
+class CustomUserChangeForm(UserChangeForm):
+    """
+    Formulaire personnalisé pour la modification d'un utilisateur.
+    Corrige le problème de validation d'unicité de l'email lors de la modification.
+    """
+    email = forms.EmailField(
+        label=_("Adresse email"),
+        max_length=254,
+        required=True,
+        help_text=_("Requis. Entrez une adresse email valide.")
+    )
+
+    class Meta:
+        model = CustomUser
+        fields = '__all__'
+
+    def clean_email(self):
+        """
+        Valide l'unicité de l'email en excluant l'instance actuelle.
+        """
+        email = self.cleaned_data.get('email')
+        if email:
+            # Exclure l'instance actuelle de la vérification d'unicité
+            qs = CustomUser.objects.filter(email=email)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+
+            if qs.exists():
+                raise forms.ValidationError(
+                    _("Un objet Utilisateur avec ce champ Adresse email existe déjà."),
+                    code='unique'
+                )
+        return email
+
+
 class UserProfileInline(admin.StackedInline):
     model = UserProfile
     can_delete = False
@@ -37,6 +74,7 @@ class UserProfileInline(admin.StackedInline):
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
+    form = CustomUserChangeForm  # Utiliser le formulaire personnalisé
     list_display = ('email', 'username', 'get_full_name', 'role', 'is_active', 'is_staff', 'derniere_connexion')
     list_filter = ('is_active', 'is_staff', 'is_superuser', 'role', 'date_joined')
     search_fields = ('email', 'username', 'first_name', 'last_name')
